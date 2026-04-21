@@ -1,0 +1,89 @@
+                        
+ Usage: garaga gen      
+ [OPTIONS]              
+                        
+ Generate a Cairo       
+ verifier for a given   
+ proof system.          
+ Automatically detects  
+ the curve from the     
+ verification key.      
+                        
+╭─ Options ────────────╮
+│ *  …          [g  P… │
+│               ro  s… │
+│               th  [… │
+│               16     │
+│               |u     │
+│               lt     │
+│               ra     │
+│               _k     │
+│               ec     │
+│               ca     │
+│               k_     │
+│               zk     │
+│               _h     │
+│               on     │
+│               k]     │
+│    …          TE  T… │
+│               XT  v… │
+│                   n… │
+│                   (… │
+│                   f… │
+│                   t… │
+│                   f… │
+│                   n… │
+│                   s… │
+│                   p… │
+│                   n… │
+│                   a… │
+│                   c… │
+│                   n… │
+│                   [… │
+│                   (… │
+│    …          FI  P… │
+│               LE  to │
+│                   t… │
+│                   v… │
+│                   k… │
+│                   f… │
+│                   E… │
+│                   a  │
+│                   J… │
+│                   f… │
+│                   g… │
+│                   b… │
+│                   f… │
+│                   f… │
+│                   H… │
+│                   M… │
+│                   be │
+│                   p… │
+│                   e… │
+│                   w… │
+│                   t… │
+│                   s… │
+│                   s… │
+│                   an │
+│                   u… │
+│                   k… │
+│                   (… │
+│                   R… │
+│    …     …        I… │
+│                   a  │
+│                   s… │
+│                   t… │
+│                   f… │
+│                   in │
+│                   t… │
+│                   g… │
+│                   p… │
+│                   [… │
+│                   i… │
+│    …  …           S… │
+│                   t… │
+│                   m… │
+│                   a… │
+│                   e… │
+╰──────────────────────╯
+

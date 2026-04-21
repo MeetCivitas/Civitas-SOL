@@ -1,0 +1,39 @@
+# Prover.toml — Civitas Voucher Circuit (Solana build)
+# Updated test vectors for Solana context (no Starknet modulo reduction)
+# All values are BN254 field elements (< BN254 prime)
+
+# ── Private inputs ─────────────────────────────────────────────────────────
+credential_nonce = "12345"
+voucher_nonce = "67890"
+path_index = "0"
+
+# Merkle path siblings (all zero for single-leaf demo tree)
+merkle_path = [
+  "0","0","0","0","0","0","0","0","0","0",
+  "0","0","0","0","0","0","0","0","0","0"
+]
+
+# ── Public inputs ───────────────────────────────────────────────────────────
+# These must match values computed off-chain by bn128-poseidon.ts
+# (run `node scripts/compute-test-vectors.mjs` to regenerate)
+
+# merkle_root — computed from single-leaf BN254 Poseidon Merkle tree
+merkle_root = "0"
+
+# nullifier = BN254_Poseidon(credential_nonce, epoch, voucher_nonce)
+nullifier = "0"
+
+# recipient_hash = BN254_Poseidon(recipient_pubkey_as_field)
+recipient_hash = "11259375"
+
+# amount in base units (USDC * 1e6)
+amount = "1000000"
+
+# epoch (Unix timestamp of payroll run)
+epoch = "1745000000"
+
+# token_account_hash = keccak256(recipient_token_account_pubkey)[..32] as Field
+token_account_hash = "19088743"
+
+# domain_tag_hash = keccak256("civitas-devnet-v1") as Field
+domain_tag_hash = "3735928559"

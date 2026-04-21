@@ -1,0 +1,14 @@
+# workload/docker-compose.nilcc.yml
+# nilCC Workload Definition — submitted to Nillion's CVM agent
+# The nilCC-agent launches a Container Virtual Machine (CVM)
+# using this compose file inside a SEV-SNP enclave.
+
+services:
+  civitas-payroll:
+    image: ${NILCC_WORKLOAD_IMAGE:-rythmerrn/civitas-nilcc:latest}
+    environment:
+      - NILLION_ORG_SECRET_KEY
+      - PAYROLL_MANIFEST
+      - INPUT_DIR=/media/cvm-agent-entrypoint/files
+      - OUTPUT_DIR=/outputs
+    restart: "no"

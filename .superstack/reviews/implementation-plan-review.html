@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Civitas-Sol Implementation Plan Review</title>
+    <style>
+      :root {
+        --bg: #0e1116;
+        --panel: #151b23;
+        --text: #e6edf3;
+        --muted: #9fb0c0;
+        --border: #263242;
+        --high: #ffb86b;
+        --medium: #7cc7ff;
+      }
+      body {
+        margin: 0;
+        font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      main {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 32px 20px 56px;
+      }
+      h1, h2 { line-height: 1.2; }
+      .meta, p { color: var(--muted); }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 18px 20px;
+        margin: 16px 0;
+      }
+      .severity {
+        display: inline-block;
+        border-radius: 999px;
+        padding: 3px 10px;
+        font-size: 12px;
+        font-weight: 700;
+        margin-right: 8px;
+      }
+      .high { background: rgba(255, 184, 107, 0.15); color: var(--high); }
+      .medium { background: rgba(124, 199, 255, 0.15); color: var(--medium); }
+      code { color: #ffd580; }
+      ul { padding-left: 20px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Civitas-Sol Implementation Plan Review</h1>
+      <p class="meta">Scope: review of <code>implementation_plan.md.resolved</code> using the Solana review rubric with emphasis on security, correctness, compute, and production readiness.</p>
+
+      <div class="card">
+        <h2>Score</h2>
+        <p>Security: <strong>C</strong><br />Quality: <strong>B</strong><br />Ready for mainnet: <strong>No</strong></p>
+        <p>The plan is strong on product vision and privacy layering. The main gaps are Solana execution realism: compute viability for UltraHonk, batching and state layout, proof-domain binding, and Token-2022 confidential account lifecycle.</p>
+      </div>
+
+      <div class="card">
+        <h2>Findings</h2>
+        <p><span class="severity high">High</span><strong>UltraHonk verifier is the entire critical path.</strong> The plan assumes a custom split-transaction verifier will fit Solana constraints, but does not include a fallback if CU, memory, or engineering complexity make that unworkable in time.</p>
+        <p>Fix: add a fallback milestone for the hackathon demo, with the on-chain verifier as a stretch milestone rather than the only settlement path.</p>
+
+        <p><span class="severity high">High</span><strong>Commit batching is not Solana-native yet.</strong> A single <code>update_merkle_root(root, commitments)</code> path is too optimistic once payroll runs grow beyond a tiny batch.</p>
+        <p>Fix: redesign around chunked append/finalize instructions and budget for versioned transactions plus lookup tables.</p>
+
+        <p><span class="severity high">High</span><strong>Proof replay boundaries are underspecified.</strong> Binding only a recipient hash and token account hash is not enough for Solana deployment boundaries.</p>
+        <p>Fix: bind the proof to <code>program_id</code>, <code>vault_pda</code>, mint, recipient token account, run or epoch id, and a deployment-domain tag.</p>
+
+        <p><span class="severity medium">Medium</span><strong>Token-2022 confidential balances need their own workstream.</strong> The current plan treats them as a thin helper library instead of a key-management and account-provisioning subsystem.</p>
+        <p>Fix: add an explicit onboarding phase for confidential token accounts, decrypt keys, recovery, and auditor-key policy.</p>
+
+        <p><span class="severity medium">Medium</span><strong>Registry account design is demo-safe but not scale-safe.</strong> One PDA per commitment and nullifier is operationally simple, but rent-heavy and write-heavy.</p>
+        <p>Fix: document the demo approach and the scale path separately, using chunked registries, bitmaps, or append-only epoch accounts.</p>
+
+        <p><span class="severity medium">Medium</span><strong>The verification plan is missing Solana failure testing.</strong> The plan lists happy-path tests, but not compute-budget regressions, tx-size tests, local-validator confidential token tests, or finalized-state reconciliation.</p>
+        <p>Fix: add those tests before calling the plan production-ready.</p>
+      </div>
+
+      <div class="card">
+        <h2>What To Add</h2>
+        <ul>
+          <li>A fallback delivery plan with “demo-safe” and “full cryptographic” milestones.</li>
+          <li>A chunked payroll commit flow instead of a single giant commitment vector.</li>
+          <li>Explicit authority model: upgrade authority, pause authority, vault authority, and who can finalize payroll runs.</li>
+          <li>A proof-domain separator section covering replay protection across vaults, mints, accounts, clusters, and deployments.</li>
+          <li>A Token-2022 confidential balances lifecycle section covering setup, recovery, and UX constraints.</li>
+          <li>A Solana-specific test matrix for CU, transaction size, replays, bad roots, aliasing, and account validation.</li>
+        </ul>
+      </div>
+    </main>
+  </body>
+  </html>

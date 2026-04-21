@@ -1,0 +1,354 @@
+{
+  "version": 1,
+  "employees": [
+    {
+      "employee_id": "test1",
+      "employee_tag": "tag1",
+      "username": "testuser",
+      "username_normalized": "testuser",
+      "password_hash": "xxx",
+      "vouchers": [],
+      "role": "employee",
+      "org_id": "demo",
+      "credential_nonce": "abc",
+      "zkpass_credential": {},
+      "created_at": "2026-02-24T06:54:47.521Z",
+      "updated_at": "2026-02-24T06:54:47.522Z"
+    },
+    {
+      "employee_id": "test2",
+      "employee_tag": "tag2",
+      "username": "testuser2",
+      "username_normalized": "testuser2",
+      "password_hash": "xxx",
+      "vouchers": [],
+      "role": "employee",
+      "org_id": "demo",
+      "credential_nonce": "def",
+      "zkpass_credential": {},
+      "created_at": "2026-02-24T06:54:47.522Z",
+      "updated_at": "2026-02-24T06:54:47.522Z"
+    },
+    {
+      "employee_id": "emp_16481728_1771939582666",
+      "username": "employee_16481728",
+      "username_normalized": "employee_16481728",
+      "password_hash": "",
+      "employee_tag": "1648172856224488652696369788127604021196732483420010590185836269672061816179",
+      "credential_nonce": "",
+      "zkpass_credential": {
+        "ciphertext": "",
+        "iv": "",
+        "signature": ""
+      },
+      "org_id": "unassigned",
+      "vouchers": [],
+      "credential_vouchers": [],
+      "role": "employee",
+      "profile": {},
+      "created_at": "2026-02-24T13:26:22.666Z",
+      "updated_at": "2026-02-24T13:26:22.666Z",
+      "status": "provisional"
+    },
+    {
+      "employee_id": "emp_32394495_1772020666176",
+      "username": "employee_32394495",
+      "username_normalized": "employee_32394495",
+      "password_hash": "",
+      "employee_tag": "3239449555592732566062006463298486831431057794209310702840827056757213754669",
+      "credential_nonce": "",
+      "zkpass_credential": {
+        "ciphertext": "",
+        "iv": "",
+        "signature": ""
+      },
+      "org_id": "unassigned",
+      "vouchers": [],
+      "credential_vouchers": [],
+      "role": "employee",
+      "profile": {},
+      "created_at": "2026-02-25T11:57:46.176Z",
+      "updated_at": "2026-02-25T11:57:46.176Z",
+      "status": "provisional"
+    },
+    {
+      "employee_id": "emp_25996974_1772020845059",
+      "username": "employee_25996974",
+      "username_normalized": "employee_25996974",
+      "password_hash": "",
+      "employee_tag": "2599697462055322688459944619709993683940723266458414200478534262462090061149",
+      "credential_nonce": "",
+      "zkpass_credential": {
+        "ciphertext": "",
+        "iv": "",
+        "signature": ""
+      },
+      "org_id": "unassigned",
+      "vouchers": [],
+      "credential_vouchers": [],
+      "role": "employee",
+      "profile": {},
+      "created_at": "2026-02-25T12:00:45.059Z",
+      "updated_at": "2026-02-25T12:00:45.059Z",
+      "status": "provisional"
+    },
+    {
+      "employee_id": "aud_17017447_1772035720914",
+      "username": "auditor_17017447",
+      "username_normalized": "auditor_17017447",
+      "password_hash": "",
+      "employee_tag": "170174475356433510718689674643442879746157739127523974149550791163830445826",
+      "credential_nonce": "",
+      "zkpass_credential": {
+        "ciphertext": "",
+        "iv": "",
+        "signature": ""
+      },
+      "org_id": "unassigned",
+      "vouchers": [],
+      "credential_vouchers": [],
+      "role": "auditor",
+      "profile": {
+        "role": "auditor"
+      },
+      "created_at": "2026-02-25T16:08:40.914Z",
+      "updated_at": "2026-03-05T16:48:26.739Z",
+      "status": "terminated"
+    },
+    {
+      "employee_id": "emp_14649059_1772102682772",
+      "username": "employee_14649059",
+      "username_normalized": "employee_14649059",
+      "password_hash": "",
+      "employee_tag": "1464905944393073200852122665715790265075253805951581890365688605194588602108",
+      "credential_nonce": "",
+      "zkpass_credential": {
+        "ciphertext": "",
+        "iv": "",
+        "signature": ""
+      },
+      "org_id": "unassigned",
+      "vouchers": [],
+      "credential_vouchers": [],
+      "role": "employee",
+      "profile": {},
+      "created_at": "2026-02-26T10:44:42.772Z",
+      "updated_at": "2026-02-26T10:44:42.772Z",
+      "status": "provisional"
+    },
+    {
+      "employee_id": "emp_10625451_1772106228973",
+      "username": "employee_10625451",
+      "username_normalized": "employee_10625451",
+      "password_hash": "",
+      "employee_tag": "1062545115615828813471662624073582884321950905455830663063479547529971856820",
+      "credential_nonce": "",
+      "zkpass_credential": {
+        "ciphertext": "",
+        "iv": "",
+        "signature": ""
+      },
+      "org_id": "unassigned",
+      "vouchers": [],
+      "credential_vouchers": [],
+      "role": "employee",
+      "profile": {},
+      "created_at": "2026-02-26T11:43:48.973Z",
+      "updated_at": "2026-02-26T11:43:48.973Z",
+      "status": "provisional"
+    },
+    {
+      "employee_id": "emp_20795027_1772295733647",
+      "username": "employee_20795027",
+      "username_normalized": "employee_20795027",
+      "password_hash": "",
+      "employee_tag": "207950272283342336074940833762538098613308024933289990292261355411920435729",
+      "credential_nonce": "",
+      "zkpass_credential": {
+        "ciphertext": "",
+        "iv": "",
+        "signature": ""
+      },
+      "org_id": "unassigned",
+      "vouchers": [],
+      "credential_vouchers": [],
+      "role": "employee",
+      "profile": {},
+      "created_at": "2026-02-28T16:22:13.647Z",
+      "updated_at": "2026-02-28T16:22:13.647Z",
+      "status": "provisional"
+    },
+    {
+      "employee_id": "emp_16336284_1772379454543",
+      "username": "employee_16336284",
+      "username_normalized": "employee_16336284",
+      "password_hash": "",
+      "employee_tag": "1633628415067449095612981126991018643912362029273045251131726509274859253851",
+      "credential_nonce": "",
+      "zkpass_credential": {
+        "ciphertext": "",
+        "iv": "",
+        "signature": ""
+      },
+      "org_id": "unassigned",
+      "vouchers": [],
+      "credential_vouchers": [],
+      "role": "employee",
+      "profile": {},
+      "created_at": "2026-03-01T15:37:34.543Z",
+      "updated_at": "2026-03-01T15:37:34.543Z",
+      "status": "provisional"
+    },
+    {
+      "employee_id": "aud_49286836_1772549433891",
+      "username": "auditor_49286836",
+      "username_normalized": "auditor_49286836",
+      "password_hash": "",
+      "employee_tag": "492868367571240867092677173828112092265706371900094781313335254730148589387",
+      "credential_nonce": "",
+      "zkpass_credential": {
+        "ciphertext": "",
+        "iv": "",
+        "signature": ""
+      },
+      "org_id": "unassigned",
+      "vouchers": [],
+      "credential_vouchers": [],
+      "role": "auditor",
+      "profile": {
+        "role": "auditor"
+      },
+      "created_at": "2026-03-03T14:50:33.891Z",
+      "updated_at": "2026-03-03T14:50:33.891Z",
+      "status": "active"
+    },
+    {
+      "employee_id": "emp_99999999_1772625850366",
+      "username": "Test Employee",
+      "username_normalized": "test employee",
+      "password_hash": "",
+      "employee_tag": "99999999999999999999",
+      "credential_nonce": "",
+      "zkpass_credential": {
+        "ciphertext": "",
+        "iv": "",
+        "signature": ""
+      },
+      "org_id": "default_org",
+      "vouchers": [],
+      "credential_vouchers": [],
+      "role": "employee",
+      "profile": {
+        "name": "Test Employee"
+      },
+      "created_at": "2026-03-04T12:04:10.366Z",
+      "updated_at": "2026-03-04T12:04:10.366Z",
+      "status": "active"
+    },
+    {
+      "employee_id": "emp_89690962_1772790895566",
+      "username": "employee_89690962",
+      "username_normalized": "employee_89690962",
+      "password_hash": "",
+      "employee_tag": "896909623700105768040846366908231318265402284290467793220358303761727078398",
+      "credential_nonce": "",
+      "zkpass_credential": {
+        "ciphertext": "",
+        "iv": "",
+        "signature": ""
+      },
+      "org_id": "unassigned",
+      "vouchers": [],
+      "credential_vouchers": [],
+      "role": "employee",
+      "profile": {},
+      "created_at": "2026-03-06T09:54:55.566Z",
+      "updated_at": "2026-03-06T09:54:55.566Z",
+      "status": "provisional"
+    },
+    {
+      "employee_id": "emp_19641158_1772794843493",
+      "username": "employee_19641158",
+      "username_normalized": "employee_19641158",
+      "password_hash": "",
+      "employee_tag": "1964115811319220737740144013342530850347273803859308587265570036310861130650",
+      "credential_nonce": "",
+      "zkpass_credential": {
+        "ciphertext": "",
+        "iv": "",
+        "signature": ""
+      },
+      "org_id": "unassigned",
+      "vouchers": [],
+      "credential_vouchers": [],
+      "role": "employee",
+      "profile": {},
+      "created_at": "2026-03-06T11:00:43.493Z",
+      "updated_at": "2026-03-06T11:00:43.493Z",
+      "status": "provisional"
+    },
+    {
+      "employee_id": "emp_35222898_1772976818762",
+      "username": "employee_35222898",
+      "username_normalized": "employee_35222898",
+      "password_hash": "",
+      "employee_tag": "352228980910344209337272501911759613603906452555661050716653346205413070033",
+      "credential_nonce": "",
+      "zkpass_credential": {
+        "ciphertext": "",
+        "iv": "",
+        "signature": ""
+      },
+      "org_id": "unassigned",
+      "vouchers": [],
+      "credential_vouchers": [],
+      "role": "employee",
+      "profile": {},
+      "created_at": "2026-03-08T13:33:38.762Z",
+      "updated_at": "2026-03-08T13:33:38.762Z",
+      "status": "provisional"
+    },
+    {
+      "employee_id": "emp_98612530_1773156776338",
+      "username": "employee_98612530",
+      "username_normalized": "employee_98612530",
+      "password_hash": "",
+      "employee_tag": "986125306477060434689431761509011844261796425888668118313016252706081035521",
+      "credential_nonce": "",
+      "zkpass_credential": {
+        "ciphertext": "",
+        "iv": "",
+        "signature": ""
+      },
+      "org_id": "unassigned",
+      "vouchers": [],
+      "credential_vouchers": [],
+      "role": "employee",
+      "profile": {},
+      "created_at": "2026-03-10T15:32:56.338Z",
+      "updated_at": "2026-03-10T15:32:56.338Z",
+      "status": "provisional"
+    },
+    {
+      "employee_id": "emp_34319330_1773214521139",
+      "username": "employee_34319330",
+      "username_normalized": "employee_34319330",
+      "password_hash": "",
+      "employee_tag": "3431933006401010821825610895343675017087590311916440961496942447927406126226",
+      "credential_nonce": "",
+      "zkpass_credential": {
+        "ciphertext": "",
+        "iv": "",
+        "signature": ""
+      },
+      "org_id": "unassigned",
+      "vouchers": [],
+      "credential_vouchers": [],
+      "role": "employee",
+      "profile": {},
+      "created_at": "2026-03-11T07:35:21.139Z",
+      "updated_at": "2026-03-11T07:35:21.139Z",
+      "status": "provisional"
+    }
+  ]
+}

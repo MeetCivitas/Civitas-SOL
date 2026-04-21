@@ -1,0 +1,52 @@
+{
+  "version": 2,
+  "framework": "nextjs",
+  "buildCommand": "cd frontend && npm run build",
+  "outputDirectory": "frontend/.next",
+  "installCommand": "cd frontend && npm install --legacy-peer-deps",
+  "regions": ["sfo1", "iad1"],
+  "functions": {
+    "frontend/app/api/**/*.ts": {
+      "runtime": "nodejs20.x",
+      "maxDuration": 60
+    }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:; worker-src blob: 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.devnet.solana.com https://api.devnet.solana.com https://api.mainnet-beta.solana.com https://rpc.helius.xyz https://*.nillion.network wss://*.devnet.solana.com wss://api.devnet.solana.com;"
+        }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/workers/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" },
+        { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" },
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/circuits/:path*",
+      "destination": "/circuits/:path*"
+    }
+  ],
+  "env": {
+    "NEXT_TELEMETRY_DISABLED": "1"
+  }
+}
