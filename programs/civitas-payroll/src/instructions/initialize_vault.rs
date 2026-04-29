@@ -31,8 +31,11 @@ pub struct InitializeVault<'info> {
     pub usdc_mint: InterfaceAccount<'info, Mint>,
 
     /// Token-2022 ATA for the vault — will hold confidential USDC.
+    /// `init_if_needed` so a pre-existing ATA at the deterministic address
+    /// (e.g. from a prior partial init) is reused. Anchor still validates
+    /// authority + mint match, so a wrong-shape ATA fails loudly.
     #[account(
-        init,
+        init_if_needed,
         payer = owner,
         associated_token::mint = usdc_mint,
         associated_token::authority = vault_state,
