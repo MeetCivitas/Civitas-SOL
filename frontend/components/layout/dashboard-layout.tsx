@@ -11,7 +11,6 @@ import {
   Shield,
   LogOut,
   LayoutDashboard,
-  Users,
   Wallet,
   Settings,
   HelpCircle,
@@ -39,7 +38,6 @@ interface NavItem {
 const NAV_ITEMS: Record<UserRole, NavItem[]> = {
   employer: [
     { href: "/employer/dashboard", label: "Dashboard", icon: LayoutDashboard, accent: "emerald" },
-    { href: "/employer/employees", label: "Employees", icon: Users, accent: "blue" },
     { href: "/employer/payrolls", label: "Payrolls", icon: Wallet, accent: "sky" },
     { href: "/employer/auditors", label: "Auditors", icon: ClipboardCheck, accent: "amber" },
     { href: "/employer/integrations", label: "Integrations", icon: Link2, accent: "emerald" },
@@ -86,16 +84,22 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
   const { user, logout, role } = useAuth()
-  const isLoading = false
+  const [mounted, setMounted] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
+  // Give the wallet one render cycle to auto-reconnect before deciding to redirect
   useEffect(() => {
-    if (!isLoading && !user) {
-      router.push("/login")
-    }
-  }, [user, isLoading, router])
+    const timer = setTimeout(() => setMounted(true), 300)
+    return () => clearTimeout(timer)
+  }, [])
 
-  if (isLoading || !user) {
+  useEffect(() => {
+    if (mounted && !user) {
+      router.push("/employer")
+    }
+  }, [user, mounted, router])
+
+  if (!mounted || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#050505]">
         <div className="flex flex-col items-center gap-4">

@@ -321,9 +321,10 @@ export function encodeAnchorPublicInputs(p: AnchorPublicInputs): Uint8Array {
   write32(p.domainTag);
 
   // epoch: u64 LE
-  const epochBuf = Buffer.alloc(8);
-  epochBuf.writeBigUInt64LE(p.epoch);
-  buf.set(epochBuf, off);
+  const epoch = p.epoch;
+  for (let i = 0; i < 8; i++) {
+    buf[off + i] = Number((epoch >> BigInt(i * 8)) & BigInt(0xff));
+  }
   off += 8;
 
   // run_id: [u8;16]

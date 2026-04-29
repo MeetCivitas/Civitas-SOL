@@ -15,9 +15,9 @@ const features = [
   },
   {
     icon: Link2,
-    title: "Multi-Chain Settlement",
+    title: "4-Layer Privacy Stack",
     description:
-      "Bridge payroll to any supported chain via Axelar. Employees receive funds in their preferred currency.",
+      "Nillion nilDB encrypts salaries at rest. Nillion nilCC TEE computes payroll privately. Noir UltraHonk ZK proofs let employees claim anonymously on Solana. Cloak shielded pool hides the settlement graph.",
   },
   {
     icon: Users,

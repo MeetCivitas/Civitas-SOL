@@ -1,5 +1,5 @@
-@import 'tailwindcss';
-@import 'tw-animate-css';
+@import "tailwindcss";
+@import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -24,6 +24,16 @@
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.65 0.25 290);
   --radius: 0.75rem;
+
+  /* Privacy layer accent colors (Civitas V2) */
+  --clr-nillion: #8b5cf6;
+  --clr-magicblock: #f59e0b;
+  --clr-cloak: #10b981;
+  --clr-noir: #3b82f6;
+  
+  /* Gradient presets */
+  --gradient-privacy: linear-gradient(135deg, var(--clr-nillion), var(--clr-noir), var(--clr-magicblock));
+  --gradient-brand: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 50%, #10b981 100%);
 }
 
 @theme inline {
@@ -75,6 +85,19 @@
   }
   .neon-border {
     @apply border border-transparent bg-clip-border [background-image:linear-gradient(to_right,var(--color-zinc-950),var(--color-zinc-950)),linear-gradient(to_right,var(--color-purple-500),var(--color-pink-500))] [background-origin:border-box];
+  }
+  .text-gradient {
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .privacy-card {
+    backdrop-filter: blur(12px);
+    transition: border-color 200ms, background-color 200ms, transform 150ms;
+  }
+  .privacy-card:hover {
+    transform: translateY(-2px);
   }
 }
 

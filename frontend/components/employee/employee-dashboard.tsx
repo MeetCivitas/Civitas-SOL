@@ -78,7 +78,7 @@ export function EmployeeDashboard() {
         />
         <KPICard
           title="Total Received"
-          value={totalReceived > 0 ? `${totalReceived.toFixed(2)} STRK` : "*** STRK"}
+          value={totalReceived > 0 ? `${totalReceived.toFixed(2)} USDC` : "*** USDC"}
           icon={Wallet}
           subtitle="From opened notes"
         />
@@ -115,7 +115,7 @@ export function EmployeeDashboard() {
             <CreditCard className="h-6 w-6 text-emerald-400" />
           </div>
           <h3 className="mb-1 font-semibold text-white drop-shadow-md">Claim Funds</h3>
-          <p className="text-sm text-white/50">Submit ZK proofs to receive STRK</p>
+          <p className="text-sm text-white/50">Submit ZK proofs to receive USDC</p>
         </Link>
         <Link
           href="/employee/profile"
@@ -201,7 +201,7 @@ export function EmployeeDashboard() {
                         </p>
                         <p className="text-xs text-white/40 mt-0.5">
                           {note.status === "Opened" && note.decryptedAmount
-                            ? `${note.decryptedAmount} STRK`
+                            ? `${note.decryptedAmount} USDC`
                             : note.maskedAmount}
                         </p>
                       </div>

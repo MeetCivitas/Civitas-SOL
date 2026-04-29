@@ -1,6 +1,6 @@
 /**
  * /public/workers/proof-worker.js
- * Web Worker for UltraHonk proof generation.
+ * Web Worker for Noir UltraHonk proof generation.
  *
  * Runs in a separate thread — the main thread stays responsive.
  * Receives:  { type: "generate", circuitInput }
@@ -8,9 +8,8 @@
  *            { type: "done",     result }        — proof complete
  *            { type: "error",    error }         — failure
  *
- * The circuit + VK are loaded from:
- *   /circuits/voucher_noir/target/voucher.json  (compiled Noir artifact)
- *   /circuits/voucher_noir/target/vk.bin        (verification key)
+ * Circuit artifact must be at:
+ *   /circuits/voucher_noir/target/voucher.json  (compiled by `nargo compile`)
  */
 
 /* eslint-disable no-restricted-globals */
@@ -20,58 +19,60 @@ self.onmessage = async function (event) {
   if (type !== "generate") return;
 
   try {
-    self.postMessage({ type: "progress", pct: 0, label: "Loading bb.js UltraHonk..." });
+    self.postMessage({ type: "progress", pct: 0, label: "Loading Noir circuit artifact..." });
 
-    // Dynamic import inside the worker
-    const { UltraHonkBackend } = await import(
-      "https://unpkg.com/@aztec/bb.js@0.68.2/dest/browser/index.js"
-    ).catch(() => import("@aztec/bb.js"));
-
-    self.postMessage({ type: "progress", pct: 5, label: "Loading Noir circuit artifact..." });
-
-    // Load the compiled Noir circuit (bytecode)
+    // Load compiled Noir artifact (nargo compile output)
     const circuitResp = await fetch("/circuits/voucher_noir/target/voucher.json");
-    if (!circuitResp.ok) throw new Error("Circuit artifact not found — run `nargo build` first");
+    if (!circuitResp.ok) throw new Error("Circuit artifact not found at /circuits/voucher_noir/target/voucher.json");
     const circuitArtifact = await circuitResp.json();
 
-    self.postMessage({ type: "progress", pct: 15, label: "Initialising prover (WASM)..." });
+    self.postMessage({ type: "progress", pct: 10, label: "Initialising Noir runtime..." });
 
-    // Import Noir.js runtime
-    const { Noir } = await import("@noir-lang/noir_js").catch(
-      () => import("https://unpkg.com/@noir-lang/noir_js@1.0.0-beta.16/dist/node/index.js")
-    );
+    // @noir-lang/noir_js — Noir witness generation
+    const { Noir } = await import("@noir-lang/noir_js");
 
-    // Import Barretenberg backend
-    const { BarretenbergBackend } = await import("@noir-lang/backend_barretenberg").catch(
-      () => import("https://unpkg.com/@noir-lang/backend_barretenberg@0.36.0/dist/node/index.js")
-    );
+    self.postMessage({ type: "progress", pct: 20, label: "Initialising UltraHonk backend..." });
 
-    self.postMessage({ type: "progress", pct: 25, label: "Compiling backend..." });
+    // @noir-lang/backend_barretenberg — UltraHonk prover (not Groth16 BarretenbergBackend)
+    const { UltraHonkBackend } = await import("@noir-lang/backend_barretenberg");
 
-    const backend = new BarretenbergBackend(circuitArtifact, { threads: 4 });
-    const noir = new Noir(circuitArtifact, backend);
+    self.postMessage({ type: "progress", pct: 30, label: "Compiling proving key (one-time, ~15s)..." });
 
-    self.postMessage({ type: "progress", pct: 35, label: "Generating witness..." });
+    const backend = new UltraHonkBackend(circuitArtifact, { threads: navigator.hardwareConcurrency ?? 4 });
+    const noir = new Noir(circuitArtifact);
 
-    // Execute circuit to get witness
+    self.postMessage({ type: "progress", pct: 40, label: "Generating witness..." });
+
+    // Execute Noir circuit — derives the witness from private/public inputs
     const { witness } = await noir.execute(circuitInput);
 
-    self.postMessage({ type: "progress", pct: 55, label: "Generating UltraHonk proof (most time is here)..." });
+    self.postMessage({ type: "progress", pct: 55, label: "Generating UltraHonk proof (~30–60s)..." });
 
-    // Generate the actual UltraHonk proof
-    const { proof, vk } = await backend.generateProof(witness);
+    // Generate the proof from the witness
+    const proofData = await backend.generateProof(witness);
 
-    self.postMessage({ type: "progress", pct: 90, label: "Finalising proof..." });
+    self.postMessage({ type: "progress", pct: 88, label: "Exporting verification key..." });
 
-    // Serialise for transfer back to main thread
-    const publicSignals = Object.values(circuitInput)
-      .filter((v) => typeof v === "string")
-      .map(String);
+    const vk = await backend.getVerificationKey();
+
+    self.postMessage({ type: "progress", pct: 95, label: "Finalising..." });
+
+    // Extract public inputs — Noir puts them at the front of the proof bytes
+    // Public signals are the public inputs passed in circuitInput (non-array, non-object values)
+    const publicSignals = [
+      circuitInput.merkle_root,
+      circuitInput.nullifier,
+      circuitInput.recipient_hash,
+      circuitInput.amount,
+      circuitInput.epoch,
+      circuitInput.token_account_hash,
+      circuitInput.domain_tag_hash,
+    ].map(String);
 
     self.postMessage({
       type: "done",
       result: {
-        proofBytes: Array.from(proof),
+        proofBytes: Array.from(proofData.proof),
         vkBytes: Array.from(vk),
         publicSignals,
       },

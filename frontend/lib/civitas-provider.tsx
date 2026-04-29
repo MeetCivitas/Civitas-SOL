@@ -13,8 +13,6 @@ import type { CivitasCredential } from "./identity";
 import {
   generateCredential,
   verifyCredential,
-  getOrCreateAutoCredential,
-  autoStoreCredential,
 } from "./identity";
 import {
   clearActiveCredentialTag,
@@ -25,10 +23,6 @@ import {
   storeCredential,
 } from "./credential-store";
 import { buildExplorerUrl, formatUsdc, SOLANA_TREASURY_VAULT } from "./solana";
-import { getVaultState, getPoolBalance, PROGRAM_ID } from "./solana-program";
-import { lookupSNS } from "./sns";
-import { PublicKey } from "@solana/web3.js";
-import BN from "bn.js";
 
 export type UserRole = "employer" | "employee" | "auditor" | "none";
 
@@ -151,30 +145,54 @@ export function CivitasProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ── Auto-credential: generate + store in IndexedDB on wallet connect ───
+  // Uses credential-store.ts IDB (civitas_credentials) as single source of truth.
+  // getOrCreateAutoCredential from identity.ts used a DIFFERENT IDB (civitas-credentials)
+  // causing stale credentials to override imported ones. Fixed: always read from credential-store.
   useEffect(() => {
     if (!walletAddress || credential) return;
-    getOrCreateAutoCredential()
-      .then((cred) => {
-        setCredential(cred);
-        setCredentials((prev) => {
-          const deduped = prev.filter((c) => c.employeeTag !== cred.employeeTag);
-          return [...deduped, cred];
-        });
-        setActiveCredentialTag(cred.employeeTag);
-      })
-      .catch((err) => console.error("[CivitasProvider] auto-credential failed:", err));
+    listCredentials().then((stored) => {
+      if (stored.length > 0) {
+        // Credentials exist — pick by active tag or latest
+        const activeTag = getActiveCredentialTag();
+        const found = activeTag ? stored.find((c) => c.employeeTag === activeTag) : null;
+        setCredential(found || stored[stored.length - 1]);
+      } else {
+        // Truly no credentials — generate a fresh one into credential-store IDB
+        const newCred = generateCredential();
+        storeCredential(newCred)
+          .then(() => {
+            setCredential(newCred);
+            setCredentials([newCred]);
+            setActiveCredentialTag(newCred.employeeTag);
+          })
+          .catch((err) => console.error("[CivitasProvider] auto-credential store failed:", err));
+      }
+    }).catch((err) => console.error("[CivitasProvider] auto-credential failed:", err));
   }, [walletAddress, credential]);
 
   // ── SNS resolution on wallet connect ──────────────────────────────────
   useEffect(() => {
     if (!walletAddress) { setSnsDomain(null); return; }
-    try {
-      lookupSNS(new PublicKey(walletAddress))
-        .then((name) => setSnsDomain(name))
-        .catch(() => setSnsDomain(null));
-    } catch {
-      setSnsDomain(null);
-    }
+    let cancelled = false;
+
+    const loadSnsDomain = async () => {
+      try {
+        const [{ PublicKey }, { lookupSNS }] = await Promise.all([
+          import("@solana/web3.js"),
+          import("./sns"),
+        ]);
+        const name = await lookupSNS(new PublicKey(walletAddress));
+        if (!cancelled) setSnsDomain(name);
+      } catch {
+        if (!cancelled) setSnsDomain(null);
+      }
+    };
+
+    void loadSnsDomain();
+
+    return () => {
+      cancelled = true;
+    };
   }, [walletAddress]);
 
   // ── Trigger on-chain refresh whenever wallet connects ─────────────────
@@ -213,19 +231,14 @@ export function CivitasProvider({ children }: { children: ReactNode }) {
             companyId: profile.companyId ?? `company-${walletAddress.slice(0, 8)}`,
             name: profile.name ?? "Civitas Treasury",
             ownerAddress: profile.ownerAddress ?? walletAddress,
-            escrowContract: profile.escrowContract ?? SOLANA_TREASURY_VAULT,
+            escrowContract: profile.escrowContract ?? "",
             employerName: profile.employerName,
             position: profile.position,
             industry: profile.industry,
             employeeCountRange: profile.employeeCountRange,
           });
         } else {
-          setCompanyState({
-            companyId: `company-${walletAddress.slice(0, 8)}`,
-            name: "Civitas Treasury",
-            ownerAddress: walletAddress,
-            escrowContract: SOLANA_TREASURY_VAULT,
-          });
+          setCompanyState(null);
         }
 
         const employeesResponse = await fetch(`/api/employer/employees?address=${encodeURIComponent(walletAddress)}`);
@@ -240,6 +253,29 @@ export function CivitasProvider({ children }: { children: ReactNode }) {
               addedAt: employee.created_at || new Date().toISOString(),
             })),
           );
+        }
+
+        // Hydrate payroll runs from NilDB
+        try {
+          const runsResponse = await fetch(`/api/employer/payrolls?address=${encodeURIComponent(walletAddress)}`);
+          const runsPayload = await runsResponse.json();
+          if (!cancelled && runsPayload?.success && Array.isArray(runsPayload.payrollRuns)) {
+            setPayrollRuns(
+              runsPayload.payrollRuns.map((run: Record<string, any>) => ({
+                runId: run.runId || "",
+                employeeCount: run.employeeCount || 0,
+                status: run.status || "draft",
+                createdAt: run.createdAt || new Date().toISOString(),
+                merkleRoot: run.merkleRoot || run.payrollRoot || "",
+                commitments: run.commitments || [],
+                epoch: run.epoch || "",
+                txHash: run.txHash || "",
+                totalAmount: run.declaredTotal || "0",
+              }))
+            );
+          }
+        } catch {
+          // non-fatal — payroll runs will start empty
         }
 
         const auditorsResponse = await fetch("/api/employer/auditors");
@@ -279,6 +315,10 @@ export function CivitasProvider({ children }: { children: ReactNode }) {
     if (!walletAddress) return;
     setIsLoadingOnChain(true);
     try {
+      const [{ PublicKey }, { getVaultState }] = await Promise.all([
+        import("@solana/web3.js"),
+        import("./solana-program"),
+      ]);
       const ownerKey = new PublicKey(walletAddress);
 
       // Fetch real VaultState from Solana RPC
@@ -374,7 +414,16 @@ export function CivitasProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addVoucher = useCallback((voucher: Voucher) => {
-    setVouchers((current) => [voucher, ...current]);
+    setVouchers((current) => {
+      const exists = current.findIndex((v) => v.commitment === voucher.commitment);
+      if (exists !== -1) {
+        // Merge: NilDB status takes priority over stale in-memory state
+        const updated = [...current];
+        updated[exists] = { ...current[exists], ...voucher };
+        return updated;
+      }
+      return [voucher, ...current];
+    });
   }, []);
 
   const updateVoucher = useCallback((commitment: string, updates: Partial<Voucher>) => {

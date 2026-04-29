@@ -15,11 +15,17 @@ import {
   Transaction,
   TransactionInstruction,
   SystemProgram,
-  LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddressSync,
+  TOKEN_2022_PROGRAM_ID,
+} from "@solana/spl-token";
 
 const PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_CIVITAS_PROGRAM_ID ?? "CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y"
+  process.env.NEXT_PUBLIC_SOLANA_PAYROLL_PROGRAM ??
+  process.env.NEXT_PUBLIC_CIVITAS_PROGRAM_ID ??
+  "CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y"
 );
 
 const RPC =
@@ -47,7 +53,7 @@ export async function POST(request: Request) {
     const connection = new Connection(RPC, "confirmed");
 
     // Derive VaultState PDA
-    const [vaultPda, vaultBump] = PublicKey.findProgramAddressSync(
+    const [vaultPda] = PublicKey.findProgramAddressSync(
       [Buffer.from("vault"), owner.toBuffer()],
       PROGRAM_ID
     );
@@ -65,7 +71,32 @@ export async function POST(request: Request) {
     // For the serialised tx we include the owner as the fee payer; the
     // client's wallet signs and the instruction creates the accounts.
     const USDC_MINT = new PublicKey(
-      process.env.NEXT_PUBLIC_USDC_MINT ?? "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+      process.env.NEXT_PUBLIC_USDC_MINT ?? "9pan9bMn5HatX4EJdBwg9VgCa7Uz5HL8N1m5D3NdXejP"
+    );
+    const mintInfo = await connection.getAccountInfo(USDC_MINT);
+    if (!mintInfo) {
+      return NextResponse.json(
+        { error: `Configured Token-2022 mint does not exist on ${RPC}: ${USDC_MINT.toBase58()}` },
+        { status: 400 }
+      );
+    }
+    if (!mintInfo.owner.equals(TOKEN_2022_PROGRAM_ID)) {
+      return NextResponse.json(
+        {
+          error:
+            `Configured mint ${USDC_MINT.toBase58()} is owned by ${mintInfo.owner.toBase58()}, ` +
+            `but initialize_vault requires a Token-2022 mint owned by ${TOKEN_2022_PROGRAM_ID.toBase58()}. ` +
+            `For devnet, set NEXT_PUBLIC_USDC_MINT=9pan9bMn5HatX4EJdBwg9VgCa7Uz5HL8N1m5D3NdXejP.`,
+        },
+        { status: 400 }
+      );
+    }
+    const usdcVaultAta = getAssociatedTokenAddressSync(
+      USDC_MINT,
+      vaultPda,
+      true,
+      TOKEN_2022_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID
     );
 
     // Build the initialize_vault instruction data (Borsh-encoded)
@@ -85,14 +116,18 @@ export async function POST(request: Request) {
 
     const instructionData = Buffer.concat([disc, snsDomainBytes]);
 
-    // Accounts required by initialize_vault context in Anchor:
-    // [signer, vault_state (init), usdc_vault (init), mint, system_program, token_program, ...]
+    // Accounts required by InitializeVault in the Anchor IDL:
+    // owner, vault_state, usdc_mint, usdc_vault, token_program,
+    // associated_token_program, system_program.
     const ix = new TransactionInstruction({
       programId: PROGRAM_ID,
       keys: [
         { pubkey: owner, isSigner: true, isWritable: true },          // owner / payer
         { pubkey: vaultPda, isSigner: false, isWritable: true },      // vault_state (PDA, init)
         { pubkey: USDC_MINT, isSigner: false, isWritable: false },    // usdc mint
+        { pubkey: usdcVaultAta, isSigner: false, isWritable: true },  // usdc_vault ATA
+        { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+        { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ],
       data: instructionData,

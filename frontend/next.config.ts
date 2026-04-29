@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Silence Turbopack/webpack mismatch warning in Next.js 16
-  turbopack: {},
+  // outputFileTracingRoot scopes tracing to this app, avoiding repo-root lockfile scanning
+  outputFileTracingRoot: process.cwd(),
 
   // 1. Force these packages to run in Node.js runtime, not the edge or bundled browser runtime
   serverExternalPackages: [
@@ -15,6 +15,13 @@ const nextConfig: NextConfig = {
 
   // 3. Webpack config
   webpack: (config, { isServer }) => {
+    // Enable async WASM for @noir-lang/backend_barretenberg (Barretenberg proving key)
+    config.experiments = {
+      ...config.experiments,
+      asyncWebAssembly: true,
+      layers: true,
+    };
+
     if (isServer) {
       // Ensure we don't try to bundle these test files
       config.resolve.alias = {

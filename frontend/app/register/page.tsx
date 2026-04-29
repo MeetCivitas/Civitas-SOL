@@ -37,31 +37,18 @@ type RegRole = "employee" | "auditor" | "employer"
 
 function EmployerWizard() {
   const router = useRouter()
-  const { address, connected, signMessage } = useSolanaWallet()
+  const { address, connected, signMessage, signAndSendTransaction } = useSolanaWallet()
   const [snsDomain, setSnsDomain] = useState("")
   const [showSnsInput, setShowSnsInput] = useState(false)
+  const [snsLoading, setSnsLoading] = useState(false)
+  const [snsStatus, setSnsStatus] = useState<{ valid: boolean; message: string } | null>(null)
   const [signedIn, setSignedIn] = useState(false)
   const [signingIn, setSigningIn] = useState(false)
   const [signError, setSignError] = useState<string | null>(null)
 
-  // `signAndSend` adapts the wallet's signMessage + send into the hook interface
-  const signAndSendTx = useCallback(
-    async (serializedTx: string): Promise<string> => {
-      const provider = (window as any).solflare ?? (window as any).solana
-      if (!provider?.signAndSendTransaction) throw new Error("Wallet does not support signAndSendTransaction")
-      const txBytes = Buffer.from(serializedTx, "base64")
-      const { signature } = await provider.signAndSendTransaction(
-        txBytes,
-        { skipPreflight: false, preflightCommitment: "confirmed" }
-      )
-      return signature
-    },
-    []
-  )
-
   const { status: vaultStatus, vaultPda, error: vaultError, initialize } = useInitializeVault(
     address,
-    connected ? signAndSendTx : null
+    connected ? signAndSendTransaction : null
   )
 
   // ── Step 1 → connect wallet
@@ -93,6 +80,33 @@ function EmployerWizard() {
       setSignError(e?.message ?? "Message signing cancelled")
     } finally {
       setSigningIn(false)
+    }
+  }
+
+  const handleSnsLookup = async () => {
+    if (!snsDomain) return
+    setSnsLoading(true)
+    setSnsStatus(null)
+    try {
+      const { resolveSNS, isValidSNSDomain } = await import("@/lib/sns")
+      if (!isValidSNSDomain(snsDomain)) {
+        setSnsStatus({ valid: false, message: "Invalid domain format" })
+        return
+      }
+      const owner = await resolveSNS(snsDomain)
+      if (owner) {
+        if (owner.toBase58() === address) {
+          setSnsStatus({ valid: true, message: "Domain owned by you ✓" })
+        } else {
+          setSnsStatus({ valid: false, message: "Domain owned by another wallet" })
+        }
+      } else {
+        setSnsStatus({ valid: false, message: "Domain not registered" })
+      }
+    } catch (e) {
+      setSnsStatus({ valid: false, message: "Lookup failed" })
+    } finally {
+      setSnsLoading(false)
     }
   }
 
@@ -205,7 +219,7 @@ function EmployerWizard() {
             {vaultStatus === "ready" && (
               <div className="space-y-3">
                 {/* Optional SNS domain */}
-                <div>
+                <div className="space-y-2">
                   <button
                     onClick={() => setShowSnsInput(!showSnsInput)}
                     className="flex items-center gap-2 text-xs text-white/40 hover:text-white/70 transition-colors"
@@ -215,13 +229,28 @@ function EmployerWizard() {
                   </button>
                   <AnimatePresence>
                     {showSnsInput && (
-                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="mt-2">
-                        <input
-                          value={snsDomain}
-                          onChange={(e) => setSnsDomain(e.target.value)}
-                          placeholder="yourcompany.sol"
-                          className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30"
-                        />
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+                        <div className="flex gap-2">
+                          <input
+                            autoFocus
+                            value={snsDomain}
+                            onChange={(e) => setSnsDomain(e.target.value)}
+                            placeholder="yourcompany.sol"
+                            className="flex-1 rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30"
+                          />
+                          <button
+                            onClick={handleSnsLookup}
+                            disabled={!snsDomain || snsLoading}
+                            className="px-4 rounded-xl border border-violet-500/30 text-violet-400 text-[10px] font-bold uppercase tracking-widest hover:bg-violet-500/10 transition-all disabled:opacity-40"
+                          >
+                            {snsLoading ? "..." : "Verify"}
+                          </button>
+                        </div>
+                        {snsStatus && (
+                          <p className={`mt-2 text-[10px] font-bold uppercase tracking-widest ${snsStatus.valid ? "text-emerald-400" : "text-amber-400/70"}`}>
+                            {snsStatus.message}
+                          </p>
+                        )}
                       </motion.div>
                     )}
                   </AnimatePresence>

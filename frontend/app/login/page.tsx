@@ -1,380 +1,264 @@
-"use client";
+"use client"
 
-import { useMemo, useState, useEffect, useRef } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import {
-  ArrowLeft,
-  Briefcase,
-  ShieldCheck,
-  UserCircle,
-  Upload,
-  KeyRound,
-  CheckCircle2,
-  Loader2,
-  AlertCircle,
-  FileJson,
-} from "lucide-react";
-import { useCivitas } from "@/lib/civitas-provider";
-import { useSolanaWallet } from "@/lib/solana-wallet";
-import { WalletButton } from "@/components/wallet-button";
-import {
-  signEmployerIn,
-  getEmployerSession,
-} from "@/lib/use-employer-session";
+import { useState, useCallback, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { useCivitas } from "@/lib/civitas-provider"
+import { useSolanaWallet } from "@/lib/solana-wallet"
+import { signEmployerIn, getEmployerSession } from "@/lib/use-employer-session"
+import Link from "next/link"
+import { motion, AnimatePresence } from "framer-motion"
+import { Shield, Briefcase, UserCircle, ChevronRight, UploadCloud, Lock, ArrowLeft, KeyRound } from "lucide-react"
+import { WalletButton } from "@/components/wallet-button"
+
+type TabType = "employer" | "employee" | "auditor"
 
 export default function LoginPage() {
-  const router = useRouter();
-  const { connected, address, signMessage } = useSolanaWallet();
-  const { credential, importCredential, setUserRole, setWalletAddress } = useCivitas();
-  const [role, setRole] = useState<"employer" | "employee" | "auditor">("employer");
-  const [error, setError] = useState<string | null>(null);
+  const router = useRouter()
+  const { connected, address, signMessage } = useSolanaWallet()
+  const { setWalletAddress, setUserRole, credential, importCredential } = useCivitas()
 
-  // ── Employer state ──────────────────────────────────────────────────────
-  const [signInState, setSignInState] = useState<"idle" | "signing" | "signed">("idle");
-  const [hasExistingSession, setHasExistingSession] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabType>("employer")
+  const [error, setError] = useState<string | null>(null)
+  const [statusMsg, setStatusMsg] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [isSigningIn, setIsSigningIn] = useState(false)
+  const [hasExistingSession, setHasExistingSession] = useState(false)
 
-  // ── Employee / Auditor state ────────────────────────────────────────────
-  const [importing, setImporting] = useState(false);
-  const [importedTag, setImportedTag] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const subtitle = useMemo(() => {
-    if (role === "employer") return "Connect your Solana wallet, then sign a gasless message to authorize your session.";
-    if (role === "auditor") return "Load your auditor credential to inspect payout batches and attestation history.";
-    return "Upload your keyfile backup to access your private payouts — no password needed.";
-  }, [role]);
-
-  // Restore employer session on wallet connect
   useEffect(() => {
-    if (connected && address && role === "employer") {
-      const session = getEmployerSession(address);
-      if (session) {
-        setHasExistingSession(true);
-        setSignInState("signed");
-      } else {
-        setHasExistingSession(false);
-        setSignInState("idle");
+    if (connected && address) {
+      setWalletAddress(address)
+      if (activeTab === "employer") {
+        const session = getEmployerSession(address)
+        setHasExistingSession(Boolean(session))
       }
-    } else {
-      setSignInState("idle");
-      setHasExistingSession(false);
     }
-  }, [connected, address, role]);
+  }, [connected, address, setWalletAddress, activeTab])
 
-  // Restore imported tag from active credential on mount
-  useEffect(() => {
-    if (credential && (role === "employee" || role === "auditor")) {
-      setImportedTag(credential.employeeTag);
-    }
-  }, [credential, role]);
+  const doEmployeeLogin = useCallback(async (nonce: string, tag: string) => {
+    setError(null)
+    setIsLoading(true)
+    setStatusMsg("Authenticating Identity...")
 
-  // ── Handlers ────────────────────────────────────────────────────────────
-
-  const handleRoleChange = (newRole: typeof role) => {
-    setRole(newRole);
-    setError(null);
-    setImportedTag(null);
-    setSignInState("idle");
-  };
-
-  const handleCredentialUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    event.target.value = "";
-    setError(null);
-    setImporting(true);
     try {
-      const imported = await importCredential(file);
-      setImportedTag(imported.employeeTag);
-    } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : "Failed to read credential file. Make sure it's a valid Civitas keyfile.");
+      const res = await fetch("/api/auth/zk-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "tag", employee_tag: tag, proof: { nonce }, role: "employee" }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || `Auth failed (${res.status})`)
+      setUserRole("employee")
+      setStatusMsg("Identity Verified.")
+      window.location.href = "/employees"
+    } catch (err: any) {
+      setError(`Login failed: ${err?.message || String(err)}`)
+      setStatusMsg(null)
     } finally {
-      setImporting(false);
+      setIsLoading(false)
     }
-  };
+  }, [setUserRole])
 
-  const handleCredentialContinue = () => {
-    if (!importedTag) {
-      setError("Please upload your credential keyfile first.");
-      return;
-    }
-    setUserRole(role);
-    setWalletAddress(address ?? null);
-    if (role === "auditor") router.push("/auditors");
-    else router.push("/employees");
-  };
+  const doAuditorLogin = useCallback(async (nonce: string, tag: string) => {
+    setError(null)
+    setIsLoading(true)
+    setStatusMsg("Authenticating Auditor Node...")
 
-  // Gasless sign-in for employer
-  const handleSignIn = async () => {
-    if (!address) { setError("Connect a Solana wallet first."); return; }
-    setSignInState("signing");
-    setError(null);
     try {
-      await signEmployerIn(address, signMessage);
-      setSignInState("signed");
-      setHasExistingSession(false);
-    } catch (e: any) {
-      setSignInState("idle");
-      setError(e?.message ?? "Sign-in was cancelled. Please try again.");
+      const res = await fetch("/api/auth/zk-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "tag", employee_tag: tag, proof: { nonce }, role: "auditor" }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || `Auth failed (${res.status})`)
+      setUserRole("auditor")
+      setStatusMsg("Clearance Granted.")
+      window.location.href = "/auditors"
+    } catch (err: any) {
+      setError(`Login failed: ${err?.message || String(err)}`)
+      setStatusMsg(null)
+    } finally {
+      setIsLoading(false)
     }
-  };
+  }, [setUserRole])
 
-  const handleEmployerContinue = () => {
-    if (!connected || !address) { setError("Connect a Solana wallet first."); return; }
-    if (signInState !== "signed") { setError("Please authorize your sign-in first."); return; }
-    setWalletAddress(address);
-    setUserRole("employer");
-    router.push("/employer");
-  };
+  const handleCredentialFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ""
+    setError(null)
+    try {
+      const cred = await importCredential(file)
+      await doEmployeeLogin(cred.credentialNonce, cred.employeeTag)
+    } catch (err: any) {
+      setError(`Failed: ${err?.message || String(err)}`)
+    }
+  }, [importCredential, doEmployeeLogin])
+
+  const handleAuditorCredentialFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ""
+    setError(null)
+    try {
+      const cred = await importCredential(file)
+      await doAuditorLogin(cred.credentialNonce, cred.employeeTag)
+    } catch (err: any) {
+      setError(`Failed: ${err?.message || String(err)}`)
+    }
+  }, [importCredential, doAuditorLogin])
+
+  const handleEmployerSignIn = useCallback(async () => {
+    if (!address) {
+      setError("Connect a Solana wallet first.")
+      return
+    }
+
+    setError(null)
+    setStatusMsg("Waiting for wallet signature...")
+    setIsSigningIn(true)
+
+    try {
+      await signEmployerIn(address, signMessage)
+      setStatusMsg("Session authorized.")
+      setHasExistingSession(true)
+    } catch (err: any) {
+      setError(err?.message || "Sign-in cancelled.")
+      setStatusMsg(null)
+    } finally {
+      setIsSigningIn(false)
+    }
+  }, [address, signMessage])
+
+  const handleEmployer = useCallback(() => {
+    if (!connected || !address) {
+      setError("Establish a wallet connection first.")
+      return
+    }
+    if (!hasExistingSession) {
+      setError("Authorize sign-in first.")
+      return
+    }
+    setWalletAddress(address)
+    setUserRole("employer")
+    router.push("/employer")
+  }, [connected, address, hasExistingSession, setWalletAddress, setUserRole, router])
+
+  const tabs = [
+    { id: "employer" as const, label: "Enterprise", icon: <Briefcase className="w-4 h-4" /> },
+    { id: "employee" as const, label: "Recipient", icon: <UserCircle className="w-4 h-4" /> },
+    { id: "auditor" as const, label: "Auditor", icon: <Shield className="w-4 h-4" /> },
+  ]
 
   return (
-    <main className="min-h-screen bg-black px-4 py-12 text-white">
-      <div className="mx-auto max-w-5xl">
-        <Link
-          href="/"
-          className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-        >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          Back
-        </Link>
-
-        <div className="mt-10 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <section className="rounded-3xl border border-white/10 bg-white/5 p-8">
-            <p className="text-sm uppercase tracking-[0.2em] text-white/50">Portal Access</p>
-            <h1 className="mt-4 text-4xl font-semibold tracking-tight">Sign in to Civitas</h1>
-            <p className="mt-4 max-w-2xl text-base text-white/65">{subtitle}</p>
-
-            {/* Role selector */}
-            <div className="mt-8 grid gap-3 sm:grid-cols-3">
-              {[
-                { id: "employer", label: "Employer", icon: Briefcase },
-                { id: "employee", label: "Employee", icon: UserCircle },
-                { id: "auditor", label: "Auditor", icon: ShieldCheck },
-              ].map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => handleRoleChange(id as typeof role)}
-                  className={`flex min-h-12 items-center gap-3 rounded-2xl border px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
-                    role === id
-                      ? "border-white/30 bg-white/10 text-white"
-                      : "border-white/10 bg-black/20 text-white/65 hover:bg-white/5"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" aria-hidden="true" />
-                  <span>{label}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* ── EMPLOYER FLOW ── */}
-            {role === "employer" && (
-              <div className="mt-8 rounded-2xl border border-white/10 bg-black/30 p-6 space-y-6">
-
-                {/* Step 1: Connect wallet */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold border transition-all ${connected ? "bg-emerald-500 border-emerald-500 text-black" : "bg-white/5 border-white/15 text-white/50"}`}>
-                      {connected ? <CheckCircle2 className="h-3.5 w-3.5" /> : "1"}
-                    </span>
-                    <p className="text-sm font-semibold text-white/80">Connect Wallet</p>
-                  </div>
-                  <div className="pl-8">
-                    <WalletButton />
-                    {connected && address && (
-                      <p className="mt-2 font-mono text-xs text-white/40 break-all">{address}</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Step 2: Gasless sign-in */}
-                {connected && (
-                  <div className="space-y-3 border-t border-white/[0.07] pt-5">
-                    <div className="flex items-center gap-2.5">
-                      <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold border transition-all ${signInState === "signed" ? "bg-emerald-500 border-emerald-500 text-black" : "bg-amber-500/20 border-amber-500/40 text-amber-300"}`}>
-                        {signInState === "signed" ? <CheckCircle2 className="h-3.5 w-3.5" /> : "2"}
-                      </span>
-                      <p className="text-sm font-semibold text-white/80">Authorize Sign-In</p>
-                      {hasExistingSession && (
-                        <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Session active</span>
-                      )}
-                    </div>
-
-                    <div className="pl-8 space-y-3">
-                      {signInState !== "signed" ? (
-                        <>
-                          <div className="rounded-xl bg-black/50 border border-white/[0.08] px-4 py-3 font-mono text-xs text-white/40 leading-relaxed">
-                            <p className="text-white/20 mb-1 text-[9px] uppercase tracking-widest">Gasless message — 0 SOL cost</p>
-                            <p className="text-white/60">Statement: I authorize access to Civitas Protocol as an Employer.</p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={handleSignIn}
-                            disabled={signInState === "signing"}
-                            className="inline-flex min-h-10 items-center gap-2 rounded-full bg-white px-5 py-2 text-sm font-medium text-black transition hover:bg-white/90 disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-                          >
-                            {signInState === "signing" ? (
-                              <><Loader2 className="h-4 w-4 animate-spin" /> Waiting for wallet...</>
-                            ) : (
-                              <><KeyRound className="h-4 w-4" /> Authorize Sign-In</>
-                            )}
-                          </button>
-                        </>
-                      ) : (
-                        <div className="flex items-center gap-2 text-sm text-emerald-400">
-                          <CheckCircle2 className="h-4 w-4" />
-                          <span>{hasExistingSession ? "Existing session restored — no re-sign needed." : "Signed in successfully."}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Continue */}
-                {connected && (
-                  <div className="border-t border-white/[0.07] pt-5 pl-8">
-                    <button
-                      type="button"
-                      onClick={handleEmployerContinue}
-                      disabled={!connected || signInState !== "signed"}
-                      className="inline-flex min-h-10 items-center rounded-full bg-white px-5 py-2 text-sm font-medium text-black transition hover:bg-white/90 disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-                    >
-                      Enter Employer Dashboard →
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ── EMPLOYEE / AUDITOR FLOW ── */}
-            {(role === "employee" || role === "auditor") && (
-              <div className="mt-8 rounded-2xl border border-white/10 bg-black/30 p-6 space-y-5">
-                <p className="text-sm text-white/60">
-                  Upload your <strong className="text-white">Civitas keyfile</strong> (.json) to restore your private identity.
-                  Your credential nonce never leaves your device.
-                </p>
-
-                {/* Upload area */}
-                {!importedTag ? (
-                  <label
-                    className={`group flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-10 text-center cursor-pointer transition-all
-                      ${importing
-                        ? "border-white/20 bg-white/5 pointer-events-none"
-                        : "border-white/15 bg-black/20 hover:border-white/30 hover:bg-white/5"
-                      }`}
-                  >
-                    {importing ? (
-                      <>
-                        <Loader2 className="h-8 w-8 text-white/40 animate-spin" />
-                        <p className="text-sm text-white/50">Reading keyfile...</p>
-                      </>
-                    ) : (
-                      <>
-                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 border border-white/10 group-hover:bg-white/10 transition-all">
-                          <FileJson className="h-6 w-6 text-white/50" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-white">Click to upload keyfile</p>
-                          <p className="mt-1 text-xs text-white/40">civitas-credential.json or civitas-auditor-credential.json</p>
-                        </div>
-                        <div className="flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs text-white/60 hover:text-white hover:border-white/30 transition-all">
-                          <Upload className="h-3.5 w-3.5" />
-                          Browse files
-                        </div>
-                      </>
-                    )}
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="application/json,.json"
-                      className="sr-only"
-                      onChange={handleCredentialUpload}
-                      disabled={importing}
-                    />
-                  </label>
-                ) : (
-                  /* Credential loaded successfully */
-                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                      <p className="text-sm font-medium text-emerald-300">Credential loaded successfully</p>
-                    </div>
-                    <div className="pl-6">
-                      <p className="text-[10px] uppercase tracking-widest text-white/30 mb-1">
-                        {role === "auditor" ? "Auditor Tag" : "Employee Tag"}
-                      </p>
-                      <p className="font-mono text-xs text-white/70 break-all">{importedTag}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => { setImportedTag(null); setError(null); }}
-                      className="pl-6 text-xs text-white/40 hover:text-white/70 transition-colors underline underline-offset-2"
-                    >
-                      Use a different keyfile
-                    </button>
-                  </div>
-                )}
-
-                {/* Continue button */}
-                <button
-                  type="button"
-                  onClick={handleCredentialContinue}
-                  disabled={!importedTag || importing}
-                  className="w-full inline-flex min-h-11 items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-medium text-black transition hover:bg-white/90 disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-                >
-                  {importing ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...</>
-                  ) : importedTag ? (
-                    <>Enter {role === "auditor" ? "Auditor" : "Employee"} Dashboard →</>
-                  ) : (
-                    "Upload keyfile to continue"
-                  )}
-                </button>
-              </div>
-            )}
-
-            {/* Error message */}
-            {error && (
-              <div className="mt-4 flex items-start gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3">
-                <AlertCircle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
-                <p className="text-sm text-rose-300">{error}</p>
-              </div>
-            )}
-
-            {/* Register link */}
-            <p className="mt-6 text-xs text-white/35 text-center">
-              No credential yet?{" "}
-              <Link href="/register" className="text-white/60 hover:text-white underline underline-offset-2 transition-colors">
-                Create one on the register page
-              </Link>
-            </p>
-          </section>
-
-          {/* Info sidebar */}
-          <aside className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/8 to-white/0 p-8">
-            <p className="text-sm uppercase tracking-[0.2em] text-white/45">Security Model</p>
-            <ul className="mt-6 space-y-5 text-sm text-white/70">
-              <li className="flex gap-3">
-                <span className="mt-0.5 shrink-0 h-4 w-4 rounded-full border border-white/20 bg-white/5 flex items-center justify-center text-[9px] font-bold text-white/40">1</span>
-                <span>Employer sessions use a <strong className="text-white">gasless wallet signature</strong>. No passwords, no custodial auth.</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="mt-0.5 shrink-0 h-4 w-4 rounded-full border border-white/20 bg-white/5 flex items-center justify-center text-[9px] font-bold text-white/40">2</span>
-                <span>Sessions last <strong className="text-white">24 hours</strong>. You won't be asked to sign again within that window.</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="mt-0.5 shrink-0 h-4 w-4 rounded-full border border-white/20 bg-white/5 flex items-center justify-center text-[9px] font-bold text-white/40">3</span>
-                <span>Employee credentials are verified locally — your <strong className="text-white">private nonce never leaves your device</strong>.</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="mt-0.5 shrink-0 h-4 w-4 rounded-full border border-white/20 bg-white/5 flex items-center justify-center text-[9px] font-bold text-white/40">4</span>
-                <span>If you registered on this device, your last credential may be <strong className="text-white">auto-restored</strong> — just click the role and continue.</span>
-              </li>
-            </ul>
-          </aside>
-        </div>
+    <div className="min-h-screen bg-black text-white relative overflow-hidden font-sans flex items-center justify-center">
+      <div className="absolute inset-0 z-0 pointer-events-none">
+        <video autoPlay loop muted playsInline className="w-full h-full object-cover opacity-60 mix-blend-screen">
+          <source src="/videos/Animated_Privacy_Video_Element.mp4" type="video/mp4" />
+        </video>
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-[4px]" />
       </div>
-    </main>
-  );
+
+      <header className="absolute top-0 w-full z-10 px-6 py-6 flex justify-between items-center">
+        <Link href="/" className="flex items-center gap-2 group text-white/50 hover:text-white transition-colors">
+          <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
+          <span className="text-xs font-bold uppercase tracking-widest">Return to Protocol</span>
+        </Link>
+        <div className="flex items-center gap-3">
+          <img src="/logo-light.svg" alt="Civitas" className="h-4 w-auto opacity-60" />
+          <span className="text-xs font-bold tracking-[0.3em] uppercase text-white/40">Auth</span>
+        </div>
+      </header>
+
+      <main className="relative z-10 w-full max-w-[420px] px-6">
+        <div className="text-center mb-10">
+          <h1 className="text-4xl font-light tracking-tight text-white mb-3">Portal Access</h1>
+          <p className="text-sm font-light text-white/40 uppercase tracking-widest">Select your authorization layer</p>
+        </div>
+
+        <div className="relative rounded-3xl bg-[#0a0a0a]/90 backdrop-blur-2xl border border-white/10 overflow-hidden">
+          <div className="p-2 border-b border-white/[0.05]">
+            <div className="flex bg-black/50 p-1.5 rounded-2xl border border-white/[0.05]">
+              {tabs.map((tab) => {
+                const isActive = activeTab === tab.id
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => { setActiveTab(tab.id); setError(null); setStatusMsg(null) }}
+                    className={`relative flex-1 flex flex-col items-center gap-1.5 py-3 rounded-xl transition-all duration-300 z-10 ${isActive ? "text-white" : "text-white/40 hover:text-white/70"}`}
+                  >
+                    {isActive && <motion.div layoutId="activeTabBadge" className="absolute inset-0 rounded-xl bg-white/[0.06] border border-white/10" />}
+                    <div className="relative z-10">{tab.icon}</div>
+                    <span className="text-[10px] font-bold uppercase tracking-widest relative z-10">{tab.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="p-8 space-y-6">
+            <AnimatePresence mode="wait">
+              {error && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-4 rounded-xl border border-red-500/20 bg-red-500/10 text-xs text-red-300">{error}</motion.div>}
+              {statusMsg && !error && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-4 rounded-xl border border-white/10 bg-white/5 text-xs text-white/70">{statusMsg}</motion.div>}
+            </AnimatePresence>
+
+            {activeTab === "employer" && (
+              <div className="space-y-4">
+                <div className="flex justify-center"><WalletButton /></div>
+                {connected && address && <p className="text-xs font-mono text-emerald-300 break-all text-center">{address}</p>}
+                {connected && (
+                  <button onClick={handleEmployerSignIn} disabled={isSigningIn} className="w-full py-3 rounded-xl border border-white/10 bg-black/40 hover:bg-white/5 text-sm">
+                    {hasExistingSession ? "Session authorized" : isSigningIn ? "Authorizing..." : "Authorize Sign-In"}
+                  </button>
+                )}
+                <button onClick={handleEmployer} disabled={!connected || !hasExistingSession} className="w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-emerald-500 text-black font-bold text-xs uppercase tracking-widest disabled:opacity-40">
+                  Access Employer <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+
+            {activeTab === "employee" && (
+              <div className="space-y-4">
+                {credential && credential.role !== "auditor" && (
+                  <button onClick={() => doEmployeeLogin(credential.credentialNonce, credential.employeeTag)} disabled={isLoading} className="w-full p-4 rounded-xl border border-blue-500/30 bg-blue-500/10 text-xs font-mono text-white/80">
+                    {credential.employeeTag.slice(0, 16)}...
+                  </button>
+                )}
+                <label className="block w-full rounded-xl border border-white/10 bg-black/40 hover:bg-white/5 transition-all cursor-pointer">
+                  <div className="flex flex-col items-center justify-center py-8 gap-3">
+                    <UploadCloud className="h-6 w-6 text-white/30" />
+                    <p className="text-sm font-medium text-white">Import Credential File</p>
+                  </div>
+                  <input type="file" accept=".json" onChange={handleCredentialFile} className="hidden" />
+                </label>
+                <div className="text-center text-xs text-white/30">No identity root? <Link href="/register" className="text-blue-400">Synthesize one now.</Link></div>
+              </div>
+            )}
+
+            {activeTab === "auditor" && (
+              <div className="space-y-4">
+                {credential && credential.role === "auditor" && (
+                  <button onClick={() => doAuditorLogin(credential.credentialNonce, credential.employeeTag)} disabled={isLoading} className="w-full p-4 rounded-xl border border-purple-500/30 bg-purple-500/10 text-xs font-mono text-white/80">
+                    {credential.employeeTag.slice(0, 16)}...
+                  </button>
+                )}
+                <label className="block w-full rounded-xl border border-white/10 bg-black/40 hover:bg-white/5 transition-all cursor-pointer">
+                  <div className="flex flex-col items-center justify-center py-8 gap-3">
+                    <UploadCloud className="h-6 w-6 text-white/30" />
+                    <p className="text-sm font-medium text-white">Import Auditor Clearance</p>
+                  </div>
+                  <input type="file" accept=".json" onChange={handleAuditorCredentialFile} className="hidden" />
+                </label>
+                <div className="text-center text-xs text-white/30">Need auditor clearance? <Link href="/register" className="text-purple-400">Request here.</Link></div>
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
+
+      <footer className="absolute bottom-6 w-full text-center pointer-events-none z-10 px-6">
+        <p className="text-[10px] font-mono tracking-widest uppercase text-white/20">Powered by Solana · Nillion · private computation</p>
+      </footer>
+    </div>
+  )
 }

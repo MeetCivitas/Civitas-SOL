@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySession } from "@/lib/server/session";
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const pathname = req.nextUrl.pathname || "/";
   const isEmployees = pathname.startsWith("/employees");
   const isAuditors = pathname.startsWith("/auditors");
@@ -23,6 +23,7 @@ export async function middleware(req: NextRequest) {
   if (isEmployees && session.role !== "employee") {
     return NextResponse.redirect(new URL("/login", req.url));
   }
+
   if (isAuditors && session.role !== "auditor") {
     return NextResponse.redirect(new URL("/login", req.url));
   }
@@ -33,4 +34,3 @@ export async function middleware(req: NextRequest) {
 export const config = {
   matcher: ["/employees/:path*", "/auditors/:path*"],
 };
-

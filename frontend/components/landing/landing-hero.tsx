@@ -64,8 +64,8 @@ export function LandingHero() {
               <Globe className="h-5 w-5 text-accent" />
             </div>
             <div className="text-left">
-              <p className="text-sm font-medium text-foreground">Multi-chain</p>
-              <p className="text-xs text-muted-foreground">Axelar, NEAR, Zcash</p>
+              <p className="text-sm font-medium text-foreground">Privacy Stack</p>
+              <p className="text-xs text-muted-foreground">Nillion · Cloak · MagicBlock</p>
             </div>
           </div>
           <div className="flex items-center justify-center gap-3 rounded-xl border border-border/50 bg-card/50 p-4 backdrop-blur-sm">

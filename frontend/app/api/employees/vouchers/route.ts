@@ -54,32 +54,56 @@ export async function GET(req: NextRequest) {
     let allVouchers: any[] = [];
 
     // 2. Query each company's vouchers collection for this employee
+    // Also collect run metadata to enrich vouchers with merkleRoot + employerAddress
+    const runCache: Record<string, { merkleRoot?: string; employerAddress?: string }> = {};
+
     for (const cid of companyIdsToTry) {
       try {
         const response = await listVouchersByEmployee(cid, employeeTag);
         const records = extractRecords(response);
         if (records.length > 0) {
           console.log(`[Vouchers] Found ${records.length} vouchers in company ${cid}`);
+
+          // Fetch run records for this company to enrich voucher data
+          try {
+            const { listPayrollRuns } = await import("@/lib/server/nillion-server");
+            const runResp = await listPayrollRuns(cid);
+            const runs = extractRecords(runResp);
+            for (const run of runs) {
+              if (run.run_id) {
+                runCache[run.run_id] = {
+                  merkleRoot: run.merkle_root || "",
+                  employerAddress: run.employer_address || "",
+                };
+              }
+            }
+          } catch { /* non-fatal */ }
+
           allVouchers.push(...records);
         }
-      } catch (err: any) {
+      } catch {
         // Some collections might not exist yet, that's fine
       }
     }
 
-    const vouchers = allVouchers.map((r: any) => ({
-      commitment: r.commitment || "",
-      employeeTag: r.employee_tag || "",
-      amount: r.amount || "0",
-      epoch: r.epoch || "",
-      voucherNonce: r.nonce || "",
-      nullifier: r.nullifier || "",
-      runId: r.run_id || "",
-      status: r.status || "pending",
-      claimedAt: r.claimed_at || "",
-      createdAt: r.created_at || "",
-      claimTxHash: r.tx_hash || "",
-    }));
+    const vouchers = allVouchers.map((r: any) => {
+      const run = runCache[r.run_id] ?? {};
+      return {
+        commitment: r.commitment || "",
+        employeeTag: r.employee_tag || "",
+        amount: r.amount || "0",
+        epoch: r.epoch || "",
+        voucherNonce: r.nonce || "",
+        nullifier: r.nullifier || "",
+        runId: r.run_id || "",
+        status: r.status || "pending",
+        claimedAt: r.claimed_at || "",
+        createdAt: r.created_at || "",
+        claimTxHash: r.tx_hash || "",
+        merkleRoot: run.merkleRoot || r.merkle_root || "",
+        employerAddress: r.employer_address || run.employerAddress || "",
+      };
+    });
 
     return NextResponse.json({ success: true, vouchers });
   } catch (error: any) {

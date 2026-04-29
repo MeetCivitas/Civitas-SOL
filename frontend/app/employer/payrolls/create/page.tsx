@@ -5,11 +5,7 @@ import { WalletButton } from "@/components/wallet-button"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 
-import { useCivitas } from "@/lib/civitas-provider"
-
 export default function CreatePayrollPage() {
-  const { employees } = useCivitas()
-
   return (
     <div className="min-h-screen bg-[#030303] text-white selection:bg-blue-500/30 selection:text-white pb-20 relative overflow-x-hidden">
 
@@ -42,7 +38,7 @@ export default function CreatePayrollPage() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
               </span>
-              Sepolia
+              Solana
             </div>
             <div className="h-4 w-px bg-white/[0.06] hidden sm:block" />
             <WalletButton />
@@ -61,7 +57,7 @@ export default function CreatePayrollPage() {
           Back to Dashboard
         </Link>
 
-        <CreatePayrollWizard employees={employees} onPrepare={(epoch) => console.log('Prepared:', epoch)} />
+        <CreatePayrollWizard />
       </div>
     </div>
   )

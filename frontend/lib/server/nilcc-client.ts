@@ -3,9 +3,6 @@
 // Submits payroll compute jobs to the Nillion nilCC TEE cluster,
 // polls for results, and verifies TEE attestations.
 
-import fs from "fs";
-import path from "path";
-
 // ── Configuration ───────────────────────────────────────────────────────
 
 const NILCC_CLUSTER_URL = (process.env.NILCC_CLUSTER_URL || "").trim();
@@ -73,15 +70,19 @@ async function nilccFetch(
 
     console.log(`[nilCC] API Call: ${options.method || "GET"} ${path}`);
 
-    // The nilCC API requires x-api-key header for authentication
-    const apiKey = process.env.NILCC_API_KEY || process.env.NILCC_SECRET_KEY || NILCC_SIGNING_KEY;
-    console.log(`[nilCC] Using API key: ${apiKey.slice(0, 8)}…`);
+    // The nilCC API requires Authorization: Bearer or x-api-key header
+    const apiKey = process.env.NILCC_API_KEY || process.env.NILCC_SECRET_KEY || process.env.NILCC_SIGNING_KEY || "";
+    const accountId = process.env.NILLCC_ACCOUNT_ID || "";
+
+    console.log(`[nilCC] Auth: key=${apiKey.slice(0, 8)}…, account=${accountId.slice(0, 8)}…`);
 
     const res = await fetch(url, {
         ...options,
         headers: {
             "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
             "x-api-key": apiKey,
+            ...(accountId ? { "x-account-id": accountId } : {}),
             ...(options.headers || {}),
         },
     });
@@ -95,8 +96,7 @@ async function nilccFetch(
 }
 
 function getDockerComposeStr(manifestJson: string): string {
-    const orgKey = process.env.NEXT_PUBLIC_NILLION_ORG_SECRET_KEY || "";
-    // Embed values directly — CVM envVars don't propagate reliably into container
+    const orgKey = process.env.NEXT_PUBLIC_NILLION_ORG_SECRET_KEY || process.env.NILLION_ORG_SECRET_KEY || "";
     return `services:\n  civitas-payroll:\n    image: ${NILCC_WORKLOAD_IMAGE}\n    environment:\n      NILLION_ORG_SECRET_KEY: '${orgKey}'\n      PAYROLL_MANIFEST: '${manifestJson.replace(/'/g, "''")}'\n      OUTPUT_DIR: /outputs\n    restart: "no"`;
 }
 
@@ -134,7 +134,7 @@ export async function submitPayrollJob(
         name: `civitas-payroll-${manifest.run_id}`,
         dockerCompose: getDockerComposeStr(manifestJson),
         envVars: {
-            NILLION_ORG_SECRET_KEY: process.env.NEXT_PUBLIC_NILLION_ORG_SECRET_KEY || "",
+            NILLION_ORG_SECRET_KEY: process.env.NEXT_PUBLIC_NILLION_ORG_SECRET_KEY || process.env.NILLION_ORG_SECRET_KEY || "",
         },
         files: {
             "manifest.json": manifestBase64,
@@ -344,8 +344,8 @@ export interface OnboardResult {
 const NILCC_ONBOARD_IMAGE = process.env.NILCC_ONBOARD_IMAGE || "rythmerrn/civitas-nilcc-onboard:latest";
 
 function getOnboardComposeStr(manifestJson: string): string {
-    const orgKey = process.env.NEXT_PUBLIC_NILLION_ORG_SECRET_KEY || "";
-    return `services:\\n  civitas-onboard:\\n    image: ${NILCC_ONBOARD_IMAGE}\\n    environment:\\n      NILLION_ORG_SECRET_KEY: '${orgKey}'\\n      ONBOARD_MANIFEST: '${manifestJson.replace(/'/g, "''")}'\\n      OUTPUT_DIR: /outputs\\n    restart: "no"`;
+    const orgKey = process.env.NEXT_PUBLIC_NILLION_ORG_SECRET_KEY || process.env.NILLION_ORG_SECRET_KEY || "";
+    return `services:\n  civitas-onboard:\n    image: ${NILCC_ONBOARD_IMAGE}\n    environment:\n      NILLION_ORG_SECRET_KEY: '${orgKey}'\n      ONBOARD_MANIFEST: '${manifestJson.replace(/'/g, "''")}'\n      OUTPUT_DIR: /outputs\n    restart: "no"`;
 }
 
 /**
@@ -360,7 +360,7 @@ export async function submitOnboardingJob(manifest: OnboardManifest): Promise<st
         name: `civitas-onboard-${Date.now()}`,
         dockerCompose: getOnboardComposeStr(manifestJson),
         envVars: {
-            NILLION_ORG_SECRET_KEY: process.env.NEXT_PUBLIC_NILLION_ORG_SECRET_KEY || "",
+            NILLION_ORG_SECRET_KEY: process.env.NEXT_PUBLIC_NILLION_ORG_SECRET_KEY || process.env.NILLION_ORG_SECRET_KEY || "",
         },
         artifactsVersion: "0.4.2",
         publicContainerName: "civitas-onboard",

@@ -81,23 +81,18 @@ function computeZkZeroHashes(): bigint[] {
 
 const ZK_ZERO_HASHES = computeZkZeroHashes();
 
-// ── Web Worker – Main Thread Wrapper ────────────────────────────────────────
-
-let _worker: Worker | null = null;
-
-function getProofWorker(): Worker {
-  if (!_worker) {
-    // The worker file is served from /public/workers/
-    _worker = new Worker("/workers/proof-worker.js");
-  }
-  return _worker;
+// Yield to the browser event loop so React can flush progress state updates
+// between the heavy async steps.
+async function yieldAndUpdate(pct: number, label: string, onProgress?: ProofProgressCallback) {
+  onProgress?.(pct, label);
+  await new Promise<void>((r) => setTimeout(r, 0));
 }
 
 /**
  * Generate a UltraHonk ZK proof for voucher redemption.
  *
- * Runs in a Web Worker — the main thread is never blocked.
- * The caller receives progress updates via onProgress callback.
+ * Runs on the main thread using webpack-bundled dynamic imports — no static
+ * worker file needed, so @noir-lang packages resolve correctly.
  *
  * @param input     Voucher redemption inputs (private nonce + public fields)
  * @param onProgress Optional callback — pct in [0..100], label is human-readable
@@ -118,40 +113,31 @@ export async function generateRedemptionProof(
     leafIndex,
   } = input;
 
-  // ── Compute all field values on main thread (fast, <1ms) ───────────────
+  // ── Compute all field values (fast, <1ms) ─────────────────────────────
 
-  onProgress?.(2, "Computing credential fields...");
+  await yieldAndUpdate(2, "Computing credential fields...", onProgress);
 
   const nonceBigInt = toFieldElement(BigInt("0x" + credentialNonce));
   const employeeTag = bn128Poseidon1(nonceBigInt);
   const nullifierBig = bn128Poseidon3(nonceBigInt, epoch, voucherNonce);
   const commitmentBig = bn128Poseidon4(employeeTag, amount, epoch, voucherNonce);
 
-  // recipient_hash uses the wallet address as a field element
-  const recipientHashBig = bn128Poseidon1(toFieldElement(BigInt(recipientAddress.slice(0, 16) + "0".repeat(16))));
+  const recipientHashBig = BigInt(computeRecipientHash(recipientAddress));
+  const tokenAccountHashBig = BigInt(computeTokenAccountHash(recipientTokenAccount));
 
-  // token_account_hash binds to the Token-2022 token account
-  const tokenAccountHashBig = bn128Poseidon1(toFieldElement(BigInt(recipientTokenAccount.slice(0, 16) + "0".repeat(16))));
-
-  // domain_tag_hash = Poseidon(keccak256(DOMAIN_TAG) as field)
   const domainTagBytes = new TextEncoder().encode(DOMAIN_TAG);
-  const domainTagHashBig = bn128Poseidon1(toFieldElement(
-    BigInt("0x" + Array.from(domainTagBytes).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 60))
-  ));
+  let domainTagNum = BigInt(0);
+  for (const b of domainTagBytes) domainTagNum = (domainTagNum * BigInt(256) + BigInt(b));
+  const domainTagHashBig = bn128Poseidon1(toFieldElement(domainTagNum));
 
   // ── Build circuit inputs ───────────────────────────────────────────────
 
-  const circuitInput = {
-    // Private inputs
+  const circuitInput: Record<string, unknown> = {
     credential_nonce: nonceBigInt.toString(),
     voucher_nonce: voucherNonce.toString(),
-    merkle_path: merklePath.length > 0
-      ? merklePath
-      : Array(20).fill("0"),
+    merkle_path: merklePath.length > 0 ? merklePath : Array(20).fill("0"),
     path_index: leafIndex.toString(),
-
-    // Public inputs
-    merkle_root: "0", // Will be filled by the Merkle tree computation below
+    merkle_root: "0",
     nullifier: nullifierBig.toString(),
     recipient_hash: recipientHashBig.toString(),
     amount: amount.toString(),
@@ -160,91 +146,90 @@ export async function generateRedemptionProof(
     domain_tag_hash: domainTagHashBig.toString(),
   };
 
-  // Compute the Merkle root from the provided path
+  // Compute Merkle root from the sibling path
   let current = commitmentBig;
   let currentIndex = leafIndex;
   for (let i = 0; i < ZK_TREE_DEPTH; i++) {
-    const sibling = merklePath.length > i
-      ? BigInt(merklePath[i])
-      : ZK_ZERO_HASHES[i];
-
+    const sibling = merklePath.length > i ? BigInt(merklePath[i]) : ZK_ZERO_HASHES[i];
     const isRight = (currentIndex & 1) === 1;
-    current = isRight
-      ? bn128Poseidon2(sibling, current)
-      : bn128Poseidon2(current, sibling);
+    current = isRight ? bn128Poseidon2(sibling, current) : bn128Poseidon2(current, sibling);
     currentIndex >>= 1;
   }
   circuitInput.merkle_root = current.toString();
 
-  onProgress?.(5, "Starting proof generation (this takes 30–60s)...");
+  // ── Load circuit artifact ──────────────────────────────────────────────
 
-  // ── Dispatch to Web Worker ─────────────────────────────────────────────
+  await yieldAndUpdate(8, "Loading Noir circuit artifact...", onProgress);
 
-  return new Promise<UltraHonkProof>((resolve, reject) => {
-    const worker = getProofWorker();
-
-    const handleMessage = (event: MessageEvent) => {
-      const { type, pct, label, result, error } = event.data;
-
-      if (type === "progress") {
-        onProgress?.(Math.min(5 + Math.floor(pct * 0.9), 95), label);
-        return;
-      }
-
-      if (type === "done") {
-        worker.removeEventListener("message", handleMessage);
-        onProgress?.(100, "Proof generated ✓");
-        resolve({
-          proofBytes: new Uint8Array(result.proofBytes),
-          vkBytes: new Uint8Array(result.vkBytes),
-          publicSignals: result.publicSignals,
-          nullifier: nullifierBig.toString(),
-          commitment: commitmentBig.toString(),
-          merkleRoot: circuitInput.merkle_root,
-          amount: amount.toString(),
-          epoch: epoch.toString(),
-          recipientHash: recipientHashBig.toString(),
-          tokenAccountHash: tokenAccountHashBig.toString(),
-          domainTagHash: domainTagHashBig.toString(),
-        });
-        return;
-      }
-
-      if (type === "error") {
-        worker.removeEventListener("message", handleMessage);
-        reject(new Error(error ?? "Proof generation failed in worker"));
-      }
-    };
-
-    worker.addEventListener("message", handleMessage);
-    worker.postMessage({ type: "generate", circuitInput });
-  });
-}
-
-/**
- * Verify a UltraHonk proof locally (client-side, for debugging).
- * Uses the bundled bb.js backend.
- */
-export async function verifyRedemptionProof(
-  proofBytes: Uint8Array,
-  vkBytes: Uint8Array
-): Promise<boolean> {
-  try {
-    // @ts-ignore — bb.js types may lag behind the nightly build
-    const { UltraHonkBackend } = await import("@aztec/bb.js");
-    const backend = new UltraHonkBackend(vkBytes as any, { threads: 1 });
-    // @ts-ignore
-    return await backend.verifyProof({ proof: proofBytes });
-  } catch {
-    return false;
+  const circuitResp = await fetch("/circuits/voucher_noir/target/voucher.json");
+  if (!circuitResp.ok) {
+    throw new Error("Circuit artifact not found at /circuits/voucher_noir/target/voucher.json");
   }
+  const circuitArtifact = await circuitResp.json();
+
+  // ── Load Noir runtime (webpack-bundled, bare specifier resolves) ───────
+
+  await yieldAndUpdate(18, "Initialising Noir runtime...", onProgress);
+  const { Noir } = await import("@noir-lang/noir_js");
+
+  await yieldAndUpdate(28, "Initialising UltraHonk backend...", onProgress);
+  // Use @aztec/bb.js directly — @noir-lang/backend_barretenberg@0.36.0 bundles
+  // an incompatible @aztec/bb.js@0.58.0 that cannot prove ACIR from Nargo 1.0.0-beta.16.
+  const { UltraHonkBackend } = await import("@aztec/bb.js");
+
+  await yieldAndUpdate(35, "Compiling proving key (one-time, ~15s)...", onProgress);
+  // New API: takes bytecode string (base64+gzip ACIR), not the full artifact object.
+  const backend = new UltraHonkBackend(circuitArtifact.bytecode, {
+    threads: typeof navigator !== "undefined" ? (navigator.hardwareConcurrency ?? 4) : 4,
+  });
+  const noir = new Noir(circuitArtifact);
+
+  // ── Generate witness ───────────────────────────────────────────────────
+
+  await yieldAndUpdate(45, "Generating witness...", onProgress);
+  const { witness } = await noir.execute(circuitInput as Parameters<typeof noir.execute>[0]);
+
+  // ── Generate UltraHonk proof ───────────────────────────────────────────
+
+  await yieldAndUpdate(55, "Generating UltraHonk proof (~30–60s)...", onProgress);
+  const proofData = await backend.generateProof(witness);
+
+  await yieldAndUpdate(88, "Exporting verification key...", onProgress);
+  const vk = await backend.getVerificationKey();
+
+  await yieldAndUpdate(95, "Finalising...", onProgress);
+
+  const publicSignals = [
+    circuitInput.merkle_root,
+    circuitInput.nullifier,
+    circuitInput.recipient_hash,
+    circuitInput.amount,
+    circuitInput.epoch,
+    circuitInput.token_account_hash,
+    circuitInput.domain_tag_hash,
+  ].map(String);
+
+  onProgress?.(100, "Proof generated ✓");
+
+  return {
+    proofBytes: new Uint8Array(proofData.proof),
+    vkBytes: new Uint8Array(vk),
+    publicSignals,
+    nullifier: nullifierBig.toString(),
+    commitment: commitmentBig.toString(),
+    merkleRoot: String(circuitInput.merkle_root),
+    amount: amount.toString(),
+    epoch: epoch.toString(),
+    recipientHash: recipientHashBig.toString(),
+    tokenAccountHash: tokenAccountHashBig.toString(),
+    domainTagHash: domainTagHashBig.toString(),
+  };
 }
 
 /**
- * Terminate the proof worker when the component unmounts.
- * Call this in useEffect cleanup.
+ * No-op — proof now runs on the main thread, no worker to terminate.
+ * Kept for API compatibility with the useEffect cleanup in employees/page.tsx.
  */
 export function terminateProofWorker(): void {
-  _worker?.terminate();
-  _worker = null;
+  // no-op
 }

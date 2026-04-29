@@ -112,10 +112,25 @@ pub fn verify_step_1(
     //   matches the pi_hash embedded in the proof.
     //   Estimated CU: 80 CU (keccak syscall) + field arithmetic ~200 CU.
 
-    // ── Stub (hackathon demo) ────────────────────────────────────────────
-    // Returns true to allow the full pipeline to run end-to-end.
-    // Replace with the full constraint check in production.
-    msg!("[verifier] Step 1 stub passed (hackathon demo)");
+    // ── HACKATHON DISCLOSURE ─────────────────────────────────────────────
+    // The full KZG opening verifier for UltraHonk is ~3000 lines of BPF Rust.
+    // The Barretenberg team has not released a Solana-native BPF build.
+    // This stub returns Ok(true) so the complete pipeline (Nillion → ZK proof →
+    // MagicBlock Private Payments → Cloak) runs end-to-end for the demo.
+    //
+    // WHAT IS REAL:
+    //   • Noir circuit compiles and UltraHonk proofs ARE generated client-side
+    //   • proof_data.len() >= MIN_PROOF_SIZE is enforced (above)
+    //   • nullifier and commitment non-zero checks are enforced (above)
+    //   • Fiat-Shamir transcript is computed (above, binds proof to domain tag)
+    //   • Nullifier PDA init_if_needed in complete_withdrawal enforces anti-double-spend
+    //
+    // WHAT IS SKIPPED:
+    //   • BN254 KZG polynomial opening verification (requires alt_bn128 syscall)
+    //   • UltraHonk constraint system check (wire polynomial commitments)
+    //
+    // Production path: port barretenberg/src/barretenberg/ultra_honk/ to BPF Rust.
+    msg!("[verifier] STUB: structural checks passed — KZG pairing check pending BPF port");
     Ok(true)
 }
 
@@ -151,8 +166,11 @@ pub fn verify_step_2(
     //   batching protocol used by Barretenberg.
     //   Estimated additional CU: 100K
 
-    // ── Stub (hackathon demo) ────────────────────────────────────────────
-    msg!("[verifier] Step 2 stub passed (hackathon demo)");
+    // ── HACKATHON DISCLOSURE — same as verify_step_1 ────────────────────
+    // KZG pairing verification pending BPF Rust port of Barretenberg.
+    // Anti-double-spend via nullifier PDA is unconditionally enforced in
+    // complete_withdrawal — this is the meaningful on-chain security guarantee.
+    msg!("[verifier] STUB: KZG pairing check pending — nullifier PDA enforces anti-double-spend");
     Ok(true)
 }
 

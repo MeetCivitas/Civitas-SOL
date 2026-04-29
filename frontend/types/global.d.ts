@@ -7,6 +7,12 @@ declare global {
     publicKey?: { toString(): string };
     connect: (options?: { onlyIfTrusted?: boolean }) => Promise<{ publicKey: { toString(): string } }>;
     disconnect?: () => Promise<void>;
+    signMessage?: (message: Uint8Array, encoding?: string) => Promise<{ signature: Uint8Array } | Uint8Array>;
+    signTransaction?: (transaction: Uint8Array | unknown) => Promise<Uint8Array | unknown>;
+    signAndSendTransaction?: (
+      transaction: Uint8Array | unknown,
+      options?: { skipPreflight?: boolean; preflightCommitment?: string }
+    ) => Promise<{ signature: string }>;
     on?: (event: string, handler: (...args: unknown[]) => void) => void;
     off?: (event: string, handler: (...args: unknown[]) => void) => void;
   }

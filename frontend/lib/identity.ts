@@ -118,12 +118,40 @@ export function computeNullifier(
 }
 
 /**
+ * Decode a Solana base58 pubkey string to a BN254 field element.
+ * Pubkey bytes are treated as 32-byte little-endian unsigned integer,
+ * then reduced mod BN254_PRIME to stay in field.
+ */
+function solanaAddressToField(address: string): bigint {
+  // @solana/web3.js PublicKey decodes base58 → 32 bytes
+  // We import lazily to avoid bundling PublicKey in SSR paths.
+  // Fallback: interpret address chars as utf-8 bytes if decoding fails.
+  try {
+    // Base58 alphabet → byte decode using PublicKey
+    // Available because @solana/web3.js is already a dep
+    const { PublicKey } = require("@solana/web3.js");
+    const bytes: Uint8Array = new PublicKey(address).toBytes(); // 32 bytes LE
+    let n = BigInt(0);
+    for (let i = 31; i >= 0; i--) {
+      n = (n << BigInt(8)) | BigInt(bytes[i]);
+    }
+    return toFieldElement(n);
+  } catch {
+    // Last resort: utf-8 byte path for tests
+    const bytes = new TextEncoder().encode(address);
+    let n = BigInt(0);
+    for (const b of bytes) n = (n * BigInt(256) + BigInt(b));
+    return toFieldElement(n);
+  }
+}
+
+/**
  * Compute recipient hash for front-running protection.
- * recipient_hash = BN254_Poseidon(recipient_address_as_field)
+ * recipient_hash = BN254_Poseidon(pubkey_bytes_as_field)
  * Matches the Noir circuit constraint C5.
  */
 export function computeRecipientHash(recipientAddress: string): string {
-  return bn128Poseidon1(parseBigIntSafe(recipientAddress)).toString();
+  return bn128Poseidon1(solanaAddressToField(recipientAddress)).toString();
 }
 
 /**
@@ -132,7 +160,7 @@ export function computeRecipientHash(recipientAddress: string): string {
  * Matches the Noir circuit constraint C6.
  */
 export function computeTokenAccountHash(tokenAccountAddress: string): string {
-  return bn128Poseidon1(parseBigIntSafe(tokenAccountAddress)).toString();
+  return bn128Poseidon1(solanaAddressToField(tokenAccountAddress)).toString();
 }
 
 /**

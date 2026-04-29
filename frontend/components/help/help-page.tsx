@@ -33,7 +33,7 @@ const FAQS = [
   {
     question: "How do I claim my funds?",
     answer:
-      "After opening a payroll note and revealing your payment, you can claim your funds by bridging them to your preferred chain (Ethereum, Polygon, Arbitrum, or NEAR) using Axelar's cross-chain messaging.",
+      "After opening a payroll note and revealing your payment, you claim your funds on Solana by generating a Noir ZK proof in your browser. The proof is verified on-chain, and USDC is released from the vault directly to your SPL token account — no bridging needed.",
     icon: Wallet,
   },
   {
@@ -47,7 +47,7 @@ const FAQS = [
 const DOCS = [
   { title: "Getting Started Guide", href: "#" },
   { title: "Zero-Knowledge Proofs Explained", href: "#" },
-  { title: "Cross-Chain Settlement", href: "#" },
+  { title: "Solana ZK Claiming Guide", href: "#" },
   { title: "API Reference", href: "#" },
   { title: "Security Best Practices", href: "#" },
 ]

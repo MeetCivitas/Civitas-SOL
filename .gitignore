@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+/frontend/node_modules/
+
+# Build artifacts
+target/
+.anchor/
+.next/
+/frontend/.next/
+dist/
+build/
+out/
+/circuits/voucher_noir/target/
+
+# Environment files
+.env
+.env.*
+!.env.local.example
+
+# OS files
+.DS_Store
+Thumbs.db
+*.bak
+
+# Secrets and Keys
+**/*-keypair.json
+**/*.key
+**/*.pem
+backup.keys
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Tooling
+.claude/
+.superstack/
+.vercel/
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts

@@ -76,10 +76,14 @@ export async function deriveChunkPDA(
   runId: Uint8Array,
   chunkIndex: number
 ): Promise<[PublicKey, number]> {
-  const chunkIdxBuf = Buffer.alloc(4);
-  chunkIdxBuf.writeUInt32LE(chunkIndex, 0);
+  const chunkIdxBuf = new Uint8Array(4);
+  chunkIdxBuf[0] = chunkIndex & 0xff;
+  chunkIdxBuf[1] = (chunkIndex >> 8) & 0xff;
+  chunkIdxBuf[2] = (chunkIndex >> 16) & 0xff;
+  chunkIdxBuf[3] = (chunkIndex >> 24) & 0xff;
+
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("chunk"), Buffer.from(runId), chunkIdxBuf],
+    [Buffer.from("chunk"), Buffer.from(runId), Buffer.from(chunkIdxBuf)],
     PROGRAM_ID
   );
 }

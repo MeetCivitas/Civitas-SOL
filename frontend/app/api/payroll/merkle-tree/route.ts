@@ -15,6 +15,15 @@ export const runtime = "nodejs";
 
 const PROFILE_COLLECTION_NAME = "civitas_employer_profiles";
 
+// NilDB stores arrays as JSON strings — parse defensively
+function parseCommitmentsField(raw: unknown): string[] {
+    if (Array.isArray(raw)) return raw.map(String);
+    if (typeof raw === "string" && raw.startsWith("[")) {
+        try { return JSON.parse(raw) as string[]; } catch { /* fall through */ }
+    }
+    return [];
+}
+
 /**
  * GET /api/payroll/merkle-tree?run_id=X&company_id=Y
  *
@@ -56,12 +65,13 @@ export async function GET(req: NextRequest) {
 
                     if (runId) {
                         const run = await getPayrollRun(cid, runId);
-                        if (run && (run as any).commitments?.length) {
+                        const parsedCommitments = parseCommitmentsField((run as any)?.commitments);
+                        if (run && parsedCommitments.length > 0) {
                             return NextResponse.json({
                                 success: true,
                                 run_id: (run as any).run_id,
                                 merkle_root: (run as any).merkle_root,
-                                commitments: (run as any).commitments || [],
+                                commitments: parsedCommitments,
                                 source: "nildb",
                             });
                         }
@@ -82,12 +92,13 @@ export async function GET(req: NextRequest) {
                                 .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 
                             const latestRun = uniqueRuns.find(r => r.status === "committed") || uniqueRuns[0];
-                            if (latestRun && latestRun.commitments?.length) {
+                            const parsedLatest = parseCommitmentsField(latestRun?.commitments);
+                            if (latestRun && parsedLatest.length > 0) {
                                 return NextResponse.json({
                                     success: true,
                                     run_id: latestRun.run_id,
                                     merkle_root: latestRun.merkle_root,
-                                    commitments: latestRun.commitments || [],
+                                    commitments: parsedLatest,
                                     source: "nildb",
                                 });
                             }

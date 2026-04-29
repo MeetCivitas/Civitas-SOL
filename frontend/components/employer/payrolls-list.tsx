@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Plus, Eye, RefreshCw } from "lucide-react"
 import { motion } from "framer-motion"
+import { useSolanaWallet } from "@/lib/solana-wallet"
+import { useCivitas } from "@/lib/civitas-provider"
 
 interface PayrollRun {
   runId: string;
@@ -23,16 +25,39 @@ interface PayrollRun {
 }
 
 export function PayrollsList() {
+  const { address } = useSolanaWallet()
+  const { walletAddress, payrollRuns: contextRuns } = useCivitas()
+  const ownerAddress = address || walletAddress
   const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Use context runs if available (already fetched)
+    if (contextRuns.length > 0) {
+      setPayrollRuns(
+        contextRuns.map((r: any) => ({
+          runId: r.runId,
+          orgId: r.orgId || "",
+          createdBy: r.createdBy || "employer",
+          createdAt: r.createdAt || new Date().toISOString(),
+          status: r.status || "draft",
+          employeeCount: r.employeeCount || 0,
+          declaredTotal: r.totalAmount || r.declaredTotal || "***",
+          currency: "USDC",
+          payrollRoot: r.merkleRoot || r.payrollRoot || "",
+        }))
+      )
+      setLoading(false)
+      return
+    }
     loadPayrolls()
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contextRuns])
 
   const loadPayrolls = async () => {
+    if (!ownerAddress) { setLoading(false); return; }
     try {
-      const res = await fetch("/api/employer/payrolls")
+      const res = await fetch(`/api/employer/payrolls?address=${encodeURIComponent(ownerAddress)}`)
       const data = await res.json()
       if (data.success) {
         setPayrollRuns(data.payrollRuns || [])

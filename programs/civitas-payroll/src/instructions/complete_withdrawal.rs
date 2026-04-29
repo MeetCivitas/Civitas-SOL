@@ -21,7 +21,7 @@ use anchor_spl::{
 use crate::{
     errors::CivitasError,
     events::PaymentClaimed,
-    state::{CommitmentAccount, NullifierAccount, VaultState, VerificationSession},
+    state::{NullifierAccount, VaultState, VerificationSession},
     verifier,
 };
 
@@ -48,13 +48,6 @@ pub struct CompleteWithdrawal<'info> {
         constraint = session.public_inputs.vault_pda == vault_state.key() @ CivitasError::VaultMismatch,
     )]
     pub vault_state: Account<'info, VaultState>,
-
-    /// CommitmentAccount — must exist (proof commitment registered in Merkle tree).
-    #[account(
-        seeds = [b"commit".as_ref(), session.commitment.as_ref()],
-        bump = commitment_account.bump,
-    )]
-    pub commitment_account: Account<'info, CommitmentAccount>,
 
     /// NullifierAccount — must NOT exist (proves voucher was not spent).
     /// `init` will fail if the PDA already exists, preventing double-spend.

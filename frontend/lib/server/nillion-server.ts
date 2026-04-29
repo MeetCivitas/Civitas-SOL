@@ -61,7 +61,7 @@ const COMPANY_EMPLOYEES_SCHEMA = {
             _id: { type: "string" as const, format: "uuid" },
             employee_tag: { type: "string" as const },
             employee_name: { type: "string" as const },
-            salary_policy: { type: "string" as const },
+            salary: { type: "string" as const },
             status: { type: "string" as const },
             created_at: { type: "string" as const },
             updated_at: { type: "string" as const },
@@ -85,6 +85,7 @@ const PAYROLL_RUNS_SCHEMA = {
             status: { type: "string" as const },
             zk_proof_hash: { type: "string" as const },
             tx_hash: { type: "string" as const },
+            employer_address: { type: "string" as const },
             nilcc_attestation: { type: "string" as const },
             commitments: { type: "string" as const },
             created_at: { type: "string" as const },
@@ -96,7 +97,7 @@ const PAYROLL_RUNS_SCHEMA = {
 
 const VOUCHERS_SCHEMA = {
     $schema: "http://json-schema.org/draft-07/schema#",
-    title: "Payroll Vouchers v2",
+    title: "Payroll Vouchers v3",
     type: "array" as const,
     items: {
         type: "object" as const,
@@ -109,6 +110,7 @@ const VOUCHERS_SCHEMA = {
             nullifier: { type: "string" as const },
             epoch: { type: "string" as const },
             run_id: { type: "string" as const },
+            employer_address: { type: "string" as const },
             status: { type: "string" as const },
             claimed_at: { type: "string" as const },
             created_at: { type: "string" as const },
@@ -170,6 +172,28 @@ export function extractRecords(result: any): any[] {
         }
     }
     return records;
+}
+
+// ── NilDB field unwrapper ───────────────────────────────────────────────
+// Salary is stored with { "%allot": value } for secret-sharing.
+// The plaintext read client returns either the raw wrapper object or a
+// secret-share reference. This extracts the plain numeric string in all cases.
+export function unwrapNilDBField(raw: any): string {
+    if (raw == null) return "0";
+    if (typeof raw === "string" || typeof raw === "number") return String(raw);
+    // { "%allot": value } — written by blindfold client, returned on plaintext read
+    if (raw["%allot"] != null) return String(raw["%allot"]);
+    // { "%share": value } — alternative secret-share form
+    if (raw["%share"] != null) {
+        const inner = raw["%share"];
+        if (typeof inner === "string" || typeof inner === "number") return String(inner);
+        try {
+            const parsed = JSON.parse(String(inner));
+            if (parsed?.amount != null) return String(parsed.amount);
+        } catch { /* not JSON */ }
+        return String(inner);
+    }
+    return String(raw);
 }
 
 // ── Client Singletons ───────────────────────────────────────────────────
@@ -321,9 +345,9 @@ export async function ensureCompanyCollections(companyId: string): Promise<Compa
 
     const collections = [
         { key: "meta", name: `company_${companyId}_meta`, schema: COMPANY_META_SCHEMA },
-        { key: "employees", name: `company_${companyId}_employees_v2`, schema: COMPANY_EMPLOYEES_SCHEMA },
-        { key: "payrollRuns", name: `company_${companyId}_payroll_runs_v2`, schema: PAYROLL_RUNS_SCHEMA },
-        { key: "vouchers", name: `company_${companyId}_vouchers_v2`, schema: VOUCHERS_SCHEMA },
+        { key: "employees", name: `company_${companyId}_employees_v3`, schema: COMPANY_EMPLOYEES_SCHEMA },
+        { key: "payrollRuns", name: `company_${companyId}_payroll_runs_v3`, schema: PAYROLL_RUNS_SCHEMA },
+        { key: "vouchers", name: `company_${companyId}_vouchers_v3`, schema: VOUCHERS_SCHEMA },
     ] as const;
 
     const result: Record<string, string> = {};
@@ -461,17 +485,20 @@ export async function getCompanyMeta(companyId: string) {
 
 export async function createEmployees(
     companyId: string,
-    employees: Array<{ employeeTag: string; employeeName?: string; salaryPolicy: string }>
+    employees: Array<{ employeeTag: string; employeeName?: string; salary: string }>
 ) {
     await initClients();
     const colls = await ensureCompanyCollections(companyId);
-    const client = getPlaintext();
+    // Use blindfold client so salary is secret-shared with %allot encryption.
+    // No single Nillion node can read the salary amount in plaintext.
+    const client = getBlindfolded();
 
     const data = employees.map(emp => ({
         _id: crypto.randomUUID(),
         employee_tag: emp.employeeTag,
         employee_name: emp.employeeName || "",
-        salary_policy: emp.salaryPolicy,
+        // %allot marks this field for Nillion secret-sharing (Nucleus requirement)
+        salary: { "%allot": emp.salary },
         status: "active",
         created_at: new Date().toISOString(),
     }));
@@ -487,8 +514,9 @@ export async function createEmployees(
 export async function listActiveEmployees(companyId: string) {
     await initClients();
     const colls = await ensureCompanyCollections(companyId);
+    // Blindfold client reconstructs %allot secret fields (salary) from cluster
     return withRetry(
-        () => getPlaintext().findData({ collection: colls.employees, filter: { status: "active" } }),
+        () => getBlindfolded().findData({ collection: colls.employees, filter: { status: "active" } }),
         "listActiveEmployees"
     );
 }
@@ -505,6 +533,8 @@ export async function createPayrollRun(
         commitments: string[];
         status?: string;
         zkProofHash?: string;
+        employerAddress?: string;
+        nilccAttestation?: string;
     }
 ) {
     await initClients();
@@ -535,14 +565,15 @@ export async function createPayrollRun(
                 status: run.status || "generated",
                 zk_proof_hash: run.zkProofHash || "",
                 tx_hash: "",
-                nilcc_attestation: "",
+                employer_address: run.employerAddress || "",
+                nilcc_attestation: run.nilccAttestation || "",
                 commitments: JSON.stringify(run.commitments),
                 created_at: new Date().toISOString(),
             }],
         }),
         "createPayrollRun"
     );
-    console.log(`[nilDB] Stored payroll run ${run.runId}`);
+    console.log(`[nilDB] Stored payroll run ${run.runId} (TEE Attested: ${!!run.nilccAttestation})`);
     return result;
 }
 
@@ -602,6 +633,7 @@ export async function createVoucherBatch(
         nonce: string;
         epoch: string;
         runId: string;
+        employerAddress: string;
         nullifier?: string;
     }>
 ) {
@@ -617,6 +649,7 @@ export async function createVoucherBatch(
         nullifier: v.nullifier || "",
         epoch: v.epoch,
         run_id: v.runId,
+        employer_address: v.employerAddress,
         status: "pending",
         claimed_at: "",
         created_at: new Date().toISOString(),
@@ -686,6 +719,67 @@ export async function updateVoucherStatus(
         "updateVoucherStatus"
     );
     console.log(`[nilDB] Updated voucher → ${newStatus}`);
+}
+
+/**
+ * Update voucher status without knowing the companyId.
+ * Scans all registered employer profile collections (same logic as GET /api/employees/vouchers).
+ * Used from the employee side where companyId is not known.
+ */
+export async function updateVoucherStatusByCommitment(
+    commitment: string,
+    newStatus: string,
+    txHash?: string
+): Promise<boolean> {
+    await initClients();
+
+    const PROFILE_COLLECTION_NAME = "civitas_employer_profiles";
+    const profileCollectionId = nameToUUID(PROFILE_COLLECTION_NAME);
+
+    let companyIdsToTry: string[] = ["default"];
+    try {
+        const profilesResult = await withRetry(
+            () => getPlaintext().findData({ collection: profileCollectionId, filter: {} }),
+            "updateVoucherStatusByCommitment:getProfiles"
+        );
+        const profiles = extractRecords(profilesResult);
+        const discovered = profiles.map((p: any) => p.company_id).filter(Boolean);
+        companyIdsToTry = [...new Set(["default", ...discovered])] as string[];
+    } catch { /* non-fatal */ }
+
+    for (const cid of companyIdsToTry) {
+        try {
+            const colls = await ensureCompanyCollections(cid);
+            // Find vouchers in this company matching the commitment
+            const result = await withRetry(
+                () => getPlaintext().findData({ collection: colls.vouchers, filter: { commitment } }),
+                "updateVoucherStatusByCommitment:find"
+            );
+            const records = extractRecords(result);
+            if (records.length > 0) {
+                await withRetry(
+                    () => getPlaintext().updateData({
+                        collection: colls.vouchers,
+                        filter: { commitment },
+                        update: {
+                            $set: {
+                                status: newStatus,
+                                ...(txHash ? { tx_hash: txHash } : {}),
+                                ...(newStatus === "claimed" ? { claimed_at: new Date().toISOString() } : {}),
+                                updated_at: new Date().toISOString(),
+                            },
+                        },
+                    }),
+                    "updateVoucherStatusByCommitment:update"
+                );
+                console.log(`[nilDB] Updated voucher in company ${cid} → ${newStatus}`);
+                return true;
+            }
+        } catch { /* collection may not exist */ }
+    }
+
+    console.warn(`[nilDB] Voucher commitment not found in any company collection`);
+    return false;
 }
 
 // ── Identity Store Schema ────────────────────────────────────────────────
@@ -933,6 +1027,8 @@ export interface NillionServerClient {
     employeeCount: number;
     status: string;
     nilccAttestation: string;
+    commitments?: string[];
+    epoch?: string;
   }): Promise<void>;
   getPayrollRun(runId: string): Promise<{
     merkleRoot: string;
@@ -987,14 +1083,15 @@ export async function getNillionServerClient(): Promise<NillionServerClient> {
   return {
     async getEmployeesForPayroll(companyId) {
       const colls = await ensureCompanyCollections(companyId);
+      // Blindfold client reconstructs %allot secret fields (salary) from cluster nodes
       const result = await withRetry(
-        () => getPlaintext().findData({ collection: colls.employees, filter: { status: "active" } }),
+        () => getBlindfolded().findData({ collection: colls.employees, filter: { status: "active" } }),
         "getEmployeesForPayroll"
       );
       const rows = extractRecords(result);
       return rows.map((r: any) => ({
         employee_tag: r.employee_tag,
-        salary_amount: r.salary_policy || "0",
+        salary_amount: unwrapNilDBField(r.salary) || "0",
       }));
     },
 
@@ -1013,14 +1110,14 @@ export async function getNillionServerClient(): Promise<NillionServerClient> {
           data: [{
             _id: crypto.randomUUID(),
             run_id: run.runId,
-            epoch: String(Math.floor(Date.now() / 1000)),
+            epoch: run.epoch || String(Math.floor(Date.now() / 1000)),
             merkle_root: run.merkleRoot,
             commitment_count: String(run.employeeCount),
             status: run.status,
             zk_proof_hash: "",
             tx_hash: "",
             nilcc_attestation: run.nilccAttestation,
-            commitments: "[]",
+            commitments: JSON.stringify(run.commitments || []),
             created_at: new Date().toISOString(),
           }],
         }),
@@ -1075,7 +1172,7 @@ export async function getNillionServerClient(): Promise<NillionServerClient> {
             _id: crypto.randomUUID(),
             employee_tag: data.employeeTag,
             employee_name: data.name,
-            salary_policy: data.salary,
+            salary: data.salary,
             status: data.status,
             created_at: new Date().toISOString(),
           }],

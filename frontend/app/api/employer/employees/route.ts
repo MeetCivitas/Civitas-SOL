@@ -21,16 +21,21 @@ function addressToCompanyId(address: string): string {
     .slice(0, 20);
 }
 
-/** Parse salary from NilDB %share value — may be JSON or plain string */
+/** Parse salary from NilDB secret-shared value (%allot or %share wrapper). */
 function parseSalary(raw: any): string {
-  if (!raw) return "0";
-  const val = (raw && raw["%share"]) || raw;
-  if (typeof val !== "string") return String(val);
-  try {
-    const parsed = JSON.parse(val);
-    if (parsed && parsed.amount) return String(parsed.amount);
-  } catch { /* not JSON, use as-is */ }
-  return val;
+  if (raw == null) return "0";
+  if (typeof raw === "string" || typeof raw === "number") return String(raw);
+  if (raw["%allot"] != null) return String(raw["%allot"]);
+  if (raw["%share"] != null) {
+    const inner = raw["%share"];
+    if (typeof inner === "string" || typeof inner === "number") return String(inner);
+    try {
+      const parsed = JSON.parse(String(inner));
+      if (parsed?.amount != null) return String(parsed.amount);
+    } catch { /* not JSON */ }
+    return String(inner);
+  }
+  return String(raw);
 }
 
 /**
@@ -47,14 +52,14 @@ export async function GET(req: NextRequest) {
 
       const employees = records.map((r: any) => {
         const tag = r.employee_tag || "";
-        const salary = parseSalary(r.salary_policy);
+        const salary = parseSalary(r.salary);
         const name = r.employee_name || "";
         return {
           employee_id: r._id,
           employee_tag: tag,
           employee_name: name,
           salary_amount: salary,
-          salary_currency: "STRK",
+          salary_currency: "USDC",
           status: r.status || "active",
           created_at: r.created_at || "",
           username: name || `emp_${(r._id || "").slice(0, 8)}`,
@@ -91,7 +96,7 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { ownerAddress, employeeTag, employeeName, salaryAmount, salaryCurrency = "STRK" } = body;
+  const { ownerAddress, employeeTag, employeeName, salaryAmount, salaryCurrency = "USDC" } = body;
 
   if (!ownerAddress || !employeeTag) {
     return NextResponse.json({ error: "ownerAddress and employeeTag required" }, { status: 400 });
@@ -120,7 +125,7 @@ export async function POST(req: NextRequest) {
       {
         employeeTag,
         employeeName: employeeName || "",
-        salaryPolicy: salaryAmount || "0",
+        salary: salaryAmount || "0",
       },
     ]);
 

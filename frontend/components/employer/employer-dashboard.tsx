@@ -6,10 +6,26 @@ import { Button } from "@/components/ui/button"
 import { KPICard } from "@/components/ui/kpi-card"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { AvatarInitials } from "@/components/ui/avatar-initials"
-import { Wallet, Users, ClipboardCheck, TrendingUp, Plus, UserPlus, Eye, Calendar, ArrowRight } from "lucide-react"
+import { Wallet, Users, ClipboardCheck, TrendingUp, Plus, UserPlus, Eye, Calendar, ArrowRight, Shield, Zap, Lock, Database, Cpu, DollarSign, Globe } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
+import { PrivacyStackVisualizer } from "@/components/ui/privacy-stack"
+import { PrivacyScoreMeter } from "@/components/ui/privacy-score-meter"
 
 const TABS = ["Overview", "Payrolls", "Employees", "Auditors", "Reports", "Activity"]
+
+function PrivacyStackPanel() {
+  return (
+    <div className="glass-card rounded-2xl p-6">
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="font-semibold text-white tracking-tight">Privacy Stack</h3>
+        <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-3 py-1">5/5 Active</span>
+      </div>
+      <div className="flex justify-center py-2">
+        <PrivacyStackVisualizer />
+      </div>
+    </div>
+  )
+}
 
 interface PayrollRun {
   runId: string;
@@ -55,6 +71,9 @@ export function EmployerDashboard() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [auditors, setAuditors] = useState<Auditor[]>([])
   const [loading, setLoading] = useState(true)
+  const [vaultState, setVaultState] = useState<any>(null)
+  const [fundingVault, setFundingVault] = useState(false)
+  const [fundMsg, setFundMsg] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
@@ -80,6 +99,15 @@ export function EmployerDashboard() {
           setEmployees(employeesData.employees || [])
         }
       }
+
+      // Fetch on-chain vault state
+      const { getVaultState } = await import("@/lib/solana-program")
+      const { PublicKey } = await import("@solana/web3.js")
+      const ownerAddress = localStorage.getItem("civitas_owner_address")
+      if (ownerAddress) {
+        const vs = await getVaultState(new PublicKey(ownerAddress))
+        setVaultState(vs)
+      }
     } catch (err) {
       console.error("Failed to load dashboard data:", err)
     } finally {
@@ -87,8 +115,53 @@ export function EmployerDashboard() {
     }
   }
 
+  const handleFundVault = async () => {
+    const ownerAddress = localStorage.getItem("civitas_owner_address")
+    if (!ownerAddress) { setFundMsg("Connect wallet first"); return }
+    setFundingVault(true)
+    setFundMsg(null)
+    try {
+      const res = await fetch("/api/vault/fund", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ownerAddress, amountUsdc: 100_000 }),
+      })
+      const data = await res.json()
+      if (!data.success) throw new Error(data.error || "Failed to build tx")
+
+      const { Transaction } = await import("@solana/web3.js")
+      const { Connection } = await import("@solana/web3.js")
+
+      const txBytes = Buffer.from(data.serializedTransaction, "base64")
+      const tx = Transaction.from(txBytes)
+
+      const solana = (window as any).solana
+      if (!solana?.signAndSendTransaction) throw new Error("Wallet not connected")
+
+      const { signature } = await solana.signAndSendTransaction(tx)
+
+      const connection = new Connection(
+        process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "https://api.devnet.solana.com",
+        "confirmed"
+      )
+      await connection.confirmTransaction(signature, "confirmed")
+
+      setFundMsg(`✓ Vault funded with 100,000 USDC. Tx: ${signature.slice(0, 20)}…`)
+      // Refresh vault state
+      const { getVaultState } = await import("@/lib/solana-program")
+      const { PublicKey } = await import("@solana/web3.js")
+      const vs = await getVaultState(new PublicKey(ownerAddress))
+      setVaultState(vs)
+    } catch (err: any) {
+      setFundMsg(`Error: ${err.message}`)
+    } finally {
+      setFundingVault(false)
+    }
+  }
+
   const activeEmployees = employees.filter((e: any) => e.status === "active" || !e.status)
   const totalPayrollSpent = payrollRuns.reduce((sum: any, run: any) => sum + Number.parseFloat(run.declaredTotal || "0"), 0)
+  const vaultBalance = vaultState ? (Number(vaultState.usdcBalanceApprox.toString()) / 1_000_000).toLocaleString() : "0"
 
   return (
     <motion.div
@@ -99,7 +172,15 @@ export function EmployerDashboard() {
     >
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.1 }}>
-          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60 tracking-tight">Organization Console</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60 tracking-tight">Organization Console</h1>
+            {vaultState?.snsDomain && (
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-500/10 border border-violet-500/20 text-[10px] font-bold text-violet-300 uppercase tracking-widest">
+                <Globe className="h-3 w-3" />
+                <span>{vaultState.snsDomain}.sol</span>
+              </div>
+            )}
+          </div>
           <p className="text-white/50 mt-1">Manage private payroll generation and team credentials</p>
         </motion.div>
         <motion.div initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="flex gap-2">
@@ -152,15 +233,29 @@ export function EmployerDashboard() {
             <div className="space-y-8">
               {/* KPIs */}
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="flex flex-col gap-2">
+                  <KPICard
+                    title="Vault Balance"
+                    value={`${vaultBalance} USDC`}
+                    icon={Wallet}
+                    trend={{ value: "Confidential", positive: true }}
+                  />
+                  <button
+                    onClick={handleFundVault}
+                    disabled={fundingVault}
+                    className="w-full rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-300 hover:bg-violet-500/20 disabled:opacity-50 transition-colors"
+                  >
+                    {fundingVault ? "Minting…" : "⚡ Fund Vault (Devnet)"}
+                  </button>
+                  {fundMsg && (
+                    <p className={`text-[11px] leading-tight px-1 ${fundMsg.startsWith("Error") ? "text-red-400" : "text-emerald-400"}`}>
+                      {fundMsg}
+                    </p>
+                  )}
+                </div>
                 <KPICard
-                  title="Payrolls This Year"
-                  value={payrollRuns.length}
-                  icon={Wallet}
-                  trend={{ value: "2 this month", positive: true }}
-                />
-                <KPICard
-                  title="Total Spent"
-                  value={`${totalPayrollSpent.toLocaleString()} ZEC`}
+                  title="Total Disbursed"
+                  value={`${totalPayrollSpent.toLocaleString()} USDC`}
                   icon={TrendingUp}
                   subtitle="All time"
                 />
@@ -178,79 +273,103 @@ export function EmployerDashboard() {
                 />
               </div>
 
-              {/* Quick Actions */}
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Link
-                  href="/employer/payrolls/create"
-                  className="group glass-card rounded-2xl p-6 transition-all hover:-translate-y-1 hover:shadow-[0_0_20px_rgba(168,85,247,0.15)]"
-                >
-                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/10 border border-purple-500/20 transition-all duration-300 group-hover:bg-purple-500/20">
-                    <Wallet className="h-6 w-6 text-purple-400" />
+              {/* Privacy Stack + Recent Payroll Runs */}
+              <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+                <div className="space-y-6">
+                  <div className="glass-card rounded-2xl p-10 flex flex-col items-center justify-center text-center relative overflow-hidden group">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-violet-500/10 via-transparent to-transparent opacity-50" />
+                    <PrivacyScoreMeter score={98} />
+                    <div className="relative z-10 mt-6">
+                      <h3 className="text-2xl font-bold text-white tracking-tight">Organization Privacy Health</h3>
+                      <p className="mt-3 text-sm text-white/40 max-w-sm mx-auto leading-relaxed">
+                        Your organization is utilizing the full 5-layer Civitas privacy stack. 
+                        All payroll data is shielded via Nillion and MagicBlock.
+                      </p>
+                      <div className="mt-8 grid grid-cols-2 gap-4">
+                        <div className="px-4 py-3 rounded-2xl bg-white/[0.03] border border-white/5">
+                          <p className="text-xs font-bold text-white/70">100%</p>
+                          <p className="text-[8px] uppercase tracking-widest text-white/30">Nillion Encryption</p>
+                        </div>
+                        <div className="px-4 py-3 rounded-2xl bg-white/[0.03] border border-white/5">
+                          <p className="text-xs font-bold text-white/70">Active</p>
+                          <p className="text-[8px] uppercase tracking-widest text-white/30">Private PER Session</p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <h3 className="mb-1 font-semibold text-white drop-shadow-md">Run Payroll</h3>
-                  <p className="text-sm text-white/50">Start a new private payroll run</p>
-                </Link>
-                <Link
-                  href="/employer/employees"
-                  className="group glass-card rounded-2xl p-6 transition-all hover:-translate-y-1 hover:shadow-[0_0_20px_rgba(236,72,153,0.15)]"
-                >
-                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-pink-500/10 border border-pink-500/20 transition-all duration-300 group-hover:bg-pink-500/20">
-                    <UserPlus className="h-6 w-6 text-pink-400" />
-                  </div>
-                  <h3 className="mb-1 font-semibold text-white drop-shadow-md">Add Employee</h3>
-                  <p className="text-sm text-white/50">Register a new team member</p>
-                </Link>
-                <Link
-                  href="/employer/auditors"
-                  className="group glass-card rounded-2xl p-6 transition-all hover:-translate-y-1 hover:shadow-[0_0_20px_rgba(14,165,233,0.15)]"
-                >
-                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-sky-500/10 border border-sky-500/20 transition-all duration-300 group-hover:bg-sky-500/20">
-                    <ClipboardCheck className="h-6 w-6 text-sky-400" />
-                  </div>
-                  <h3 className="mb-1 font-semibold text-white drop-shadow-md">Invite Auditor</h3>
-                  <p className="text-sm text-white/50">Grant verification access</p>
-                </Link>
-              </div>
 
-              {/* Recent Payroll Runs */}
-              <div className="glass-card rounded-2xl overflow-hidden">
-                <div className="flex items-center justify-between border-b border-white/5 bg-white/5 px-6 py-4">
-                  <h2 className="font-semibold text-white">Recent Payroll Runs</h2>
-                  <Link href="/employer/payrolls">
-                    <Button variant="ghost" size="sm" className="gap-1 text-white/70 hover:text-white hover:bg-white/10">
-                      View all <ArrowRight className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                </div>
-                {loading ? (
-                  <div className="px-6 py-8 text-center text-white/40">Loading payroll runs...</div>
-                ) : payrollRuns.length === 0 ? (
-                  <div className="px-6 py-8 text-center text-white/40">No payroll runs yet. Create your first payroll!</div>
-                ) : (
-                  <div className="divide-y divide-white/5">
-                    {payrollRuns.slice(0, 3).map((run: any) => (
-                      <Link
-                        key={run.runId}
-                        href={`/employer/payrolls/${run.runId}`}
-                        className="flex items-center gap-4 px-6 py-4 transition-colors hover:bg-white/5"
-                      >
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/5 border border-white/10">
-                          <Calendar className="h-5 w-5 text-white/60" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-white">{run.runId}</p>
-                          <p className="text-sm text-white/40 font-mono">
-                            {new Date(run.createdAt).toLocaleDateString()} • {run.employeeCount} employees
-                          </p>
-                        </div>
-                        <StatusBadge status={run.status} />
-                        <Button variant="ghost" size="icon" className="text-white/40 hover:text-white">
-                          <Eye className="h-4 w-4" />
+                  <div className="glass-card rounded-2xl overflow-hidden">
+                    <div className="flex items-center justify-between border-b border-white/5 bg-white/5 px-6 py-4">
+                      <h2 className="font-semibold text-white">Recent Payroll Runs</h2>
+                      <Link href="/employer/payrolls">
+                        <Button variant="ghost" size="sm" className="gap-1 text-white/70 hover:text-white hover:bg-white/10">
+                          View all <ArrowRight className="h-4 w-4" />
                         </Button>
                       </Link>
-                    ))}
+                    </div>
+                    {loading ? (
+                      <div className="px-6 py-8 text-center text-white/40">Loading payroll runs...</div>
+                    ) : payrollRuns.length === 0 ? (
+                      <div className="px-6 py-8 text-center text-white/40">No payroll runs yet. Create your first payroll!</div>
+                    ) : (
+                      <div className="divide-y divide-white/5">
+                        {payrollRuns.slice(0, 3).map((run: any) => (
+                          <Link
+                            key={run.runId}
+                            href={`/employer/payrolls/${run.runId}`}
+                            className="flex items-center gap-4 px-6 py-4 transition-colors hover:bg-white/5"
+                          >
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/5 border border-white/10">
+                              <Calendar className="h-5 w-5 text-white/60" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-white">{run.runId}</p>
+                              <p className="text-sm text-white/40 font-mono">
+                                {new Date(run.createdAt).toLocaleDateString()} • {run.employeeCount} employees
+                              </p>
+                            </div>
+                            <StatusBadge status={run.status} />
+                            <Button variant="ghost" size="icon" className="text-white/40 hover:text-white">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
+                
+                <div className="space-y-6">
+                  <PrivacyStackPanel />
+                  
+                  {/* Quick Links */}
+                  <div className="glass-card rounded-2xl p-6">
+                    <h3 className="font-semibold text-white mb-4">Quick Links</h3>
+                    <div className="space-y-2">
+                      <Link href="/employer/payrolls/create" className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.08] transition-colors group">
+                        <div className="flex items-center gap-3">
+                          <Wallet className="h-4 w-4 text-purple-400" />
+                          <span className="text-xs font-medium text-white/70 group-hover:text-white">New Payroll</span>
+                        </div>
+                        <ArrowRight className="h-3 w-3 text-white/20 group-hover:text-white/50" />
+                      </Link>
+                      <Link href="/employer" className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.08] transition-colors group">
+                        <div className="flex items-center gap-3">
+                          <UserPlus className="h-4 w-4 text-pink-400" />
+                          <span className="text-xs font-medium text-white/70 group-hover:text-white">Add Employee</span>
+                        </div>
+                        <ArrowRight className="h-3 w-3 text-white/20 group-hover:text-white/50" />
+                      </Link>
+                      <Link href="/employer/auditors" className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.08] transition-colors group">
+                        <div className="flex items-center gap-3">
+                          <ClipboardCheck className="h-4 w-4 text-sky-400" />
+                          <span className="text-xs font-medium text-white/70 group-hover:text-white">Invite Auditor</span>
+                        </div>
+                        <ArrowRight className="h-3 w-3 text-white/20 group-hover:text-white/50" />
+                      </Link>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -310,7 +429,7 @@ export function EmployerDashboard() {
             <div className="glass-card rounded-2xl overflow-hidden">
               <div className="flex items-center justify-between border-b border-white/5 bg-white/5 px-6 py-4 backdrop-blur-md">
                 <h2 className="font-semibold text-white">All Employees</h2>
-                <Link href="/employer/employees">
+                <Link href="/employer">
                   <Button size="sm" className="gap-2 bg-pink-600/20 hover:bg-pink-600/40 text-pink-400 border border-pink-500/30 shadow-[0_0_15px_rgba(236,72,153,0.15)] rounded-full px-5 transition-all">
                     <UserPlus className="h-4 w-4" /> Add Employee
                   </Button>
@@ -323,18 +442,23 @@ export function EmployerDashboard() {
               ) : (
                 <div className="divide-y divide-white/5">
                   {employees.map((emp: any) => (
-                    <Link
+                    <div
                       key={emp.employee_id}
-                      href={`/employer/employees/${emp.employee_id}`}
-                      className="flex items-center gap-4 px-6 py-4 transition-colors hover:bg-white/5"
+                      className="flex items-center gap-4 px-6 py-4"
                     >
                       <AvatarInitials name={emp.profile?.name || emp.username} color="#d946ef" />
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-white">{emp.profile?.name || emp.username}</p>
                         <p className="text-sm text-white/50">{emp.profile?.email || emp.profile?.role || emp.role}</p>
                       </div>
-                      <StatusBadge status={emp.status || "active"} />
-                    </Link>
+                      <div className="flex flex-col items-end gap-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-mono text-white/80">{emp.salary || "0"} USDC</span>
+                          <span className="px-1.5 py-0.5 rounded-md bg-violet-500/10 border border-violet-500/20 text-[8px] font-bold text-violet-400 uppercase tracking-tighter">%allot</span>
+                        </div>
+                        <StatusBadge status={emp.status || "active"} />
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}

@@ -18,15 +18,23 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 import {
   Connection,
   PublicKey,
   SystemProgram,
   TransactionMessage,
   VersionedTransaction,
-  AddressLookupTableProgram,
 } from "@solana/web3.js";
 import { RPC_ENDPOINT, PROGRAM_ID } from "@/lib/solana-program";
+
+function addressToCompanyId(address: string): string {
+  return crypto
+    .createHash("sha256")
+    .update(address.toLowerCase())
+    .digest("hex")
+    .slice(0, 20);
+}
 
 const MAX_COMMITMENTS_PER_CHUNK = 32;
 
@@ -62,12 +70,28 @@ export async function POST(req: NextRequest) {
     const employer = new PublicKey(employerAddress);
 
     // ── Fetch commitments from NilDB ──────────────────────────────────────
-    const { getNillionServerClient } = await import("@/lib/server/nillion-server");
-    const nillionClient = await getNillionServerClient();
-    const runData = await nillionClient.getPayrollRun(runId);
+    const { getPayrollRun } = await import("@/lib/server/nillion-server");
+    const companyId = addressToCompanyId(employerAddress);
+    const storedRun = await getPayrollRun(companyId, runId);
 
-    if (!runData) {
+    if (!storedRun) {
       return NextResponse.json({ error: "Payroll run not found" }, { status: 404 });
+    }
+
+    const runData = {
+      merkleRoot: storedRun.merkle_root,
+      epoch: storedRun.epoch,
+      commitments: (() => {
+        try {
+          return JSON.parse(storedRun.commitments || "[]");
+        } catch {
+          return [];
+        }
+      })() as string[],
+    };
+
+    if (!runData.commitments.length) {
+      return NextResponse.json({ error: "Payroll run has no commitments to commit" }, { status: 400 });
     }
 
     const commitments: Uint8Array[] = runData.commitments.map((c: string) => {

@@ -145,7 +145,7 @@ export function EmployeeInbox() {
                       <div className="sm:text-right flex sm:flex-col justify-between sm:justify-start items-center sm:items-end mt-4 sm:mt-0">
                         <p className={`font-mono font-bold tracking-tight text-lg ${isUnopened ? "text-white/40" : "text-white"}`}>
                           {note.status === "Opened" && note.decryptedAmount
-                            ? `${note.decryptedAmount} STRK`
+                            ? `${note.decryptedAmount} USDC`
                             : note.maskedAmount}
                         </p>
                         <p className={`text-xs mt-1 uppercase tracking-widest font-semibold ${isUnopened ? "text-blue-400" : "text-emerald-400"}`}>

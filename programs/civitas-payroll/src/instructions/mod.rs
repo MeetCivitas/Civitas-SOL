@@ -8,6 +8,7 @@ pub mod complete_withdrawal;
 pub mod create_invoice;
 pub mod pay_invoice;
 pub mod close_verification_session;
+pub mod close_vault;
 
 pub use initialize_vault::*;
 pub use deposit_usdc::*;
@@ -19,3 +20,4 @@ pub use complete_withdrawal::*;
 pub use create_invoice::*;
 pub use pay_invoice::*;
 pub use close_verification_session::*;
+pub use close_vault::*;

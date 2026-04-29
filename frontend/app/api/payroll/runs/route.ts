@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
             // but if we need it, we can calculate it or store it during generate
             // For now, fallback to 0 or derive if possible
             declaredTotal: "0",
-            currency: "STRK",
+            currency: "USDC",
             payrollRoot: r.merkle_root || "",
             proofHash: r.zk_proof_hash || "",
             notes: [],

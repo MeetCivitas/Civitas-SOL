@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (!isNillionConfigured()) {
-        return NextResponse.json({ exists: false });
+        return NextResponse.json({ exists: false, backendConfigured: false });
     }
 
     try {
@@ -156,7 +156,12 @@ export async function POST(req: NextRequest) {
     };
 
     if (!isNillionConfigured()) {
-        return NextResponse.json({ success: true, profile: profilePayload });
+        // Allow the profile to be "created" without NilDB — in-memory only for the session
+        return NextResponse.json({
+            success: true,
+            profile: profilePayload,
+            _note: "NilDB not configured — profile stored client-side only",
+        });
     }
 
     try {

@@ -152,4 +152,10 @@ pub mod civitas_payroll {
     ) -> Result<()> {
         instructions::close_verification_session::handler(ctx)
     }
+
+    /// Devnet utility: close vault PDA + its token ATA so it can be
+    /// reinitialized with the correct USDC mint.
+    pub fn close_vault(ctx: Context<CloseVault>) -> Result<()> {
+        instructions::close_vault::handler(ctx)
+    }
 }

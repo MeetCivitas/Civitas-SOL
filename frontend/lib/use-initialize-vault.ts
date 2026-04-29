@@ -103,7 +103,6 @@ export function useInitializeVault(
     setError(null);
 
     try {
-      // Request orchestrator to build the initialize_vault transaction
       const resp = await fetch("/api/vault/init", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -113,21 +112,36 @@ export function useInitializeVault(
         }),
       });
 
+      const body = await resp.json().catch(() => ({}));
+      console.log("[vault/init] API response:", resp.status, body);
+
       if (!resp.ok) {
-        const body = await resp.json().catch(() => ({}));
-        throw new Error(body?.error ?? `Server error: ${resp.status}`);
+        if (resp.status === 409 && body?.alreadyExists && body?.vaultPda) {
+          setVaultPda(body.vaultPda);
+          setStatus("exists");
+          return;
+        }
+        throw new Error(body?.error ?? `Server error ${resp.status}`);
       }
 
-      const { serializedTransaction, vaultPda: returnedPda } = await resp.json();
+      const { serializedTransaction, vaultPda: returnedPda } = body;
+      if (!serializedTransaction) throw new Error("No transaction returned from /api/vault/init");
 
-      // Wallet signs + sends
+      console.log("[vault/init] signing, vaultPda:", returnedPda);
       await signAndSend(serializedTransaction);
+      console.log("[vault/init] confirmed");
 
       setVaultPda(returnedPda ?? vaultPda);
       setStatus("success");
     } catch (e: any) {
-      setError(e?.message ?? "Vault initialization failed");
+      // Extract Solana simulation logs if present
+      const logs: string[] = e?.logs ?? e?.transactionError?.logs ?? [];
+      const logsStr = logs.length ? ` | Logs: ${logs.join(" | ")}` : "";
+      const message = (e?.message ?? String(e) ?? "Vault initialization failed") + logsStr;
+      console.error("[vault/init] FULL ERROR:", e, "\nmessage:", message);
+      setError(message);
       setStatus("error");
+      throw new Error(message);
     }
   }, [address, signAndSend, status, vaultPda]);
 

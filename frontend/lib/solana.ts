@@ -9,10 +9,12 @@ export const SOLANA_TREASURY_VAULT =
   process.env.NEXT_PUBLIC_SOLANA_TREASURY_VAULT ?? "Pending deployment";
 
 export const SOLANA_PAYROLL_PROGRAM =
-  process.env.NEXT_PUBLIC_SOLANA_PAYROLL_PROGRAM ?? "Planned for Solana migration";
+  process.env.NEXT_PUBLIC_SOLANA_PAYROLL_PROGRAM ??
+  process.env.NEXT_PUBLIC_CIVITAS_PROGRAM_ID ??
+  "Planned for Solana migration";
 
 export const USDC_MINT_ADDRESS =
-  process.env.NEXT_PUBLIC_USDC_MINT ?? "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+  process.env.NEXT_PUBLIC_USDC_MINT ?? "9pan9bMn5HatX4EJdBwg9VgCa7Uz5HL8N1m5D3NdXejP";
 
 export function buildExplorerUrl(
   kind: "address" | "tx" | "token",

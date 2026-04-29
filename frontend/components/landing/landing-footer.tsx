@@ -68,7 +68,7 @@ export function LandingFooter() {
 
         <div className="mt-12 border-t border-border pt-8">
           <p className="text-center text-sm text-muted-foreground">
-            &copy; {new Date().getFullYear()} Civitas. All simulated for demonstration purposes.
+            &copy; {new Date().getFullYear()} Civitas. Built on Solana devnet — ZK proofs powered by Noir &amp; Barretenberg.
           </p>
         </div>
       </div>

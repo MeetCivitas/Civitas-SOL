@@ -83,8 +83,8 @@ export async function GET() {
     // 3. Employees
     results.push(await runTest("3a. createEmployees", async () => {
         await createEmployees(TEST_COMPANY, [
-            { employeeTag: "alice_" + Date.now(), salaryPolicy: "5000" },
-            { employeeTag: "bob_" + Date.now(), salaryPolicy: "6000" },
+            { employeeTag: "alice_" + Date.now(), salary: "5000" },
+            { employeeTag: "bob_" + Date.now(), salary: "6000" },
         ]);
         return true;
     }));
@@ -183,8 +183,8 @@ export async function GET() {
     // 5. Vouchers
     results.push(await runTest("5a. createVoucherBatch", async () => {
         await createVoucherBatch(TEST_COMPANY, [
-            { commitment: "c1_" + Date.now(), employeeTag: "alice", amount: "5000", nonce: "n1", epoch: TEST_EPOCH, runId: TEST_RUN_ID },
-            { commitment: "c2_" + Date.now(), employeeTag: "bob", amount: "6000", nonce: "n2", epoch: TEST_EPOCH, runId: TEST_RUN_ID },
+            { commitment: "c1_" + Date.now(), employeeTag: "alice", amount: "5000", nonce: "n1", epoch: TEST_EPOCH, runId: TEST_RUN_ID, employerAddress: "test_employer" },
+            { commitment: "c2_" + Date.now(), employeeTag: "bob", amount: "6000", nonce: "n2", epoch: TEST_EPOCH, runId: TEST_RUN_ID, employerAddress: "test_employer" },
         ]);
         return true;
     }));

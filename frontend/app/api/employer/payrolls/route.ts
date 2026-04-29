@@ -1,47 +1,49 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { SESSION_COOKIE, verifySession } from "@/lib/server/session";
+import crypto from "crypto";
 import {
   isNillionConfigured,
   ensureCompanyCollections,
   listPayrollRuns,
+  extractRecords,
 } from "@/lib/server/nillion-server";
 
 export const runtime = "nodejs";
 
+function addressToCompanyId(address: string): string {
+  return crypto
+    .createHash("sha256")
+    .update(address.toLowerCase())
+    .digest("hex")
+    .slice(0, 20);
+}
+
+/**
+ * GET /api/employer/payrolls?address=<walletAddress>
+ *
+ * Returns all payroll runs for the given employer wallet address.
+ * Does NOT require session auth — wallet address is the identity.
+ */
 export async function GET(req: NextRequest) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
-  if (!token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const ownerAddress = req.nextUrl.searchParams.get("address");
+
+  if (!ownerAddress) {
+    return NextResponse.json({ error: "address query param required" }, { status: 400 });
   }
-  const session = await verifySession(token);
-  if (!session || session.role !== "employer") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (!isNillionConfigured()) {
+    return NextResponse.json({
+      success: true,
+      payrollRuns: [],
+      message: "NilDB not configured",
+    });
   }
 
   try {
-    if (!isNillionConfigured()) {
-      return NextResponse.json({
-        success: true,
-        payrollRuns: [],
-        message: "NilDB not configured — no payroll data available",
-      });
-    }
-
-    // Get company ID from session
-    const companyId = (session as any).company_id || "default";
+    const companyId = addressToCompanyId(ownerAddress);
     await ensureCompanyCollections(companyId);
 
-    // Read payroll runs from NilDB
     const rawResults = await listPayrollRuns(companyId);
-
-    // Parse NilDB response — { data: [...], pagination: {} }
-    const allRuns: any[] = Array.isArray((rawResults as any)?.data)
-      ? (rawResults as any).data
-      : Array.isArray(rawResults)
-        ? rawResults as any[]
-        : [];
+    const allRuns = extractRecords(rawResults);
 
     // Deduplicate by run_id
     const seenIds = new Set<string>();
@@ -52,33 +54,35 @@ export async function GET(req: NextRequest) {
       return true;
     });
 
-    console.log(`[PayrollAPI] Found ${uniqueRuns.length} runs in nilDB`);
-
-    // Transform to match UI format
     const payrollRuns = uniqueRuns.map((run: any) => ({
       runId: run.run_id,
       orgId: companyId,
-      createdBy: session.username || "employer",
+      createdBy: "employer",
       createdAt: run.created_at || new Date().toISOString(),
-      status: run.status === "committed" ? "Committed" : run.status === "generated" ? "Draft" : "Draft",
+      status: run.status === "committed" ? "Committed" : run.status === "generated" ? "Draft" : run.status || "Draft",
       employeeCount: parseInt(run.commitment_count || "0", 10),
-      declaredTotal: "***", // Never expose amounts in list view
-      currency: "STRK",
+      declaredTotal: "***",
+      currency: "USDC",
       payrollRoot: run.merkle_root || "",
       proofHash: run.zk_proof_hash || "",
       notes: [],
       events: [
-        { ts: run.created_at, text: "Payroll run created" },
-        ...(run.status === "committed" ? [{ ts: run.updated_at || run.created_at, text: "Committed on-chain" }] : []),
+        { ts: run.created_at || new Date().toISOString(), text: "Payroll run created" },
+        ...(run.status === "committed"
+          ? [{ ts: run.updated_at || run.created_at || new Date().toISOString(), text: "Committed on-chain" }]
+          : []),
       ],
+      commitments: (() => {
+        try { return JSON.parse(run.commitments || "[]"); } catch { return []; }
+      })(),
+      epoch: run.epoch || "",
+      txHash: run.tx_hash || "",
+      merkleRoot: run.merkle_root || "",
     }));
 
-    return NextResponse.json({
-      success: true,
-      payrollRuns,
-    });
+    return NextResponse.json({ success: true, payrollRuns });
   } catch (error: any) {
-    console.error("List payroll runs error:", error);
+    console.error("[employer/payrolls GET]", error);
     return NextResponse.json(
       { error: error.message || "Failed to list payroll runs" },
       { status: 500 }

@@ -192,6 +192,7 @@ async function main() {
                 nonce: "nonce_alice_123",
                 epoch: TEST_EPOCH,
                 runId: TEST_RUN_ID,
+                employerAddress: "test_employer",
             },
             {
                 commitment: "commit_bob_" + Date.now(),
@@ -200,6 +201,7 @@ async function main() {
                 nonce: "nonce_bob_456",
                 epoch: TEST_EPOCH,
                 runId: TEST_RUN_ID,
+                employerAddress: "test_employer",
             },
         ]);
     });
