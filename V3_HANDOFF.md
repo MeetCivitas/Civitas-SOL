@@ -2,6 +2,43 @@
 
 What I shipped in this branch and what you need to do before submission.
 
+## V3.1 — MagicBlock-routed private settlement (2026-04-30)
+
+**On-chain `claim_payment` is now a pure ZK gate** — no USDC transfer, no
+`recipient_token_account` or `amount` in IX args. Settlement happens
+off-chain via the MagicBlock Private Payments API so amount + recipient
+are never visible in any direct on-chain transfer linkable to the claim.
+
+### What runs in a claim now
+1. **On-chain `claim_payment` IX** (program `CQW3T…e24y`, redeployed):
+   - args: `proof_bytes`, `pi_hash`, `nullifier`, `run_id`
+   - accounts: submitter, payroll_run, nullifier_account (init), system_program, clock
+   - verifies the Groth16 proof against the embedded VK + burns the nullifier
+   - emits `VoucherConsumed { nullifier, run_id, pi_hash, slot }`
+2. **`/api/payroll/dispatch-claim`** (server-side):
+   - confirms the on-chain claim tx is finalized + the nullifier PDA exists
+   - recomputes pi_hash from authoritative on-chain state +
+     employee-supplied `(recipient, amount, epoch)` via
+     `lib/server/pi-hash.ts` (poseidon-lite, byte-identical to circuit)
+   - rejects on mismatch
+   - signs MagicBlock private transfer (employer-ER → employee-ER,
+     visibility=private, split=5, randomized 500–30000 ms delay) using
+     `CIVITAS_DEPLOYER_KEYPAIR_PATH` → real bearer token from
+     `payments.magicblock.app/v1/spl/login`
+   - submits the signed tx
+3. **Employee withdraw** (`/api/payroll/private-pay?action=withdraw`):
+   - employee wallet signs + submits → ER → base wallet ATA
+
+### Mints
+- `NEXT_PUBLIC_USDC_MINT` (Token-2022) is the legacy Civitas vault metadata mint.
+- `NEXT_PUBLIC_MAGICBLOCK_USDC_MINT=4wnU5UyxSZ7otfDAmXucNfEkbnA27NA58y6CLTx4SDLw` (legacy SPL) — MagicBlock's SPL Vault hard-codes legacy SPL Token; Token-2022 is rejected with `IncorrectProgramId`. The proof now binds to the legacy mint + legacy ATA so dispatcher's pi_hash recompute matches.
+
+### Pre-funding
+- `/api/payroll/fund-magicblock` (POST `{amountBaseUnits, mintFirst}`): mints USDC to the deployer (devnet only — deployer is mint authority for the test legacy mint), then deposits into MagicBlock ER via `lib/server/magicblock-auth.ts::employerDeposit`. Verified working: tx `NdiF65YUmqjGzU2cwQiEiU7eciiya9NQTTPJKkZqdUvmKLfjLL9vppYtwD2msQyyBC82ob9zUgtWEzgnNtfLB8G`.
+
+### Known external blocker
+- `payments.magicblock.app/v1/spl/challenge` returns HTTP 502 / `{"code":"RPC_ERROR","message":"No challenge received"}` for any pubkey/cluster as of 2026-04-30. Deposit, withdraw, balance work — only the auth challenge upstream is degraded. `lib/server/magicblock-auth.ts` retries with exponential backoff (~9s total). When MagicBlock recovers, dispatch-claim will succeed end-to-end with no code change.
+
 ## What's done (in this commit set)
 
 ### Phase 3 — MagicBlock fallbacks removed

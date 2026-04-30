@@ -223,8 +223,9 @@ export async function buildPrivateTransferTx(
     fromBalance: "ephemeral",
     toBalance: "ephemeral",
     split,
-    minDelayMs,
-    maxDelayMs,
+    // API requires these as strings (server-side zod schema rejects numbers).
+    minDelayMs: String(minDelayMs),
+    maxDelayMs: String(maxDelayMs),
     cluster,
     initIfMissing: true,
     initAtasIfMissing: true,

@@ -51,40 +51,23 @@ export function uuidToBytes(uuid: string): Buffer {
 }
 
 /**
- * Borsh-encode ClaimPublicInputs matching state.rs layout:
- *   amount:                  u64  (8 bytes LE)
- *   epoch:                   u64  (8 bytes LE)
- *   run_id:                  [u8; 16]
- *   recipient_token_account: Pubkey (32 bytes)
+ * Encode the claim_payment instruction data — pure ZK gate, no settlement.
  *
- * Total: 64 bytes.
- */
-export function encodeClaimPublicInputs(params: {
-  amount: bigint | string;
-  epoch: bigint | string;
-  runId: string;
-  recipientTokenAccount: string;
-}): Buffer {
-  return Buffer.concat([
-    u64LE(BigInt(params.amount)),
-    u64LE(BigInt(params.epoch)),
-    uuidToBytes(params.runId),
-    new PublicKey(params.recipientTokenAccount).toBuffer(),
-  ]);
-}
-
-/**
- * Encode the full claim_payment instruction data:
- *   discriminator (8) | proof_bytes: Vec<u8> (4 LE len + 256 B) |
- *   pi_hash: [u8;32]  | public_inputs: ClaimPublicInputs (64 B) |
- *   nullifier: [u8;32]
+ *   discriminator (8) |
+ *   proof_bytes: Vec<u8> (4 LE len + 256 B) |
+ *   pi_hash: [u8;32]  |
+ *   nullifier: [u8;32] |
+ *   run_id: [u8;16]
+ *
+ * recipient + amount are intentionally NOT in IX args. They are bound
+ * only via pi_hash and verified off-chain by the MagicBlock dispatcher.
  */
 export function encodeClaimPaymentArgs(params: {
   discriminator: Buffer;
   proofBytes: Uint8Array;
   piHash: Uint8Array;
-  publicInputs: Buffer;
   nullifier: Uint8Array;
+  runId: string;
 }): Buffer {
   if (params.proofBytes.length !== 256) {
     throw new Error(`proof must be 256 bytes, got ${params.proofBytes.length}`);
@@ -100,7 +83,7 @@ export function encodeClaimPaymentArgs(params: {
     proofLenBuf,
     Buffer.from(params.proofBytes),
     Buffer.from(params.piHash),
-    params.publicInputs,
     Buffer.from(params.nullifier),
+    uuidToBytes(params.runId),
   ]);
 }

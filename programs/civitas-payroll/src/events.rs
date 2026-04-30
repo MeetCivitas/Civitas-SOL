@@ -54,9 +54,23 @@ pub struct PayrollBatchCommitted {
     pub slot: u64,
 }
 
-/// Emitted when a payment is successfully claimed (Groth16 proof verified,
-/// USDC transferred, nullifier registered). Only the nullifier is emitted —
-/// no amount, no identity.
+/// Emitted when a voucher is consumed (Groth16 proof verified + nullifier
+/// burned). Settlement happens off-chain via the MagicBlock private-pay
+/// dispatcher — `pi_hash` lets the dispatcher bind authoritative state +
+/// employee-supplied (recipient, amount) to the proof's commitment.
+///
+/// No salary amount, no recipient address — only the nullifier and the
+/// opaque pi_hash commitment.
+#[event]
+pub struct VoucherConsumed {
+    pub nullifier: [u8; 32],
+    pub run_id: [u8; 16],
+    pub pi_hash: [u8; 32],
+    pub slot: u64,
+}
+
+/// Legacy: emitted by the previous on-chain-settlement claim path. Kept
+/// for IDL compatibility with anyone still indexing it.
 #[event]
 pub struct PaymentClaimed {
     pub nullifier: [u8; 32],

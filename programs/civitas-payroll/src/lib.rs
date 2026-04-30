@@ -37,8 +37,6 @@ pub mod state;
 pub mod verifier;
 
 use instructions::*;
-// Re-export for IDL generation
-pub use state::ClaimPublicInputs;
 
 declare_id!("CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y");
 
@@ -98,23 +96,24 @@ pub mod civitas_payroll {
         instructions::finalize_merkle_root::handler(ctx, run_id, new_root, chunk_count)
     }
 
-    /// Single-transaction voucher redemption.
+    /// Pure ZK gate for voucher redemption. NO on-chain settlement.
     ///
-    /// Verifies a Groth16 BN254 proof against the embedded voucher VK,
-    /// binds public inputs to authoritative on-chain state (vault PDA,
-    /// program ID, mint, merkle root, domain tag), prevents double-spend
-    /// by initialising a NullifierAccount PDA, and transfers Token-2022
-    /// USDC from vault → recipient.
+    /// Verifies a Groth16 BN254 proof against the embedded voucher VK and
+    /// burns a single-use nullifier PDA. Settlement (USDC movement) happens
+    /// off-chain via the MagicBlock Private Payments API — a dispatcher
+    /// binds (recipient, amount) to the proof's pi_hash and triggers a
+    /// private transfer with visibility=private + split + randomized timing
+    /// so amount and recipient are never revealed in any on-chain transfer.
     ///
-    /// CU budget: ~250k.
+    /// CU budget: ~180k.
     pub fn claim_payment(
         ctx: Context<ClaimPayment>,
         proof_bytes: Vec<u8>,
         pi_hash: [u8; 32],
-        public_inputs: ClaimPublicInputs,
         nullifier: [u8; 32],
+        run_id: [u8; 16],
     ) -> Result<()> {
-        instructions::claim_payment::handler(ctx, proof_bytes, pi_hash, public_inputs, nullifier)
+        instructions::claim_payment::handler(ctx, proof_bytes, pi_hash, nullifier, run_id)
     }
 
     /// Create an invoice for contractor→client payment.

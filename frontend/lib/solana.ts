@@ -16,6 +16,14 @@ export const SOLANA_PAYROLL_PROGRAM =
 export const USDC_MINT_ADDRESS =
   process.env.NEXT_PUBLIC_USDC_MINT ?? "9pan9bMn5HatX4EJdBwg9VgCa7Uz5HL8N1m5D3NdXejP";
 
+/**
+ * Legacy SPL Token mint used by MagicBlock Private Payments. MagicBlock
+ * does not support Token-2022 — actual USDC settlement (private transfer
+ * + employee withdraw) flows through this mint.
+ */
+export const MAGICBLOCK_USDC_MINT =
+  process.env.NEXT_PUBLIC_MAGICBLOCK_USDC_MINT ?? USDC_MINT_ADDRESS;
+
 export function buildExplorerUrl(
   kind: "address" | "tx" | "token",
   value: string,

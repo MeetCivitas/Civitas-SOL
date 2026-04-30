@@ -937,6 +937,28 @@ export default function EmployerDashboard() {
                       >
                         {isProcessing ? "Minting..." : "Fund Treasury (Devnet)"}
                       </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setTxStatus("Funding MagicBlock ER (mint legacy USDC + deposit)…");
+                          try {
+                            const r = await fetch("/api/payroll/fund-magicblock", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ amountBaseUnits: "100000000", mintFirst: true }),
+                            });
+                            const j = await r.json();
+                            if (!r.ok) throw new Error(j?.error || "fund-magicblock failed");
+                            setTxStatus(`MagicBlock funded ✓ deposit: ${String(j.depositSig).slice(0, 24)}…`);
+                          } catch (e) {
+                            const msg = e instanceof Error ? e.message : String(e);
+                            setTxStatus(`MagicBlock funding error: ${msg}`);
+                          }
+                        }}
+                        className="min-h-12 w-full rounded-xl bg-fuchsia-600 py-4 text-xs font-bold uppercase tracking-widest text-white transition-all hover:bg-fuchsia-500 hover:shadow-[0_0_25px_rgba(217,70,239,0.3)] focus:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-300/70"
+                      >
+                        Pre-fund MagicBlock ER (Private Settlement)
+                      </button>
                     </div>
                   </div>
                 </div>

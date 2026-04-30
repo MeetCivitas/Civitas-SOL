@@ -195,13 +195,6 @@ pub struct CommitmentChunkAccount {
 // All of these are checked on-chain against authoritative state below
 // before the proof is invoked.
 
-/// Public input components the on-chain handler binds to authoritative
-/// state. These are independently verified (not just hashed); the same
-/// values are then folded into pi_hash for the Groth16 verifier.
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
-pub struct ClaimPublicInputs {
-    pub amount: u64,
-    pub epoch: u64,
-    pub run_id: [u8; 16],
-    pub recipient_token_account: Pubkey,
-}
+// ClaimPublicInputs removed: recipient/amount are no longer exposed in
+// IX args. They are bound only via pi_hash and verified off-chain by the
+// MagicBlock private-pay dispatcher.

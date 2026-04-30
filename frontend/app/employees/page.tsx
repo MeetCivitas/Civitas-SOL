@@ -22,10 +22,10 @@ import { useCivitas } from "@/lib/civitas-provider";
 import { useSolanaWallet } from "@/lib/solana-wallet";
 import { WalletButton } from "@/components/wallet-button";
 import { PrivacyStackVisualizer } from "@/components/ui/privacy-stack";
-import { buildExplorerUrl, formatUsdc, shortenAddress, USDC_MINT_ADDRESS } from "@/lib/solana";
+import { buildExplorerUrl, formatUsdc, shortenAddress, USDC_MINT_ADDRESS, MAGICBLOCK_USDC_MINT } from "@/lib/solana";
 import { buildMerkleTree } from "@/lib/merkle-tree";
 import { generateVoucherProof } from "@/lib/groth16-proof";
-import { encodeClaimPaymentArgs, encodeClaimPublicInputs } from "@/lib/borsh-encode";
+import { encodeClaimPaymentArgs } from "@/lib/borsh-encode";
 
 function StatTile({
   label,
@@ -186,6 +186,7 @@ export default function EmployeesPage() {
   const [provingPct, setProvingPct] = useState(0);
   const [provingLabel, setProvingLabel] = useState("");
   const [provingStep, setProvingStep] = useState<ClaimStepId>("idle");
+  const [withdrawingCommitment, setWithdrawingCommitment] = useState<string | null>(null);
   const hydratedTagRef = useRef<string | null>(null);
 
   // Hydrate vouchers from NilDB once per credential tag
@@ -299,7 +300,7 @@ export default function EmployeesPage() {
 
       const [
         { PublicKey, Connection, Transaction, SystemProgram, ComputeBudgetProgram },
-        { createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID },
+        { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID },
         { PROGRAM_ID, RPC_ENDPOINT, getVaultState },
       ] = await Promise.all([
         import("@solana/web3.js"),
@@ -308,7 +309,11 @@ export default function EmployeesPage() {
       ]);
 
       const submitter = new PublicKey(address);
-      const usdcMint = new PublicKey(USDC_MINT_ADDRESS);
+      // Bind the proof to the LEGACY MagicBlock USDC mint + legacy ATA since
+      // MagicBlock's SPL Vault does not support Token-2022. The Civitas
+      // on-chain vault still references the Token-2022 mint as metadata,
+      // but the proof's pi_hash binds to the actual settlement mint.
+      const usdcMint = new PublicKey(MAGICBLOCK_USDC_MINT);
       const owner = new PublicKey(employerAddress);
       const [vaultPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("vault"), owner.toBuffer()],
@@ -345,7 +350,7 @@ export default function EmployeesPage() {
       }
 
       const recipientAta = getAssociatedTokenAddressSync(
-        usdcMint, submitter, false, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID,
+        usdcMint, submitter, false, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID,
       );
 
       // Use the run-specific merkle_root so vouchers from any historically
@@ -384,29 +389,21 @@ export default function EmployeesPage() {
         (pct, label) => { setProvingPct(pct); setProvingLabel(label); },
       );
 
-      // ── 3. Build single claim_payment tx ─────────────────────────────
+      // ── 3. Build single claim_payment tx — pure ZK gate ────────────────
       setProvingStep("verify");
-      setProvingLabel("Building on-chain claim transaction...");
+      setProvingLabel("Building on-chain ZK gate transaction...");
 
       const DISC_CLAIM_PAYMENT = Buffer.from([69, 112, 250, 167, 37, 156, 200, 30]);
       const nullifierBytes = fieldToBE32Local(BigInt(proof.nullifier));
-
-      const publicInputs = encodeClaimPublicInputs({
-        amount: BigInt(target.amount || "0"),
-        epoch: BigInt(target.epoch || "0"),
-        runId: runId,
-        recipientTokenAccount: recipientAta.toBase58(),
-      });
 
       const claimData = encodeClaimPaymentArgs({
         discriminator: DISC_CLAIM_PAYMENT,
         proofBytes: proof.proofBytes,
         piHash: proof.piHash,
-        publicInputs,
         nullifier: nullifierBytes,
+        runId,
       });
 
-      // Derive nullifier + payroll_run PDAs
       const [nullifierPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("nullifier"), Buffer.from(nullifierBytes)],
         PROGRAM_ID,
@@ -419,22 +416,13 @@ export default function EmployeesPage() {
       const connection = new Connection(RPC_ENDPOINT, "confirmed");
 
       const tx = new Transaction();
-      tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }));
-      tx.add(createAssociatedTokenAccountIdempotentInstruction(
-        submitter, recipientAta, submitter, usdcMint,
-        TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID,
-      ));
+      tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }));
       tx.add({
         programId: PROGRAM_ID,
         keys: [
           { pubkey: submitter, isSigner: true, isWritable: true },
-          { pubkey: vaultPda, isSigner: false, isWritable: true },
           { pubkey: payrollRunPda, isSigner: false, isWritable: false },
           { pubkey: nullifierPda, isSigner: false, isWritable: true },
-          { pubkey: usdcMint, isSigner: false, isWritable: false },
-          { pubkey: vaultState.usdcVault, isSigner: false, isWritable: true },
-          { pubkey: recipientAta, isSigner: false, isWritable: true },
-          { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
           { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
           { pubkey: new PublicKey("SysvarC1ock11111111111111111111111111111111"), isSigner: false, isWritable: false },
         ],
@@ -445,13 +433,44 @@ export default function EmployeesPage() {
       const { blockhash } = await connection.getLatestBlockhash();
       tx.recentBlockhash = blockhash;
 
-      // ── 4. Wallet signs + submits ─────────────────────────────────────
+      // ── 4. Wallet signs + submits the ZK gate ─────────────────────────
       setProvingStep("payment");
-      setProvingLabel("Wallet: approve claim transaction...");
+      setProvingLabel("Wallet: approve ZK proof transaction...");
       const serialised = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString("base64");
       const sig = await signAndSendTransaction(serialised);
 
-      // ── 5. Record settlement in NilDB ─────────────────────────────────
+      // ── 5. Dispatch private settlement via MagicBlock ─────────────────
+      setProvingLabel("Settling privately via MagicBlock ER…");
+      const piHashHex = Array.from(proof.piHash)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+      const nullifierHex = Array.from(nullifierBytes)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+
+      const dispatchRes = await fetch("/api/payroll/dispatch-claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          claimTxSig: sig,
+          runId,
+          employerAddress,
+          employeeWallet: submitter.toBase58(),
+          recipientTokenAccount: recipientAta.toBase58(),
+          amountBaseUnits: String(target.amount || "0"),
+          epoch: String(target.epoch || "0"),
+          nullifierHex,
+          piHashHex,
+        }),
+      });
+      const dispatchJson = await dispatchRes.json().catch(() => ({}));
+      if (!dispatchRes.ok) {
+        throw new Error(
+          `Private dispatch failed: ${dispatchJson?.error || dispatchRes.statusText}`,
+        );
+      }
+
+      // ── 6. Record settlement in NilDB ─────────────────────────────────
       await fetch("/api/employees/redeem", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -463,6 +482,7 @@ export default function EmployeesPage() {
           voucher_nonce: target.voucherNonce,
           nullifier: proof.nullifier,
           tx_signature: sig,
+          private_transfer_sig: dispatchJson?.privateTransferSig,
           action: "settle",
         }),
       }).catch((e) => console.warn("[Claim] settle record failed (non-fatal):", e));
@@ -471,10 +491,13 @@ export default function EmployeesPage() {
         status: "claimed",
         claimTxHash: sig,
         nullifier: proof.nullifier,
+        privateTransferSig: dispatchJson?.privateTransferSig,
       } as any);
 
       setProvingStep("cloak");
-      setStatus(`Settled on-chain ✓ USDC transferred. Tx: ${sig.slice(0, 20)}…`);
+      setStatus(
+        `ZK gate ✓  Private transfer ✓  ER tx: ${String(dispatchJson?.privateTransferSig || "").slice(0, 20)}… — withdraw to your wallet from the “Withdraw” button.`,
+      );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       const friendly = msg.includes("unreachable")
@@ -489,6 +512,49 @@ export default function EmployeesPage() {
       setProvingLabel("");
     }
   }, [credential, connected, address, signAndSendTransaction, updateVoucher]);
+
+  const handleWithdraw = useCallback(
+    async (target: (typeof myVouchers)[number]) => {
+      if (!connected || !address) {
+        setStatus("Connect your wallet to withdraw.");
+        return;
+      }
+      const commitmentStr = String(target.commitment);
+      setWithdrawingCommitment(commitmentStr);
+      setStatus(null);
+      try {
+        const amountBaseUnits = String(target.amount || "0");
+        // Build the unsigned MagicBlock withdraw tx (employee ER → base wallet).
+        const buildRes = await fetch("/api/payroll/private-pay", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "withdraw",
+            owner: address,
+            amount: amountBaseUnits,
+            mint: MAGICBLOCK_USDC_MINT,
+          }),
+        });
+        const built = await buildRes.json();
+        if (!buildRes.ok) {
+          throw new Error(built?.error || "withdraw build failed");
+        }
+        const sig = await signAndSendTransaction(built.transactionBase64);
+        updateVoucher(commitmentStr, {
+          status: "settled",
+          withdrawTxHash: sig,
+        } as any);
+        setStatus(`Withdrawn ✓ — USDC now in your wallet. Tx: ${sig.slice(0, 20)}…`);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[Withdraw] FULL ERROR:", err);
+        setStatus(`Withdraw error: ${msg}`);
+      } finally {
+        setWithdrawingCommitment(null);
+      }
+    },
+    [connected, address, signAndSendTransaction, updateVoucher],
+  );
 
   // ── small local helpers ───────────────────────────────────────────────
 
@@ -663,6 +729,7 @@ export default function EmployeesPage() {
                     const isThisProving = provingCommitment === vCommitment;
                     const isPending = voucher.status === "pending";
                     const anyProving = provingCommitment !== null;
+                    const anyWithdrawing = withdrawingCommitment !== null;
                     const usdcAmount = formatUsdc(Number(voucher.amount || 0) / 1_000_000);
 
                     return (
@@ -736,9 +803,29 @@ export default function EmployeesPage() {
                         )}
 
                         {voucher.status === "claimed" && (
-                          <div className="mt-4 flex items-center gap-2 rounded-[14px] border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-400">
-                            <CheckCircle2 className="h-4 w-4 shrink-0" />
-                            Settled — {usdcAmount} USDC claimed
+                          <div className="mt-4 space-y-3">
+                            <div className="flex items-center gap-2 rounded-[14px] border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-400">
+                              <CheckCircle2 className="h-4 w-4 shrink-0" />
+                              Settled privately on MagicBlock ER — {usdcAmount} USDC
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void handleWithdraw(voucher)}
+                              disabled={anyWithdrawing}
+                              className="inline-flex w-full items-center justify-center gap-2 rounded-[14px] border border-cyan-500/25 bg-cyan-500/10 py-3 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/18 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              {withdrawingCommitment === vCommitment ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Withdrawing to wallet…
+                                </>
+                              ) : (
+                                <>
+                                  <Wallet className="h-4 w-4" />
+                                  Withdraw {usdcAmount} USDC to my wallet
+                                </>
+                              )}
+                            </button>
                           </div>
                         )}
                       </div>
