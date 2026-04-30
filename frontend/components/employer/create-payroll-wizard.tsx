@@ -364,14 +364,7 @@ export function CreatePayrollWizard() {
         console.log(`[PayrollWizard] MagicBlock ER confirmed ${sigs.length} tx(s). Last sig: ${actualTxHash}`)
       }
 
-      // Step 4: MagicBlock Private Payments — employer deposits USDC to ER.
-      // Real API only: payments.magicblock.app. No demo path.
-      setProcessingLabel(`Step 4/4 — MagicBlock Private Payments: depositing to ephemeral rollup…`)
-
       if (!ownerAddress) throw new Error("Wallet address missing — reconnect and retry")
-      const usdcMint = process.env.NEXT_PUBLIC_USDC_MINT
-      if (!usdcMint) throw new Error("NEXT_PUBLIC_USDC_MINT is not set")
-      const totalAmount = String(generatedRun.declaredTotal ?? "0")
 
       // ── Verify the on-chain commit actually finalized ──────────────────
       // The wizard previously declared "committed" if just the last tx
@@ -414,86 +407,16 @@ export function CreatePayrollWizard() {
         console.warn("[PayrollWizard] commit verify check error (non-fatal):", verErr?.message)
       }
 
-      // MagicBlock Private Payments — best-effort layer on top of the
-      // on-chain commit. The on-chain payroll batch is ALREADY finalized by
-      // this point; the deposit-to-ER step adds amount-obfuscation privacy
-      // when MagicBlock's service is up. If their service is degraded
-      // (e.g. /v1/spl/challenge returns 502), we surface the outage but DO
-      // NOT roll back the on-chain commit. ZK-voucher unlinkability still
-      // applies regardless.
-      let mbStatus: "deposited" | "skipped" = "skipped"
-      let mbError: string | null = null
-
-      try {
-        const wallet = (window as any).solana
-        if (!wallet?.signMessage || !wallet?.signTransaction) {
-          throw new Error("wallet does not support signMessage/signTransaction")
-        }
-
-        const challengeRes = await fetch(`/api/payroll/private-pay?action=challenge&pubkey=${ownerAddress}`)
-        const challengeBody = await challengeRes.json()
-        if (!challengeRes.ok) {
-          throw new Error(`challenge: ${challengeBody.error ?? challengeRes.status}`)
-        }
-
-        const msgBytes = new TextEncoder().encode(challengeBody.challenge)
-        const signed = await wallet.signMessage(msgBytes)
-        const bs58 = (await import("bs58")).default
-        const signature = bs58.encode(signed.signature)
-
-        const authRes = await fetch("/api/payroll/private-pay", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "auth", pubkey: ownerAddress, challenge: challengeBody.challenge, signature }),
-        })
-        const authBody = await authRes.json()
-        if (!authRes.ok) throw new Error(`auth: ${authBody.error ?? authRes.status}`)
-
-        setProcessingLabel(`Step 3/3 — MagicBlock: building deposit transaction…`)
-        const depositRes = await fetch("/api/payroll/private-pay", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "deposit",
-            owner: ownerAddress,
-            amount: totalAmount,
-            mint: usdcMint,
-          }),
-        })
-        const depositData = await depositRes.json()
-        if (!depositRes.ok) throw new Error(`deposit build: ${depositData.error ?? depositRes.status}`)
-
-        setProcessingLabel(`Step 3/3 — MagicBlock: signing deposit transaction…`)
-        const { VersionedTransaction, Connection } = await import("@solana/web3.js")
-        const txBytes = Buffer.from(depositData.transactionBase64, "base64")
-        const depositTx = VersionedTransaction.deserialize(txBytes)
-        const signedDeposit = await wallet.signTransaction(depositTx)
-        const connUrl =
-          depositData.sendTo === "ephemeral"
-            ? (process.env.NEXT_PUBLIC_MAGICBLOCK_ROUTER ?? "https://devnet-router.magicblock.app")
-            : RPC_ENDPOINT
-        const conn = new Connection(connUrl, "confirmed")
-
-        setProcessingLabel(`Step 3/3 — MagicBlock: submitting deposit…`)
-        const depositSig = await conn.sendRawTransaction(signedDeposit.serialize(), {
-          skipPreflight: false,
-          preflightCommitment: "confirmed",
-        })
-        await conn.confirmTransaction(depositSig, "confirmed")
-        console.log("[MagicBlock PP] ✓ Deposit confirmed:", depositSig)
-
-        const sessionId = `mbs_${generatedRun.runId.replace(/-/g, "").slice(0, 16)}`
-        setPrivateSessionId(sessionId)
-        mbStatus = "deposited"
-      } catch (mbErr: any) {
-        mbError = mbErr?.message ?? String(mbErr)
-        console.warn(
-          "[MagicBlock PP] degraded — on-chain commit succeeded but private-payments deposit was not made:",
-          mbError,
-        )
-      }
-      ;(generatedRun as any).magicblockStatus = mbStatus
-      ;(generatedRun as any).magicblockError = mbError
+      // MagicBlock private settlement: NOT done from the wizard. Each claim
+      // dispatch (POST /api/payroll/dispatch-claim, server-side) signs a
+      // base→base private transfer with the deployer keypair, pulling USDC
+      // from the deployer's MagicBlock balance. Use the dedicated
+      // "Pre-fund MagicBlock ER" button on the employer page to top that up.
+      // The connected browser wallet is NOT involved in private settlement.
+      const sessionId = `mbs_${generatedRun.runId.replace(/-/g, "").slice(0, 16)}`
+      setPrivateSessionId(sessionId)
+      ;(generatedRun as any).magicblockStatus = "deferred"
+      ;(generatedRun as any).magicblockError = null
 
       setPerStatus("done")
       console.log("[PayrollWizard] Commit transaction completed:", actualTxHash)
@@ -1015,14 +938,28 @@ export function CreatePayrollWizard() {
                   <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 space-y-2">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-3">Privacy Stack — Active</p>
                     {(() => {
-                      const mbStatus = (generatedRun as any)?.magicblockStatus as "deposited" | "skipped" | undefined
+                      const mbStatus = (generatedRun as any)?.magicblockStatus as
+                        | "deferred"
+                        | "deposited"
+                        | "skipped"
+                        | undefined
                       const mbError = (generatedRun as any)?.magicblockError as string | null | undefined
-                      const ppActive = mbStatus === "deposited"
+                      // "deferred" = the new normal: settlement runs server-side
+                      // at each claim from the deployer's pre-funded ER balance,
+                      // so the wizard doesn't deposit. "deposited" is the legacy
+                      // wallet-signed-deposit path. Both = green.
+                      const ppActive = mbStatus === "deferred" || mbStatus === "deposited"
+                      const ppSub =
+                        mbStatus === "deferred"
+                          ? "Settlement runs from deployer ER balance at claim time"
+                          : privateSessionId
+                            ? `Session ${privateSessionId.slice(0, 20)}… active`
+                            : "Deposited to ER"
                       const layers: Array<{ color: string; label: string; sub: string; ok: boolean }> = [
                         { color: "text-violet-400 border-violet-500/20 bg-violet-500/5", label: "Nillion nilCC TEE", sub: "Payroll computed in secure enclave", ok: true },
                         { color: "text-amber-400 border-amber-500/20 bg-amber-500/5", label: "MagicBlock ER", sub: "Commit txs routed through Ephemeral Rollup", ok: true },
                         ppActive
-                          ? { color: "text-blue-400 border-blue-500/20 bg-blue-500/5", label: "MagicBlock Private Payments", sub: privateSessionId ? `Session ${privateSessionId.slice(0, 20)}… active` : "Deposited to ER", ok: true }
+                          ? { color: "text-blue-400 border-blue-500/20 bg-blue-500/5", label: "MagicBlock Private Payments", sub: ppSub, ok: true }
                           : { color: "text-amber-400 border-amber-500/20 bg-amber-500/5", label: "MagicBlock Private Payments — UNAVAILABLE", sub: `Vendor outage; ZK-voucher unlinkability still applies. Detail: ${(mbError ?? "service degraded").slice(0, 80)}`, ok: false },
                         { color: "text-emerald-400 border-emerald-500/20 bg-emerald-500/5", label: "Groth16 ZK Voucher", sub: "Per-claim unlinkability enforced on-chain", ok: true },
                       ]

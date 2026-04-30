@@ -949,7 +949,11 @@ export default function EmployerDashboard() {
                             });
                             const j = await r.json();
                             if (!r.ok) throw new Error(j?.error || "fund-magicblock failed");
-                            setTxStatus(`MagicBlock funded ✓ deposit: ${String(j.depositSig).slice(0, 24)}…`);
+                            const sig = String(j.depositSig);
+                            const url = `https://explorer.solana.com/tx/${sig}?cluster=devnet`;
+                            setTxStatus(
+                              `MagicBlock funded ✓ — deployer ${String(j.employer).slice(0, 6)}…${String(j.employer).slice(-4)} now has ER balance. Deposit tx: ${sig} (${url})`,
+                            );
                           } catch (e) {
                             const msg = e instanceof Error ? e.message : String(e);
                             setTxStatus(`MagicBlock funding error: ${msg}`);

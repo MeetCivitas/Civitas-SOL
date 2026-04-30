@@ -82,13 +82,13 @@ export async function GET(_req: NextRequest) {
     let publicBal = null;
     let privateBal = null;
     try {
-      publicBal = await getPublicBalance(employer, USDC_MINT.toBase58(), "devnet");
+      publicBal = await getPublicBalance(employer, USDC_MINT.toBase58());
     } catch (e) {
       publicBal = { error: (e as Error).message };
     }
     try {
-      const token = await getEmployerAuthToken("devnet");
-      privateBal = await getPrivateBalance(employer, USDC_MINT.toBase58(), token, "devnet");
+      const token = await getEmployerAuthToken();
+      privateBal = await getPrivateBalance(employer, USDC_MINT.toBase58(), token);
     } catch (e) {
       privateBal = { error: (e as Error).message };
     }
@@ -174,10 +174,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Deposit into MagicBlock ER ──────────────────────────────────────────
+  // ── Deposit into MagicBlock ER (delegateSpl on base layer) ──────────────
   let depositSig: string;
   try {
-    const result = await employerDeposit(amount, USDC_MINT.toBase58(), "devnet");
+    const result = await employerDeposit(amount, USDC_MINT.toBase58());
     depositSig = result.signature;
   } catch (e) {
     return err(`MagicBlock deposit failed: ${(e as Error).message}`, 502);

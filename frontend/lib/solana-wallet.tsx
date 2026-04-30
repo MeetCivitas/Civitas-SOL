@@ -57,6 +57,56 @@ function getProvider(): WalletProvider | null {
   return (window as any).solflare || window.solana || null;
 }
 
+/**
+ * Wait for a transaction signature to reach `confirmed` (or `finalized`).
+ *
+ * Polls `getSignatureStatuses` instead of using `connection.confirmTransaction`,
+ * which uses a hard 30s WebSocket-based timeout that fires spuriously on slow
+ * devnets even when the tx eventually lands. We wait up to `timeoutMs` (90s
+ * by default), surface real failures as soon as they're seen, and on a
+ * timeout we re-check with `searchTransactionHistory` before giving up.
+ */
+export async function waitForSignature(
+  connection: import("@solana/web3.js").Connection,
+  signature: string,
+  timeoutMs = 90_000,
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const { value } = await connection.getSignatureStatuses([signature], {
+        searchTransactionHistory: false,
+      });
+      const s = value[0];
+      if (s?.err) {
+        throw new Error(`tx ${signature} failed on-chain: ${JSON.stringify(s.err)}`);
+      }
+      if (s?.confirmationStatus === "confirmed" || s?.confirmationStatus === "finalized") {
+        return;
+      }
+    } catch (e) {
+      // Re-throw on-chain failures; swallow transient RPC errors so we keep polling.
+      if ((e as Error).message?.includes("failed on-chain")) throw e;
+    }
+    await new Promise((r) => setTimeout(r, 2_000));
+  }
+
+  // Final attempt with history search before declaring failure.
+  const { value } = await connection.getSignatureStatuses([signature], {
+    searchTransactionHistory: true,
+  });
+  const s = value[0];
+  if (s?.err) {
+    throw new Error(`tx ${signature} failed on-chain: ${JSON.stringify(s.err)}`);
+  }
+  if (s?.confirmationStatus) return;
+  throw new Error(
+    `Transaction not seen on-chain after ${Math.round(timeoutMs / 1000)}s. ` +
+      `Signature ${signature} may still land — check Explorer ` +
+      `(https://explorer.solana.com/tx/${signature}?cluster=devnet) before retrying.`,
+  );
+}
+
 export function SolanaWalletProvider({ children }: { children: ReactNode }) {
   const [address, setAddress] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
@@ -184,7 +234,7 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
             ? stx.serialize()
             : (stx as InstanceType<typeof Transaction>).serialize();
           const sig = await connection.sendRawTransaction(rawBytes, { skipPreflight: false });
-          await connection.confirmTransaction(sig, "confirmed");
+          await waitForSignature(connection, sig);
           sigs.push(sig);
         }
         return sigs;

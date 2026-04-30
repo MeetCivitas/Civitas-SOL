@@ -186,7 +186,6 @@ export default function EmployeesPage() {
   const [provingPct, setProvingPct] = useState(0);
   const [provingLabel, setProvingLabel] = useState("");
   const [provingStep, setProvingStep] = useState<ClaimStepId>("idle");
-  const [withdrawingCommitment, setWithdrawingCommitment] = useState<string | null>(null);
   const hydratedTagRef = useRef<string | null>(null);
 
   // Hydrate vouchers from NilDB once per credential tag
@@ -238,6 +237,38 @@ export default function EmployeesPage() {
     const encoded = encodeURIComponent(JSON.stringify(credential, null, 2));
     return `data:application/json;charset=utf-8,${encoded}`;
   }, [credential]);
+
+  // Recipient USDC ATA on the MagicBlock (legacy SPL) mint — stays stable
+  // for the duration of the wallet session. Used to surface an Explorer
+  // link so the user can watch settlement land in real time.
+  const [recipientAtaForExplorer, setRecipientAtaForExplorer] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!address) {
+      setRecipientAtaForExplorer(null);
+      return;
+    }
+    (async () => {
+      const { PublicKey } = await import("@solana/web3.js");
+      const { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } =
+        await import("@solana/spl-token");
+      try {
+        const ata = getAssociatedTokenAddressSync(
+          new PublicKey(MAGICBLOCK_USDC_MINT),
+          new PublicKey(address),
+          false,
+          TOKEN_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID,
+        ).toBase58();
+        if (!cancelled) setRecipientAtaForExplorer(ata);
+      } catch {
+        if (!cancelled) setRecipientAtaForExplorer(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [address]);
 
   const handleCreateCredential = async () => {
     const next = await createNewCredential();
@@ -415,29 +446,44 @@ export default function EmployeesPage() {
 
       const connection = new Connection(RPC_ENDPOINT, "confirmed");
 
-      const tx = new Transaction();
-      tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }));
-      tx.add({
-        programId: PROGRAM_ID,
-        keys: [
-          { pubkey: submitter, isSigner: true, isWritable: true },
-          { pubkey: payrollRunPda, isSigner: false, isWritable: false },
-          { pubkey: nullifierPda, isSigner: false, isWritable: true },
-          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-          { pubkey: new PublicKey("SysvarC1ock11111111111111111111111111111111"), isSigner: false, isWritable: false },
-        ],
-        data: claimData,
-      });
+      // ── 3a. Idempotency: if the nullifier PDA already exists and is
+      //        owned by our program, the on-chain claim ix already ran
+      //        successfully in a prior attempt. Skip the wallet prompt
+      //        and dispatch with no claimTxSig — the dispatch route's
+      //        nullifier check is the authoritative success proof.
+      let sig = "";
+      const priorNullifier = await connection.getAccountInfo(nullifierPda, "confirmed");
+      const alreadyClaimed =
+        priorNullifier !== null && priorNullifier.owner.equals(PROGRAM_ID);
 
-      tx.feePayer = submitter;
-      const { blockhash } = await connection.getLatestBlockhash();
-      tx.recentBlockhash = blockhash;
+      if (alreadyClaimed) {
+        setProvingStep("payment");
+        setProvingLabel("Voucher already claimed on-chain — re-dispatching settlement…");
+      } else {
+        const tx = new Transaction();
+        tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }));
+        tx.add({
+          programId: PROGRAM_ID,
+          keys: [
+            { pubkey: submitter, isSigner: true, isWritable: true },
+            { pubkey: payrollRunPda, isSigner: false, isWritable: false },
+            { pubkey: nullifierPda, isSigner: false, isWritable: true },
+            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+            { pubkey: new PublicKey("SysvarC1ock11111111111111111111111111111111"), isSigner: false, isWritable: false },
+          ],
+          data: claimData,
+        });
 
-      // ── 4. Wallet signs + submits the ZK gate ─────────────────────────
-      setProvingStep("payment");
-      setProvingLabel("Wallet: approve ZK proof transaction...");
-      const serialised = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString("base64");
-      const sig = await signAndSendTransaction(serialised);
+        tx.feePayer = submitter;
+        const { blockhash } = await connection.getLatestBlockhash();
+        tx.recentBlockhash = blockhash;
+
+        // ── 4. Wallet signs + submits the ZK gate ─────────────────────
+        setProvingStep("payment");
+        setProvingLabel("Wallet: approve ZK proof transaction...");
+        const serialised = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString("base64");
+        sig = await signAndSendTransaction(serialised);
+      }
 
       // ── 5. Dispatch private settlement via MagicBlock ─────────────────
       setProvingLabel("Settling privately via MagicBlock ER…");
@@ -495,8 +541,9 @@ export default function EmployeesPage() {
       } as any);
 
       setProvingStep("cloak");
+      const fullDispatchSig = String(dispatchJson?.privateTransferSig || "");
       setStatus(
-        `ZK gate ✓  Private transfer ✓  ER tx: ${String(dispatchJson?.privateTransferSig || "").slice(0, 20)}… — withdraw to your wallet from the “Withdraw” button.`,
+        `ZK gate ✓  Private transfer queued ✓  Dispatch tx: ${fullDispatchSig} — USDC settles to your USDC ATA within ~30s as the TEE validator cranks the queue.`,
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -513,48 +560,11 @@ export default function EmployeesPage() {
     }
   }, [credential, connected, address, signAndSendTransaction, updateVoucher]);
 
-  const handleWithdraw = useCallback(
-    async (target: (typeof myVouchers)[number]) => {
-      if (!connected || !address) {
-        setStatus("Connect your wallet to withdraw.");
-        return;
-      }
-      const commitmentStr = String(target.commitment);
-      setWithdrawingCommitment(commitmentStr);
-      setStatus(null);
-      try {
-        const amountBaseUnits = String(target.amount || "0");
-        // Build the unsigned MagicBlock withdraw tx (employee ER → base wallet).
-        const buildRes = await fetch("/api/payroll/private-pay", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "withdraw",
-            owner: address,
-            amount: amountBaseUnits,
-            mint: MAGICBLOCK_USDC_MINT,
-          }),
-        });
-        const built = await buildRes.json();
-        if (!buildRes.ok) {
-          throw new Error(built?.error || "withdraw build failed");
-        }
-        const sig = await signAndSendTransaction(built.transactionBase64);
-        updateVoucher(commitmentStr, {
-          status: "settled",
-          withdrawTxHash: sig,
-        } as any);
-        setStatus(`Withdrawn ✓ — USDC now in your wallet. Tx: ${sig.slice(0, 20)}…`);
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error("[Withdraw] FULL ERROR:", err);
-        setStatus(`Withdraw error: ${msg}`);
-      } finally {
-        setWithdrawingCommitment(null);
-      }
-    },
-    [connected, address, signAndSendTransaction, updateVoucher],
-  );
+  // The legacy ER→base withdraw flow was removed when we switched the
+  // dispatcher to use ephemeral→base private transfers (depositAndQueueTransferIx).
+  // That route settles funds directly into the recipient's USDC ATA via
+  // the TEE validator's queue cranks — there's no ER ephemeral balance
+  // for the employee to manually drain.
 
   // ── small local helpers ───────────────────────────────────────────────
 
@@ -729,7 +739,6 @@ export default function EmployeesPage() {
                     const isThisProving = provingCommitment === vCommitment;
                     const isPending = voucher.status === "pending";
                     const anyProving = provingCommitment !== null;
-                    const anyWithdrawing = withdrawingCommitment !== null;
                     const usdcAmount = formatUsdc(Number(voucher.amount || 0) / 1_000_000);
 
                     return (
@@ -806,26 +815,54 @@ export default function EmployeesPage() {
                           <div className="mt-4 space-y-3">
                             <div className="flex items-center gap-2 rounded-[14px] border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-400">
                               <CheckCircle2 className="h-4 w-4 shrink-0" />
-                              Settled privately on MagicBlock ER — {usdcAmount} USDC
+                              Private transfer queued — {usdcAmount} USDC settling to your USDC ATA
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => void handleWithdraw(voucher)}
-                              disabled={anyWithdrawing}
-                              className="inline-flex w-full items-center justify-center gap-2 rounded-[14px] border border-cyan-500/25 bg-cyan-500/10 py-3 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/18 disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              {withdrawingCommitment === vCommitment ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                  Withdrawing to wallet…
-                                </>
-                              ) : (
-                                <>
-                                  <Wallet className="h-4 w-4" />
-                                  Withdraw {usdcAmount} USDC to my wallet
-                                </>
+                            <div className="rounded-[14px] border border-white/8 bg-white/[0.03] px-4 py-3 text-xs text-white/50 space-y-2">
+                              <p>
+                                The TEE validator's queue cranks fire within ~30s of the dispatch,
+                                settling USDC directly into your associated token account. No additional
+                                wallet action needed.
+                              </p>
+                              {(voucher as any).claimTxHash && (
+                                <div className="font-mono text-[10px] break-all">
+                                  <span className="text-white/35">ZK gate tx:</span>{" "}
+                                  <a
+                                    href={buildExplorerUrl("tx", (voucher as any).claimTxHash)}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-blue-400 hover:underline"
+                                  >
+                                    {(voucher as any).claimTxHash}
+                                  </a>
+                                </div>
                               )}
-                            </button>
+                              {(voucher as any).privateTransferSig && (
+                                <div className="font-mono text-[10px] break-all">
+                                  <span className="text-white/35">Dispatch tx:</span>{" "}
+                                  <a
+                                    href={buildExplorerUrl("tx", (voucher as any).privateTransferSig)}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-blue-400 hover:underline"
+                                  >
+                                    {(voucher as any).privateTransferSig}
+                                  </a>
+                                </div>
+                              )}
+                              {recipientAtaForExplorer && (
+                                <div className="font-mono text-[10px] break-all">
+                                  <span className="text-white/35">Your USDC ATA:</span>{" "}
+                                  <a
+                                    href={buildExplorerUrl("address", recipientAtaForExplorer)}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-blue-400 hover:underline"
+                                  >
+                                    Watch settlement on Solana Explorer ↗
+                                  </a>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>

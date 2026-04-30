@@ -65,8 +65,16 @@ function err(message: string, status = 400) {
 }
 
 interface DispatchBody {
-  /** Civitas claim tx signature (already submitted on-chain). */
-  claimTxSig: string;
+  /**
+   * Civitas claim tx signature (already submitted on-chain). Optional: if
+   * absent or empty, dispatch relies solely on the nullifier PDA existence
+   * check below — which is the actual proof that the on-chain claim ix ran
+   * successfully. The sig lookup is a redundant defence-in-depth check.
+   * Omit when re-dispatching after a prior aborted attempt where the
+   * claim ix succeeded but the dispatch failed (so the nullifier is
+   * already burned and the original sig may be unknown).
+   */
+  claimTxSig?: string;
   /** UUID of the payroll run. */
   runId: string;
   /** Employer base58 — used to derive vault PDA + payroll_run PDA. */
@@ -171,7 +179,6 @@ export async function POST(req: NextRequest) {
   }
 
   for (const k of [
-    "claimTxSig",
     "runId",
     "employerAddress",
     "employeeWallet",
@@ -193,14 +200,28 @@ export async function POST(req: NextRequest) {
 
   const conn = new Connection(RPC, "confirmed");
 
-  // ── 1. Confirm on-chain claim succeeded ─────────────────────────────────
-  const tx = await conn.getTransaction(body.claimTxSig, {
-    commitment: "confirmed",
-    maxSupportedTransactionVersion: 0,
-  });
-  if (!tx) return err("claim tx not found on-chain (yet?)", 404);
-  if (tx.meta?.err) {
-    return err(`claim tx failed on-chain: ${JSON.stringify(tx.meta.err)}`, 400);
+  // ── 1. Optionally verify the claim tx, but never block on its visibility.
+  //      The nullifier-PDA check below is the authoritative proof that the
+  //      on-chain claim ix ran (the program creates that PDA inside
+  //      claim_payment, and only it can do so). The sig lookup is purely
+  //      defensive and races devnet RPC's getTransaction indexing — if the
+  //      tx was just confirmed, the lookup may return null even when the
+  //      tx successfully landed. So: catch a confirmed-but-failed result
+  //      hard, but treat "not yet visible" as a soft signal and proceed.
+  if (body.claimTxSig) {
+    try {
+      const tx = await conn.getTransaction(body.claimTxSig, {
+        commitment: "confirmed",
+        maxSupportedTransactionVersion: 0,
+      });
+      if (tx?.meta?.err) {
+        return err(`claim tx failed on-chain: ${JSON.stringify(tx.meta.err)}`, 400);
+      }
+      // tx === null → just-confirmed and not yet indexed. Proceed; the
+      // nullifier check below tells the truth.
+    } catch (e) {
+      console.warn("[dispatch-claim] claim sig lookup error (non-fatal):", (e as Error).message);
+    }
   }
 
   const nullifierBytes = hexToBytes(body.nullifierHex);
@@ -281,7 +302,7 @@ export async function POST(req: NextRequest) {
     return err(`failed to ensure recipient ATA: ${(e as Error).message}`, 502);
   }
 
-  // ── 4. Trigger the MagicBlock private transfer ─────────────────────────
+  // ── 4. Trigger the MagicBlock private transfer (base→base, single ix) ──
   let transferResult;
   try {
     transferResult = await employerPrivateTransfer(
@@ -289,12 +310,14 @@ export async function POST(req: NextRequest) {
       BigInt(body.amountBaseUnits),
       USDC_MINT.toBase58(),
       {
-        split: 5,
+        // Requested split — employerPrivateTransfer clamps this to the
+        // queue's actual slot capacity if it's smaller (e.g. legacy
+        // 1-slot queues from earlier deployments → split clamped to 1).
+        split: 4,
         minDelayMs: 500,
         maxDelayMs: 30_000,
         memo: `civitas-claim:${body.runId}`,
       },
-      "devnet",
     );
   } catch (e) {
     return err(
@@ -312,8 +335,7 @@ export async function POST(req: NextRequest) {
     recipientAtaCreated: ataResult.created,
     recipientAtaCreateSig: ataResult.signature,
     privateTransferSig: transferResult.signature,
-    privateTransferSentTo: transferResult.sendTo,
     queuedSplits: transferResult.queuedTransfers,
-    note: "Funds are settling on MagicBlock ER. Call /api/payroll/private-pay?action=withdraw to bring them to the employee's base wallet.",
+    note: "Funds will settle into the employee's USDC ATA after the TEE validator's queue cranks (typically <30s, randomized). No employee-side withdraw required.",
   });
 }
