@@ -1,27 +1,27 @@
 //! Civitas Private Payroll Program
 //!
 //! Implements private on-chain payroll on Solana using:
-//!   - Noir UltraHonk ZK proofs for payment validity (split across 2 transactions)
-//!   - Token-2022 Confidential Balances to hide USDC amounts on-chain
+//!   - Groth16 BN254 ZK proofs for voucher redemption (single-tx claim)
+//!     verified on-chain via Solana's `alt_bn128_pairing` syscall
 //!   - Poseidon BN254 Merkle trees for commitment sets
-//!   - Nullifier registry to prevent double-claims
+//!   - Nullifier PDAs to prevent double-claims (init = error if exists)
 //!   - Chunked payroll commit pipeline (start_run → append_chunks → finalize_root)
 //!   - SNS domain binding on VaultState
 //!
 //! Architecture:
-//!   Employer calls: initialize_vault → deposit_usdc → start_payroll_run →
-//!                   append_commitments_chunk(×N) → finalize_merkle_root
-//!   Employee calls: begin_verification (Tx-A, ~800K CU) →
-//!                   complete_withdrawal (Tx-B, ~600K CU) →
-//!                   close_verification_session (cleanup)
-//!   Contractor:     create_invoice → (employer) pay_invoice
+//!   Employer:   initialize_vault → deposit_usdc → start_payroll_run →
+//!               append_commitments_chunk(×N) → finalize_merkle_root
+//!   Employee:   claim_payment (single tx — proof verify + transfer + nullifier)
+//!   Contractor: create_invoice → (employer) pay_invoice
 //!
 //! Security model:
-//!   - Proof public inputs are domain-bound to: program_id, vault_pda, mint,
-//!     recipient_token_account, run_id/epoch, and deployment domain tag.
-//!   - Nullifiers are stored as PDAs; double-spend is rejected at the PDA
-//!     init stage (init = error if already exists).
-//!   - Token-2022 confidential balances hide USDC amounts at the protocol layer.
+//!   - Public inputs are domain-bound to: program_id, vault_pda, mint,
+//!     recipient_token_account, run_id, epoch, and deployment domain tag.
+//!     The handler recomputes pi_hash from authoritative state and rejects
+//!     any mismatch before invoking the verifier.
+//!   - Verifier embeds the voucher VK at compile time (loaded from
+//!     keys/voucher_vk.bin produced by the trusted-setup ceremony).
+//!   - Nullifiers are stored as PDAs; double-spend is rejected at PDA init.
 
 use anchor_lang::prelude::*;
 use anchor_spl::{
@@ -38,7 +38,7 @@ pub mod verifier;
 
 use instructions::*;
 // Re-export for IDL generation
-pub use state::VerificationPublicInputs;
+pub use state::ClaimPublicInputs;
 
 declare_id!("CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y");
 
@@ -98,32 +98,23 @@ pub mod civitas_payroll {
         instructions::finalize_merkle_root::handler(ctx, run_id, new_root, chunk_count)
     }
 
-    /// Tx-A of the split UltraHonk verifier.
-    /// Stores proof bytes + partial state in VerificationSession PDA.
-    /// Target: ≤ 900K CUs.
-    /// Seeds: [b"verify", proof_hash]
-    /// Caller must compute proof_hash = keccak256(proof_data) off-chain.
-    pub fn begin_verification(
-        ctx: Context<BeginVerification>,
-        proof_hash: [u8; 32],
-        proof_data: Vec<u8>,
+    /// Single-transaction voucher redemption.
+    ///
+    /// Verifies a Groth16 BN254 proof against the embedded voucher VK,
+    /// binds public inputs to authoritative on-chain state (vault PDA,
+    /// program ID, mint, merkle root, domain tag), prevents double-spend
+    /// by initialising a NullifierAccount PDA, and transfers Token-2022
+    /// USDC from vault → recipient.
+    ///
+    /// CU budget: ~250k.
+    pub fn claim_payment(
+        ctx: Context<ClaimPayment>,
+        proof_bytes: Vec<u8>,
+        pi_hash: [u8; 32],
+        public_inputs: ClaimPublicInputs,
         nullifier: [u8; 32],
-        commitment: [u8; 32],
-        public_inputs: VerificationPublicInputs,
     ) -> Result<()> {
-        instructions::begin_verification::handler(ctx, proof_hash, proof_data, nullifier, commitment, public_inputs)
-    }
-
-    /// Tx-B of the split UltraHonk verifier.
-    /// Loads VerificationSession, completes KZG pairing checks,
-    /// verifies nullifier/commitment, transfers confidential USDC,
-    /// creates NullifierAccount (prevents double-spend).
-    /// Target: ≤ 600K CUs.
-    pub fn complete_withdrawal(
-        ctx: Context<CompleteWithdrawal>,
-        session: Pubkey,
-    ) -> Result<()> {
-        instructions::complete_withdrawal::handler(ctx, session)
+        instructions::claim_payment::handler(ctx, proof_bytes, pi_hash, public_inputs, nullifier)
     }
 
     /// Create an invoice for contractor→client payment.
@@ -142,15 +133,6 @@ pub mod civitas_payroll {
     /// in a single atomic instruction (single commitment batch).
     pub fn pay_invoice(ctx: Context<PayInvoice>, invoice_id: [u8; 16]) -> Result<()> {
         instructions::pay_invoice::handler(ctx, invoice_id)
-    }
-
-    /// Close a VerificationSession PDA after successful withdrawal.
-    /// Returns rent to the initiator.
-    pub fn close_verification_session(
-        ctx: Context<CloseVerificationSession>,
-        _session: Pubkey,
-    ) -> Result<()> {
-        instructions::close_verification_session::handler(ctx)
     }
 
     /// Devnet utility: close vault PDA + its token ATA so it can be

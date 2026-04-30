@@ -21,13 +21,11 @@ idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
 anchor-spl = { version = "0.31.1", features = ["token_2022", "associated_token"] }
 spl-token-2022 = { version = "6.0.0", features = ["no-entrypoint"] }
-spl-token-confidential-transfer-proof-extraction = { version = "0.2.0" }
-light-poseidon = { version = "0.2.0", default-features = false }
-# ark-bn254 used only in std (off-chain tests); BPF verifier uses lighter approach
-ark-bn254 = { version = "0.4", default-features = false, optional = true }
-ark-ff = { version = "0.4", default-features = false, optional = true }
-ark-ec = { version = "0.4", default-features = false, optional = true }
 solana-program = "=2.1.0"
+# Native alt_bn128 syscall wrapper used by the Groth16 verifier.
+solana-bn254 = "=2.1.0"
+# Native Poseidon BN254 syscall (sol_poseidon) — used to compute pi_hash.
+solana-poseidon = "4.0.0"
 
 [dev-dependencies]
 anchor-client = "0.31.1"

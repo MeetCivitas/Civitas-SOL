@@ -51,54 +51,56 @@ export function uuidToBytes(uuid: string): Buffer {
 }
 
 /**
- * Borsh-encode VerificationPublicInputs matching state.rs layout:
- *   merkle_root:            [u8; 32]
- *   amount:                 u64  (8 bytes LE)
- *   epoch:                  u64  (8 bytes LE)
+ * Borsh-encode ClaimPublicInputs matching state.rs layout:
+ *   amount:                  u64  (8 bytes LE)
+ *   epoch:                   u64  (8 bytes LE)
+ *   run_id:                  [u8; 16]
  *   recipient_token_account: Pubkey (32 bytes)
- *   program_id:             Pubkey (32 bytes)
- *   vault_pda:              Pubkey (32 bytes)
- *   mint:                   Pubkey (32 bytes)
- *   run_id:                 [u8; 16]
- *   domain_tag:             Vec<u8> (4-byte length prefix + UTF-8 bytes)
  *
- * Total fixed portion: 32+8+8+32+32+32+32+16 = 192 bytes
- * Plus domain_tag len prefix (4) + tag bytes (variable, typically 17).
+ * Total: 64 bytes.
  */
-export function encodeVerificationPublicInputs(params: {
-  /** 32-byte Uint8Array from on-chain vault (preferred) OR bigint/hex string */
-  merkleRoot: Uint8Array | bigint | string;
+export function encodeClaimPublicInputs(params: {
   amount: bigint | string;
   epoch: bigint | string;
-  recipientTokenAccount: string;
-  programId: string;
-  vaultPda: string;
-  mint: string;
   runId: string;
-  domainTag?: string;
+  recipientTokenAccount: string;
 }): Buffer {
-  const domainTag = params.domainTag ?? "civitas-devnet-v1";
-  const domainTagBytes = Buffer.from(domainTag, "utf8");
-  const domainTagLenBuf = Buffer.alloc(4);
-  domainTagLenBuf.writeUInt32LE(domainTagBytes.length);
-
-  // merkleRoot: if raw bytes provided use them directly (on-chain LE bytes, no BigInt round-trip).
-  // BigInt conversion would misinterpret LE bytes as big-endian, producing wrong values.
-  const merkleRootBuf =
-    params.merkleRoot instanceof Uint8Array
-      ? Buffer.from(params.merkleRoot).subarray(0, 32)
-      : fieldToBytesLE(BigInt(params.merkleRoot));
-
   return Buffer.concat([
-    merkleRootBuf,
     u64LE(BigInt(params.amount)),
     u64LE(BigInt(params.epoch)),
-    new PublicKey(params.recipientTokenAccount).toBuffer(),
-    new PublicKey(params.programId).toBuffer(),
-    new PublicKey(params.vaultPda).toBuffer(),
-    new PublicKey(params.mint).toBuffer(),
     uuidToBytes(params.runId),
-    domainTagLenBuf,
-    domainTagBytes,
+    new PublicKey(params.recipientTokenAccount).toBuffer(),
+  ]);
+}
+
+/**
+ * Encode the full claim_payment instruction data:
+ *   discriminator (8) | proof_bytes: Vec<u8> (4 LE len + 256 B) |
+ *   pi_hash: [u8;32]  | public_inputs: ClaimPublicInputs (64 B) |
+ *   nullifier: [u8;32]
+ */
+export function encodeClaimPaymentArgs(params: {
+  discriminator: Buffer;
+  proofBytes: Uint8Array;
+  piHash: Uint8Array;
+  publicInputs: Buffer;
+  nullifier: Uint8Array;
+}): Buffer {
+  if (params.proofBytes.length !== 256) {
+    throw new Error(`proof must be 256 bytes, got ${params.proofBytes.length}`);
+  }
+  if (params.piHash.length !== 32) throw new Error("piHash must be 32 bytes");
+  if (params.nullifier.length !== 32) throw new Error("nullifier must be 32 bytes");
+
+  const proofLenBuf = Buffer.alloc(4);
+  proofLenBuf.writeUInt32LE(params.proofBytes.length, 0);
+
+  return Buffer.concat([
+    params.discriminator,
+    proofLenBuf,
+    Buffer.from(params.proofBytes),
+    Buffer.from(params.piHash),
+    params.publicInputs,
+    Buffer.from(params.nullifier),
   ]);
 }

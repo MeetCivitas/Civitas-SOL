@@ -343,92 +343,113 @@ export function CreatePayrollWizard() {
 
       let actualTxHash = data.txHash || ""
       if (Array.isArray(data.transactions) && data.transactions.length > 0) {
-        // Phase B: Delegate to MagicBlock PER (Permissioned Ephemeral Rollup)
-        // Replaces basic ConnectionMagicRouter with private session delegation
-        setPerStatus("delegating")
-        setProcessingLabel(`Step 2/4 — Initializing private PER session (Permissioned Ephemeral Rollup)…`)
-        
-        try {
-          const { delegateWithPER } = await import("@/lib/magicblock-per")
-          const MAGIC_PER_ENDPOINT = process.env.NEXT_PUBLIC_MAGICBLOCK_ROUTER ?? "https://devnet-router.magicblock.app"
-          
-          const perSession = await delegateWithPER({
-            endpoint: MAGIC_PER_ENDPOINT,
-            authority: connectedAddress || "",
-            sessionParams: {
-              access: "private",
-              authorizedReaders: [connectedAddress || ""],
-            },
-          })
-          
-          console.log(`[PayrollWizard] PER Session established: ${perSession.sessionId}`)
-          
-          setPerStatus("processing")
-          setProcessingLabel(`Step 3/4 — Processing ${data.transactions.length} commitments in private PER…`)
-          
-          const { ConnectionMagicRouter } = await import("@magicblock-labs/ephemeral-rollups-sdk")
-          const magicConn = new ConnectionMagicRouter(
-            process.env.NEXT_PUBLIC_MAGICBLOCK_ROUTER ?? "https://devnet-router.magicblock.app",
-            "confirmed"
-          )
-          
-          const sigs = await signAllAndSend(data.transactions, magicConn)
-          actualTxHash = sigs[sigs.length - 1] || ""
-          
-          setPerStatus("finalizing")
-          console.log(`[PayrollWizard] MagicBlock PER confirmed ${sigs.length} tx(s). Last sig: ${actualTxHash}`)
-        } catch (perErr: any) {
-          console.error("[PayrollWizard] PER delegation failed, falling back to basic ER:", perErr)
-          // Fallback to basic ER if PER fails
-          const { ConnectionMagicRouter } = await import("@magicblock-labs/ephemeral-rollups-sdk")
-          const magicConn = new ConnectionMagicRouter(
-            process.env.NEXT_PUBLIC_MAGICBLOCK_ROUTER ?? "https://devnet-router.magicblock.app",
-            "confirmed"
-          )
-          const sigs = await signAllAndSend(data.transactions, magicConn)
-          actualTxHash = sigs[sigs.length - 1] || ""
-        }
+        // Submit commit txs through MagicBlock's Ephemeral Rollup router.
+        // ConnectionMagicRouter is a drop-in @solana/web3.js Connection that
+        // dispatches to the nearest ER node (~50 ms blocks vs 400 ms on L1)
+        // and proxies finality back. The router endpoint exposes JSON-RPC at
+        // /; ER routing happens transparently. (PER private-state delegation
+        // requires REST endpoints not yet deployed on devnet, so we don't
+        // attempt a separate PER handshake — the router is the working path.)
+        setPerStatus("processing")
+        setProcessingLabel(`Step 2/3 — Routing ${data.transactions.length} commit txs through MagicBlock ER…`)
+
+        const MAGIC_ROUTER = process.env.NEXT_PUBLIC_MAGICBLOCK_ROUTER ?? "https://devnet-router.magicblock.app"
+        const { ConnectionMagicRouter } = await import("@magicblock-labs/ephemeral-rollups-sdk")
+        const magicConn = new ConnectionMagicRouter(MAGIC_ROUTER, "confirmed")
+
+        const sigs = await signAllAndSend(data.transactions, magicConn)
+        actualTxHash = sigs[sigs.length - 1] || ""
+
+        setPerStatus("finalizing")
+        console.log(`[PayrollWizard] MagicBlock ER confirmed ${sigs.length} tx(s). Last sig: ${actualTxHash}`)
       }
 
-      // Step 4: MagicBlock Private Payments — employer deposits USDC to ER
-      // Real API: payments.magicblock.app
-      // Flow: challenge → wallet sign → auth token → deposit to ER
-      // Employees will then receive private transfers from this ephemeral balance.
+      // Step 4: MagicBlock Private Payments — employer deposits USDC to ER.
+      // Real API only: payments.magicblock.app. No demo path.
       setProcessingLabel(`Step 4/4 — MagicBlock Private Payments: depositing to ephemeral rollup…`)
+
+      if (!ownerAddress) throw new Error("Wallet address missing — reconnect and retry")
+      const usdcMint = process.env.NEXT_PUBLIC_USDC_MINT
+      if (!usdcMint) throw new Error("NEXT_PUBLIC_USDC_MINT is not set")
+      const totalAmount = String(generatedRun.declaredTotal ?? "0")
+
+      // ── Verify the on-chain commit actually finalized ──────────────────
+      // The wizard previously declared "committed" if just the last tx
+      // signature came back from the wallet adapter, even if devnet RPC
+      // timeouts meant finalize_merkle_root never actually landed. Now we
+      // poll the payroll_run PDA until it reports status=Committed (1).
+      // If it doesn't reach Committed within 60 s, throw — vouchers from
+      // this run would be unclaimable anyway.
+      setProcessingLabel(`Verifying commit on-chain…`)
       try {
-        if (!ownerAddress) throw new Error("No employer address");
-        const usdcMint = process.env.NEXT_PUBLIC_USDC_MINT ?? "";
-        const totalAmount = String(generatedRun.declaredTotal ?? "0");
-
-        // 1. Get challenge for employer's wallet
-        const challengeRes = await fetch(
-          `/api/payroll/private-pay?action=challenge&pubkey=${ownerAddress}`
+        const { Connection: SConn, PublicKey: SPK } = await import("@solana/web3.js")
+        const { PROGRAM_ID } = await import("@/lib/solana-program")
+        const verifyConn = new SConn(RPC_ENDPOINT, "confirmed")
+        const ridHex = (generatedRun.runId || "").replace(/-/g, "")
+        const ridBytes = Buffer.from(ridHex, "hex")
+        const owner = new SPK(ownerAddress)
+        const [runPda] = SPK.findProgramAddressSync(
+          [Buffer.from("run"), owner.toBuffer(), ridBytes],
+          PROGRAM_ID,
         )
-        const { challenge, isDemo: challengeDemo } = await challengeRes.json()
-
-        // 2. Wallet signs challenge
-        let signature = "demo-sig"
-        if (!challengeDemo && (window as any).solana?.signMessage) {
-          try {
-            const msgBytes = new TextEncoder().encode(challenge)
-            const { signature: sig } = await (window as any).solana.signMessage(msgBytes)
-            const bs58 = (await import("bs58")).default
-            signature = bs58.encode(sig)
-          } catch (sigErr) {
-            console.warn("[MagicBlock PP] Sign skipped (demo mode):", sigErr)
+        const STATUS_OFF = 8 + 16 + 32 + 8 + 32 + 32 + 4 + 4 + 4
+        const deadline = Date.now() + 60_000
+        let onChainStatus = -1
+        while (Date.now() < deadline) {
+          const info = await verifyConn.getAccountInfo(runPda)
+          if (info && info.data.length > STATUS_OFF) {
+            onChainStatus = info.data[STATUS_OFF]
+            if (onChainStatus === 1) break
           }
+          await new Promise(r => setTimeout(r, 2_000))
+        }
+        if (onChainStatus !== 1) {
+          throw new Error(
+            `Commit didn't finalize on-chain (run ${generatedRun.runId.slice(0, 8)}… status=${onChainStatus === -1 ? "missing" : onChainStatus}). ` +
+            `Click Retry Commit — start_payroll_run and append_commitments_chunk are now idempotent so retries are safe.`,
+          )
+        }
+      } catch (verErr: any) {
+        if (verErr?.message?.startsWith("Commit didn't finalize")) throw verErr
+        console.warn("[PayrollWizard] commit verify check error (non-fatal):", verErr?.message)
+      }
+
+      // MagicBlock Private Payments — best-effort layer on top of the
+      // on-chain commit. The on-chain payroll batch is ALREADY finalized by
+      // this point; the deposit-to-ER step adds amount-obfuscation privacy
+      // when MagicBlock's service is up. If their service is degraded
+      // (e.g. /v1/spl/challenge returns 502), we surface the outage but DO
+      // NOT roll back the on-chain commit. ZK-voucher unlinkability still
+      // applies regardless.
+      let mbStatus: "deposited" | "skipped" = "skipped"
+      let mbError: string | null = null
+
+      try {
+        const wallet = (window as any).solana
+        if (!wallet?.signMessage || !wallet?.signTransaction) {
+          throw new Error("wallet does not support signMessage/signTransaction")
         }
 
-        // 3. Get Bearer token
+        const challengeRes = await fetch(`/api/payroll/private-pay?action=challenge&pubkey=${ownerAddress}`)
+        const challengeBody = await challengeRes.json()
+        if (!challengeRes.ok) {
+          throw new Error(`challenge: ${challengeBody.error ?? challengeRes.status}`)
+        }
+
+        const msgBytes = new TextEncoder().encode(challengeBody.challenge)
+        const signed = await wallet.signMessage(msgBytes)
+        const bs58 = (await import("bs58")).default
+        const signature = bs58.encode(signed.signature)
+
         const authRes = await fetch("/api/payroll/private-pay", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "auth", pubkey: ownerAddress, challenge, signature }),
+          body: JSON.stringify({ action: "auth", pubkey: ownerAddress, challenge: challengeBody.challenge, signature }),
         })
-        const { token, isDemo: tokenDemo } = await authRes.json()
+        const authBody = await authRes.json()
+        if (!authRes.ok) throw new Error(`auth: ${authBody.error ?? authRes.status}`)
 
-        // 4. Build deposit tx (employer deposits total USDC to MagicBlock ER)
-        setProcessingLabel(`Step 4/4 — MagicBlock: building deposit transaction…`)
+        setProcessingLabel(`Step 3/3 — MagicBlock: building deposit transaction…`)
         const depositRes = await fetch("/api/payroll/private-pay", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -440,48 +461,39 @@ export function CreatePayrollWizard() {
           }),
         })
         const depositData = await depositRes.json()
+        if (!depositRes.ok) throw new Error(`deposit build: ${depositData.error ?? depositRes.status}`)
 
-        if (depositData.success && !depositData.isDemo && depositData.transactionBase64) {
-          // 5. Employer signs + submits the deposit VersionedTransaction
-          setProcessingLabel(`Step 4/4 — MagicBlock: signing deposit transaction…`)
-          try {
-            const { VersionedTransaction, Connection } = await import("@solana/web3.js")
-            const txBytes = Buffer.from(depositData.transactionBase64, "base64")
-            const depositTx = VersionedTransaction.deserialize(txBytes)
+        setProcessingLabel(`Step 3/3 — MagicBlock: signing deposit transaction…`)
+        const { VersionedTransaction, Connection } = await import("@solana/web3.js")
+        const txBytes = Buffer.from(depositData.transactionBase64, "base64")
+        const depositTx = VersionedTransaction.deserialize(txBytes)
+        const signedDeposit = await wallet.signTransaction(depositTx)
+        const connUrl =
+          depositData.sendTo === "ephemeral"
+            ? (process.env.NEXT_PUBLIC_MAGICBLOCK_ROUTER ?? "https://devnet-router.magicblock.app")
+            : RPC_ENDPOINT
+        const conn = new Connection(connUrl, "confirmed")
 
-            if ((window as any).solana?.signTransaction) {
-              const signed = await (window as any).solana.signTransaction(depositTx)
+        setProcessingLabel(`Step 3/3 — MagicBlock: submitting deposit…`)
+        const depositSig = await conn.sendRawTransaction(signedDeposit.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: "confirmed",
+        })
+        await conn.confirmTransaction(depositSig, "confirmed")
+        console.log("[MagicBlock PP] ✓ Deposit confirmed:", depositSig)
 
-              const connUrl =
-                depositData.sendTo === "ephemeral"
-                  ? (process.env.NEXT_PUBLIC_MAGICBLOCK_ROUTER ?? "https://devnet-router.magicblock.app")
-                  : RPC_ENDPOINT
-              const conn = new Connection(connUrl, "confirmed")
-
-              setProcessingLabel(`Step 4/4 — MagicBlock: submitting deposit…`)
-              const depositSig = await conn.sendRawTransaction(signed.serialize(), {
-                skipPreflight: false,
-                preflightCommitment: "confirmed",
-              })
-              await conn.confirmTransaction(depositSig, "confirmed")
-              console.log("[MagicBlock PP] ✓ Deposit confirmed:", depositSig)
-            } else {
-              console.log("[MagicBlock PP] Deposit tx ready (wallet unavailable):", depositData.transactionBase64?.slice(0, 60) + "…")
-            }
-          } catch (signErr: any) {
-            console.warn("[MagicBlock PP] Deposit signing failed (non-fatal):", signErr.message)
-          }
-        } else {
-          console.log("[MagicBlock PP] Demo deposit registered — USDC flows to ER in production")
-        }
-
-        // Store session info for employee claims (sessionId = derived from runId)
         const sessionId = `mbs_${generatedRun.runId.replace(/-/g, "").slice(0, 16)}`
         setPrivateSessionId(sessionId)
-        console.log(`[MagicBlock PP] Private Payment session ready: ${sessionId} (token: ${tokenDemo ? "demo" : "live"})`)
-      } catch (ppErr: any) {
-        console.warn("[PayrollWizard] MagicBlock deposit (non-critical):", ppErr.message)
+        mbStatus = "deposited"
+      } catch (mbErr: any) {
+        mbError = mbErr?.message ?? String(mbErr)
+        console.warn(
+          "[MagicBlock PP] degraded — on-chain commit succeeded but private-payments deposit was not made:",
+          mbError,
+        )
       }
+      ;(generatedRun as any).magicblockStatus = mbStatus
+      ;(generatedRun as any).magicblockError = mbError
 
       setPerStatus("done")
       console.log("[PayrollWizard] Commit transaction completed:", actualTxHash)
@@ -1002,19 +1014,28 @@ export function CreatePayrollWizard() {
                   {/* Privacy layers activated */}
                   <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 space-y-2">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-3">Privacy Stack — Active</p>
-                    {[
-                      { color: "text-violet-400 border-violet-500/20 bg-violet-500/5", label: "Nillion nilCC TEE", sub: "Payroll computed in secure enclave" },
-                      { color: "text-amber-400 border-amber-500/20 bg-amber-500/5", label: "MagicBlock PER", sub: "Commitments processed in Permissioned Ephemeral Rollup" },
-                      { color: "text-blue-400 border-blue-500/20 bg-blue-500/5", label: "MagicBlock Private Payments", sub: privateSessionId ? `Session ${privateSessionId.slice(0, 20)}… active` : "Session initializing…" },
-                    ].map(layer => (
-                      <div key={layer.label} className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 ${layer.color}`}>
-                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                        <div>
-                          <p className="text-xs font-semibold">{layer.label}</p>
-                          <p className="text-[10px] text-white/40">{layer.sub}</p>
+                    {(() => {
+                      const mbStatus = (generatedRun as any)?.magicblockStatus as "deposited" | "skipped" | undefined
+                      const mbError = (generatedRun as any)?.magicblockError as string | null | undefined
+                      const ppActive = mbStatus === "deposited"
+                      const layers: Array<{ color: string; label: string; sub: string; ok: boolean }> = [
+                        { color: "text-violet-400 border-violet-500/20 bg-violet-500/5", label: "Nillion nilCC TEE", sub: "Payroll computed in secure enclave", ok: true },
+                        { color: "text-amber-400 border-amber-500/20 bg-amber-500/5", label: "MagicBlock ER", sub: "Commit txs routed through Ephemeral Rollup", ok: true },
+                        ppActive
+                          ? { color: "text-blue-400 border-blue-500/20 bg-blue-500/5", label: "MagicBlock Private Payments", sub: privateSessionId ? `Session ${privateSessionId.slice(0, 20)}… active` : "Deposited to ER", ok: true }
+                          : { color: "text-amber-400 border-amber-500/20 bg-amber-500/5", label: "MagicBlock Private Payments — UNAVAILABLE", sub: `Vendor outage; ZK-voucher unlinkability still applies. Detail: ${(mbError ?? "service degraded").slice(0, 80)}`, ok: false },
+                        { color: "text-emerald-400 border-emerald-500/20 bg-emerald-500/5", label: "Groth16 ZK Voucher", sub: "Per-claim unlinkability enforced on-chain", ok: true },
+                      ]
+                      return layers.map(layer => (
+                        <div key={layer.label} className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 ${layer.color}`}>
+                          <CheckCircle2 className={`h-3.5 w-3.5 shrink-0 ${layer.ok ? "" : "opacity-40"}`} />
+                          <div>
+                            <p className="text-xs font-semibold">{layer.label}</p>
+                            <p className="text-[10px] text-white/40">{layer.sub}</p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    })()}
                   </div>
 
                   {commitTx && commitTx !== "pending" && (

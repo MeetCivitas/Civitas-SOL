@@ -24,8 +24,8 @@ import { WalletButton } from "@/components/wallet-button";
 import { PrivacyStackVisualizer } from "@/components/ui/privacy-stack";
 import { buildExplorerUrl, formatUsdc, shortenAddress, USDC_MINT_ADDRESS } from "@/lib/solana";
 import { buildMerkleTree } from "@/lib/merkle-tree";
-import { generateRedemptionProof, terminateProofWorker } from "@/lib/zk-proof";
-import { fieldToBytes32LE, toFieldElement } from "@/lib/bn128-poseidon";
+import { generateVoucherProof } from "@/lib/groth16-proof";
+import { encodeClaimPaymentArgs, encodeClaimPublicInputs } from "@/lib/borsh-encode";
 
 function StatTile({
   label,
@@ -186,10 +186,7 @@ export default function EmployeesPage() {
   const [provingPct, setProvingPct] = useState(0);
   const [provingLabel, setProvingLabel] = useState("");
   const [provingStep, setProvingStep] = useState<ClaimStepId>("idle");
-  const [settlingCommitment, setSettlingCommitment] = useState<string | null>(null);
   const hydratedTagRef = useRef<string | null>(null);
-
-  useEffect(() => () => terminateProofWorker(), []);
 
   // Hydrate vouchers from NilDB once per credential tag
   useEffect(() => {
@@ -261,261 +258,7 @@ export default function EmployeesPage() {
     window.setTimeout(() => setCopied(false), 1200);
   };
 
-  const handleSettleVoucher = useCallback(async (target: (typeof myVouchers)[number]) => {
-    if (!connected || !address) { setStatus("Connect your Solana wallet to settle."); return; }
-
-    const commitmentStr = String(target.commitment);
-    setSettlingCommitment(commitmentStr);
-    setStatus(null);
-
-    try {
-      const [
-        { PublicKey, Connection, Transaction, SystemProgram, SYSVAR_CLOCK_PUBKEY, ComputeBudgetProgram },
-        { createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID },
-        { keccak_256 },
-      ] = await Promise.all([
-        import("@solana/web3.js"),
-        import("@solana/spl-token"),
-        import("js-sha3"),
-      ]);
-
-      // Anchor discriminators — hardcoded from IDL (sha256("global:<name>")[0..8])
-      // These are fixed at compile time and won't change unless the program is recompiled.
-      const DISC_BEGIN_VERIFICATION = Buffer.from([6, 173, 175, 164, 204, 186, 106, 218]);
-      const DISC_COMPLETE_WITHDRAWAL = Buffer.from([107, 98, 134, 131, 74, 120, 174, 121]);
-
-      const { PROGRAM_ID, RPC_ENDPOINT } = await import("@/lib/solana-program");
-      const connection = new Connection(RPC_ENDPOINT, "confirmed");
-
-      const submitter = new PublicKey(address);
-      const usdcMint = new PublicKey(USDC_MINT_ADDRESS);
-
-      // employerAddress is stored on the voucher when it was hydrated from NilDB
-      const employerAddress = (target as any).employerAddress as string | undefined;
-      if (!employerAddress) throw new Error("Employer address not found. Re-load your vouchers and try again.");
-
-      const owner = new PublicKey(employerAddress);
-      const [vaultPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("vault"), owner.toBuffer()],
-        PROGRAM_ID
-      );
-
-      // ── Fetch vault state to get usdc_vault token account ─────────────────
-      const { getVaultState } = await import("@/lib/solana-program");
-      const vaultState = await getVaultState(new PublicKey(employerAddress!));
-      if (!vaultState) throw new Error("Employer vault not initialised on-chain. Ask your employer to set up the vault first.");
-
-      const vaultUsdcAccount = vaultState.usdcVault;
-
-      // ── Recipient ATA (Token-2022) — create if missing ────────────────────
-      const recipientAta = getAssociatedTokenAddressSync(
-        usdcMint, submitter, false, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
-      );
-
-      // ── Encode proof public inputs as [u8;32] LE field elements ──────────
-      // Nullifier: read from voucher, fall back to sessionStorage (set during claim)
-      const nullifierStr =
-        (target.nullifier && target.nullifier !== "0")
-          ? target.nullifier
-          : sessionStorage.getItem(`nullifier_${commitmentStr}`) ?? "0";
-      if (!nullifierStr || nullifierStr === "0") {
-        throw new Error("Nullifier not found. Please re-generate the proof by clicking 'Missing proof? Re-generate it' below.");
-      }
-      const nullifierBig = BigInt(nullifierStr);
-      const nullifierBytes = fieldToBytes32LE(toFieldElement(nullifierBig));
-
-      const commitmentBig = BigInt(commitmentStr);
-      const commitmentBytes = fieldToBytes32LE(toFieldElement(commitmentBig));
-
-      // ── Fetch the VerificationSession PDA seeded with proof_hash ─────────
-      // The proof_hash was computed during handleClaimVoucher and stored as claimTxHash
-      // It's actually the reference string — we need the real session pda.
-
-      // ── Merkle root: pass raw on-chain bytes (32-byte LE Uint8Array).
-      // Do NOT convert to hex string first — BigInt("0x"+leHex) misinterprets
-      // the LE bytes as big-endian, producing a completely wrong value.
-      const runId = (target as any).runId;
-
-      // ── Encode proof public inputs using V2 helpers ─────────────────────
-      const { encodeVerificationPublicInputs } = await import("@/lib/borsh-encode");
-      const publicInputsBuf = encodeVerificationPublicInputs({
-        merkleRoot: vaultState.merkleRoot, // raw Uint8Array — no BigInt round-trip
-        amount: target.amount || "0",
-        epoch: target.epoch || "0",
-        recipientTokenAccount: recipientAta.toBase58(),
-        programId: PROGRAM_ID.toBase58(),
-        vaultPda: vaultPda.toBase58(),
-        mint: usdcMint.toBase58(),
-        runId: runId || "",
-        domainTag: process.env.NEXT_PUBLIC_CIVITAS_DOMAIN_TAG ?? "civitas-devnet-v1",
-      });
-
-      // ── Proof bytes — stored in sessionStorage during claim ───────────────
-      // The real UltraHonk proof from bb.js is 2–4 KB, which exceeds Solana's
-      // 1232-byte transaction size limit. The on-chain verifier is a hackathon
-      // stub that only enforces proof_data.len() >= MIN_PROOF_SIZE (400 bytes)
-      // and that keccak256(proof_data) == proof_hash.
-      //
-      // Strategy:
-      //   • Build a 400-byte stub filled with the first 400 bytes of the real proof
-      //   • Compute proof_hash = keccak256(stub)  → PDA seed + integrity check match
-      //   • Send stub as proof_data in the tx     → satisfies length guard
-      //
-      // Both sides of the on-chain check:  keccak256(proof_data) == proof_hash
-      // will use the stub, so the check passes.
-      const storedProof = sessionStorage.getItem(`proof_${commitmentStr}`);
-      if (!storedProof) throw new Error("Proof not found in session. Please re-generate the proof by clicking Claim first.");
-      const realProofBytes = Buffer.from(JSON.parse(storedProof) as number[]);
-
-      // Build a compact stub (MIN_PROOF_SIZE 400 bytes + 4-byte random nonce).
-      // The nonce makes proofHash unique per settlement attempt, giving a fresh
-      // sessionPda every time — prevents both AccountAlreadyInUse (on retry)
-      // and SessionExpired (session from a prior attempt has elapsed 100 slots).
-      // The on-chain stub verifier checks proof_data.len() >= 400 AND
-      // keccak256(proof_data) == proof_hash. Both use the same 404-byte buffer,
-      // so the check always passes.
-      const STUB_PROOF_SIZE = 400;
-      const nonce = crypto.getRandomValues(new Uint8Array(4));
-      const proofBytes = Buffer.alloc(STUB_PROOF_SIZE + 4, 0);
-      realProofBytes.copy(proofBytes, 0, 0, Math.min(realProofBytes.length, STUB_PROOF_SIZE));
-      proofBytes.set(nonce, STUB_PROOF_SIZE); // last 4 bytes = random nonce
-
-      // proof_hash = keccak256(proofBytes) — unique per attempt, matches on-chain recompute
-      const proofHashHex = keccak_256(proofBytes);
-      const proofHashBytes = Buffer.from(proofHashHex, "hex");
-
-      // ── Derive session PDA ────────────────────────────────────────────────
-      const [sessionPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("verify"), proofHashBytes],
-        PROGRAM_ID
-      );
-
-      // Each settlement attempt uses a fresh 4-byte nonce in proofBytes (above),
-      // so sessionPda is unique per attempt — AccountAlreadyInUse and SessionExpired
-      // are no longer possible. nullifierPda always derived from this attempt's nullifier.
-      const [nullifierPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("nullifier"), Buffer.from(nullifierBytes)],
-        PROGRAM_ID
-      );
-
-      // ── Build begin_verification instruction data ──────────────────────────
-      // Layout (Borsh): discriminator[8] | proof_hash[32] | proof_data_len[4] | proof_data[N]
-      //                 | nullifier[32] | commitment[32] | VerificationPublicInputs
-      const proofDataLenBuf = new Uint8Array(4);
-      const len = proofBytes.length;
-      proofDataLenBuf[0] = len & 0xff;
-      proofDataLenBuf[1] = (len >> 8) & 0xff;
-      proofDataLenBuf[2] = (len >> 16) & 0xff;
-      proofDataLenBuf[3] = (len >> 24) & 0xff;
-
-      const beginData = Buffer.concat([
-        DISC_BEGIN_VERIFICATION,
-        proofHashBytes,                           // proof_hash: [u8;32]
-        Buffer.from(proofDataLenBuf), proofBytes, // proof_data: Vec<u8> (400-byte stub)
-        Buffer.from(nullifierBytes),              // nullifier: [u8;32]
-        Buffer.from(commitmentBytes),             // commitment: [u8;32]
-        publicInputsBuf,                          // public_inputs: VerificationPublicInputs
-      ]);
-
-      // ── Tx-A: begin_verification ──────────────────────────────────────────
-      const txA = new Transaction();
-      txA.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 900_000 }));
-      txA.add({
-        programId: PROGRAM_ID,
-        keys: [
-          { pubkey: submitter, isSigner: true, isWritable: true },
-          { pubkey: vaultPda, isSigner: false, isWritable: false },
-          { pubkey: sessionPda, isSigner: false, isWritable: true },
-          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-          { pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false },
-        ],
-        data: beginData,
-      });
-
-      txA.feePayer = submitter;
-      const { blockhash: bhA } = await connection.getLatestBlockhash();
-      txA.recentBlockhash = bhA;
-
-      // ── Build complete_withdrawal instruction data ─────────────────────────
-      const completeData = Buffer.concat([
-        DISC_COMPLETE_WITHDRAWAL,
-        sessionPda.toBytes(), // _session: Pubkey
-      ]);
-
-      const txB = new Transaction();
-      txB.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 }));
-      txB.add(createAssociatedTokenAccountIdempotentInstruction(
-        submitter, recipientAta, submitter, usdcMint,
-        TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID,
-      ));
-      txB.add({
-        programId: PROGRAM_ID,
-        keys: [
-          { pubkey: submitter, isSigner: true, isWritable: true },
-          { pubkey: sessionPda, isSigner: false, isWritable: true },
-          { pubkey: vaultPda, isSigner: false, isWritable: true },
-          { pubkey: nullifierPda, isSigner: false, isWritable: true },
-          { pubkey: usdcMint, isSigner: false, isWritable: false },
-          { pubkey: vaultUsdcAccount, isSigner: false, isWritable: true },
-          { pubkey: recipientAta, isSigner: false, isWritable: true },
-          { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
-          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-          { pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false },
-        ],
-        data: completeData,
-      });
-
-      txB.feePayer = submitter;
-      const { blockhash: bhB } = await connection.getLatestBlockhash();
-      txB.recentBlockhash = bhB;
-
-      // ── Sign + send ────────────────────────────────────────────────────────
-      setStatus("Wallet: approve Tx-A (begin verification)…");
-      const serialisedA = Buffer.from(txA.serialize({ requireAllSignatures: false })).toString("base64");
-      const sigA = await signAndSendTransaction(serialisedA);
-      setStatus(`Tx-A confirmed: ${sigA.slice(0, 20)}… Sending Tx-B…`);
-      // Brief delay to let Tx-A land before Tx-B reads the session account
-      await new Promise((r) => setTimeout(r, 2000));
-
-      const { blockhash: bhB2 } = await connection.getLatestBlockhash();
-      txB.recentBlockhash = bhB2;
-      const serialisedB = Buffer.from(txB.serialize({ requireAllSignatures: false })).toString("base64");
-      const sigB = await signAndSendTransaction(serialisedB);
-
-      // ── Mark claimed in NilDB + local state ───────────────────────────────
-      const redeemResp = await fetch("/api/employees/redeem", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          employee_tag: target.employeeTag,
-          commitment: commitmentStr,
-          amount: target.amount,
-          epoch: target.epoch,
-          nullifier: target.nullifier,
-          tx_signature: sigB,
-          action: "settle",
-        }),
-      });
-      const payload = await redeemResp.json();
-      if (!redeemResp.ok) throw new Error(payload.error || "NilDB settle failed");
-
-      updateVoucher(commitmentStr, { status: "claimed", claimTxHash: sigB });
-      sessionStorage.removeItem(`proof_${commitmentStr}`);
-      setStatus(`Settled on-chain ✓ USDC transferred. Tx: ${sigB.slice(0, 20)}…`);
-      setProvingStep("cloak");
-    } catch (err: unknown) {
-      console.error("=== FULL SETTLEMENT ERROR ===", err);
-      if (err instanceof Error && err.stack) {
-        console.error("Stack trace:", err.stack);
-      }
-      const msg = err instanceof Error ? err.message : String(err);
-      setStatus(`Settlement error: ${msg}`);
-    } finally {
-      setSettlingCommitment(null);
-    }
-  }, [connected, address, signAndSendTransaction, updateVoucher]);
-
-  const handleClaimVoucher = useCallback(async (target: (typeof myVouchers)[number]) => {
+  const handleClaim = useCallback(async (target: (typeof myVouchers)[number]) => {
     if (!credential) { setStatus("Create or import a credential first."); return; }
     if (!connected || !address) { setStatus("Connect your Solana wallet to receive USDC."); return; }
 
@@ -527,6 +270,7 @@ export default function EmployeesPage() {
     setStatus(null);
 
     try {
+      // ── 1. Fetch Merkle path for this voucher ────────────────────────
       const runId = (target as any).runId;
       const treeUrl = runId
         ? `/api/payroll/merkle-tree?run_id=${encodeURIComponent(runId)}`
@@ -544,38 +288,171 @@ export default function EmployeesPage() {
       const leafIndex = commitments.indexOf(commitmentStr);
       if (leafIndex === -1) throw new Error("Voucher commitment not found in Merkle tree.");
 
-      setProvingStep("proof");
-      setProvingLabel("Building Merkle proof path...");
       const tree = buildMerkleTree(commitments);
       const { path } = tree.getProof(leafIndex);
       const merklePath = path.map((p) => p.toString());
 
-      const recipientTokenAccount = address;
+      // ── 2. Generate Groth16 proof (256 B) ─────────────────────────────
+      setProvingStep("proof");
+      const employerAddress = (target as any).employerAddress as string | undefined;
+      if (!employerAddress) throw new Error("Employer address not on voucher; reload vouchers.");
 
-      const proof = await generateRedemptionProof(
-        {
-          credentialNonce: credential.credentialNonce,
-          amount: BigInt(target.amount || "0"),
-          epoch: BigInt(target.epoch || "0"),
-          voucherNonce: BigInt(target.voucherNonce || "0"),
-          recipientAddress: address,
-          recipientTokenAccount,
-          merklePath,
-          leafIndex,
-        },
-        (pct, label) => { setProvingPct(pct); setProvingLabel(label); }
+      const [
+        { PublicKey, Connection, Transaction, SystemProgram, ComputeBudgetProgram },
+        { createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID },
+        { PROGRAM_ID, RPC_ENDPOINT, getVaultState },
+      ] = await Promise.all([
+        import("@solana/web3.js"),
+        import("@solana/spl-token"),
+        import("@/lib/solana-program"),
+      ]);
+
+      const submitter = new PublicKey(address);
+      const usdcMint = new PublicKey(USDC_MINT_ADDRESS);
+      const owner = new PublicKey(employerAddress);
+      const [vaultPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("vault"), owner.toBuffer()],
+        PROGRAM_ID,
       );
 
-      // Store proof bytes + nullifier in sessionStorage so the settlement step can send Tx-A/B
-      sessionStorage.setItem(`proof_${commitmentStr}`, JSON.stringify(Array.from(proof.proofBytes)));
-      // Store merkle root for settlement
-      sessionStorage.setItem(`merkleRoot_${commitmentStr}`, proof.merkleRoot);
-      // Store nullifier — CRITICAL: needed for begin_verification public inputs
-      sessionStorage.setItem(`nullifier_${commitmentStr}`, proof.nullifier);
+      const vaultState = await getVaultState(owner);
+      if (!vaultState) throw new Error("Employer vault not initialised on-chain.");
 
+      // Precheck: the voucher's payroll_run PDA must exist and be Committed.
+      // Saves ~30 s of proof generation when the run is still Pending or
+      // never finalized.
+      const [precheckRunPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("run"), owner.toBuffer(), uuidStringToBytes(runId)],
+        PROGRAM_ID,
+      );
+      const conn = new Connection(RPC_ENDPOINT, "confirmed");
+      const runInfo = await conn.getAccountInfo(precheckRunPda);
+      if (!runInfo) {
+        throw new Error(
+          `Payroll run ${runId.slice(0, 8)}… is not on-chain yet — the employer's commit didn't reach finalization. Ask them to recommit this run.`,
+        );
+      }
+      // PayrollRunAccount status byte sits at: 8(disc)+16+32+8+32+32+4+4+4 = 140
+      const STATUS_OFFSET = 8 + 16 + 32 + 8 + 32 + 32 + 4 + 4 + 4;
+      const status = runInfo.data[STATUS_OFFSET];
+      if (status !== 1) {
+        throw new Error(
+          `Payroll run ${runId.slice(0, 8)}… is on-chain but its status is ` +
+          `${status === 0 ? "Pending (commit didn't finalize)" : "Settled"}. ` +
+          `The employer needs to (re-)commit this run all the way through ` +
+          `finalize_merkle_root before this voucher is claimable.`,
+        );
+      }
+
+      const recipientAta = getAssociatedTokenAddressSync(
+        usdcMint, submitter, false, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID,
+      );
+
+      // Use the run-specific merkle_root so vouchers from any historically
+      // committed run remain valid (not just the latest). The on-chain
+      // claim_payment handler reads PayrollRunAccount.finalized_root and
+      // recomputes pi_hash with that value. NilCC stores the root as a
+      // decimal string; the local fallback uses "0x"-prefixed hex.
+      // BigInt(s) accepts both — we then write 32 BE bytes consistently.
+      const rawRoot = String(treeData.merkle_root || "").trim();
+      if (!rawRoot) throw new Error("merkle root missing from run data");
+      const merkleRootBE = new Uint8Array(32);
+      {
+        let n = BigInt(rawRoot);
+        for (let i = 31; i >= 0; i--) {
+          merkleRootBE[i] = Number(n & 0xffn);
+          n >>= 8n;
+        }
+        if (n !== 0n) throw new Error("merkle root doesn't fit in 32 bytes");
+      }
+
+      const proof = await generateVoucherProof(
+        {
+          credentialNonce: BigInt("0x" + credential.credentialNonce),
+          voucherNonce: BigInt(target.voucherNonce || "0"),
+          amount: BigInt(target.amount || "0"),
+          epoch: BigInt(target.epoch || "0"),
+          runId: uuidStringToBytes(runId),
+          recipientTokenAccount: recipientAta.toBytes(),
+          mint: usdcMint.toBytes(),
+          vaultPda: vaultPda.toBytes(),
+          programId: PROGRAM_ID.toBytes(),
+          merklePath,
+          leafIndex,
+          merkleRoot: merkleRootBE,
+        },
+        (pct, label) => { setProvingPct(pct); setProvingLabel(label); },
+      );
+
+      // ── 3. Build single claim_payment tx ─────────────────────────────
       setProvingStep("verify");
-      setProvingLabel("Submitting proof on-chain...");
-      const claimResp = await fetch("/api/employees/redeem", {
+      setProvingLabel("Building on-chain claim transaction...");
+
+      const DISC_CLAIM_PAYMENT = Buffer.from([69, 112, 250, 167, 37, 156, 200, 30]);
+      const nullifierBytes = fieldToBE32Local(BigInt(proof.nullifier));
+
+      const publicInputs = encodeClaimPublicInputs({
+        amount: BigInt(target.amount || "0"),
+        epoch: BigInt(target.epoch || "0"),
+        runId: runId,
+        recipientTokenAccount: recipientAta.toBase58(),
+      });
+
+      const claimData = encodeClaimPaymentArgs({
+        discriminator: DISC_CLAIM_PAYMENT,
+        proofBytes: proof.proofBytes,
+        piHash: proof.piHash,
+        publicInputs,
+        nullifier: nullifierBytes,
+      });
+
+      // Derive nullifier + payroll_run PDAs
+      const [nullifierPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("nullifier"), Buffer.from(nullifierBytes)],
+        PROGRAM_ID,
+      );
+      const [payrollRunPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("run"), owner.toBuffer(), uuidStringToBytes(runId)],
+        PROGRAM_ID,
+      );
+
+      const connection = new Connection(RPC_ENDPOINT, "confirmed");
+
+      const tx = new Transaction();
+      tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }));
+      tx.add(createAssociatedTokenAccountIdempotentInstruction(
+        submitter, recipientAta, submitter, usdcMint,
+        TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID,
+      ));
+      tx.add({
+        programId: PROGRAM_ID,
+        keys: [
+          { pubkey: submitter, isSigner: true, isWritable: true },
+          { pubkey: vaultPda, isSigner: false, isWritable: true },
+          { pubkey: payrollRunPda, isSigner: false, isWritable: false },
+          { pubkey: nullifierPda, isSigner: false, isWritable: true },
+          { pubkey: usdcMint, isSigner: false, isWritable: false },
+          { pubkey: vaultState.usdcVault, isSigner: false, isWritable: true },
+          { pubkey: recipientAta, isSigner: false, isWritable: true },
+          { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+          { pubkey: new PublicKey("SysvarC1ock11111111111111111111111111111111"), isSigner: false, isWritable: false },
+        ],
+        data: claimData,
+      });
+
+      tx.feePayer = submitter;
+      const { blockhash } = await connection.getLatestBlockhash();
+      tx.recentBlockhash = blockhash;
+
+      // ── 4. Wallet signs + submits ─────────────────────────────────────
+      setProvingStep("payment");
+      setProvingLabel("Wallet: approve claim transaction...");
+      const serialised = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString("base64");
+      const sig = await signAndSendTransaction(serialised);
+
+      // ── 5. Record settlement in NilDB ─────────────────────────────────
+      await fetch("/api/employees/redeem", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -584,162 +461,58 @@ export default function EmployeesPage() {
           amount: target.amount,
           epoch: target.epoch,
           voucher_nonce: target.voucherNonce,
-          proof_bytes: Array.from(proof.proofBytes),
           nullifier: proof.nullifier,
-          merkle_root: proof.merkleRoot,
-          recipient_address: address,
-          recipient_token_account: recipientTokenAccount,
+          tx_signature: sig,
+          action: "settle",
         }),
-      });
-      const payload = await claimResp.json();
-      if (!claimResp.ok) throw new Error(payload.error || "Claim submission failed");
-
-      setProvingStep("payment");
-      setProvingLabel("MagicBlock Private Payment — authenticating…");
-
-      // ── MagicBlock Private Payments (real API: payments.magicblock.app) ──
-      // Flow: challenge → wallet sign → auth token → deposit to ER → private transfer
-      // This replaces the disabled Token-2022 Confidential Transfers.
-      if (address && target.amount) {
-        try {
-          const usdcMint = process.env.NEXT_PUBLIC_USDC_MINT ?? "";
-          const amountStr = String(target.amount);
-
-          // 1. Get challenge for employee's wallet
-          setProvingLabel("MagicBlock — fetching auth challenge…");
-          const challengeRes = await fetch(
-            `/api/payroll/private-pay?action=challenge&pubkey=${address}`,
-          );
-          const { challenge, isDemo: challengeDemo } = await challengeRes.json();
-
-          // 2. Wallet signs the challenge
-          let signature = "demo-sig";
-          if (!challengeDemo && (window as any).solana?.signMessage) {
-            try {
-              const msgBytes = new TextEncoder().encode(challenge);
-              const { signature: sig } = await (window as any).solana.signMessage(msgBytes);
-              // base58-encode the signature bytes
-              const bs58 = (await import("bs58")).default;
-              signature = bs58.encode(sig);
-            } catch (sigErr) {
-              console.warn("[MagicBlock PP] Sign skipped (demo mode):", sigErr);
-            }
-          }
-
-          // 3. Exchange for Bearer token
-          setProvingLabel("MagicBlock — establishing private session…");
-          const authRes = await fetch("/api/payroll/private-pay", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "auth", pubkey: address, challenge, signature }),
-          });
-          const { token, isDemo: tokenDemo } = await authRes.json();
-
-          // 4. Build private transfer tx: employer ephemeral → employee ephemeral
-          //    (employer pre-funded ER during payroll commit)
-          setProvingLabel("MagicBlock — building sealed transfer…");
-          const employerAddress = (target as any).employerAddress as string | undefined;
-          const transferRes = await fetch("/api/payroll/private-pay", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "transfer",
-              from: employerAddress ?? address,
-              to: address,
-              amount: amountStr,
-              token,
-              mint: usdcMint,
-              split: 5,
-              minDelayMs: 500,
-              maxDelayMs: 30_000,
-              memo: `civitas-claim-${commitmentStr.slice(0, 16)}`,
-            }),
-          });
-          const transferData = await transferRes.json();
-
-          if (transferData.success && !transferData.isDemo) {
-            // 5. Private transfer tx — employer must sign (from=employer ER).
-            // Log the sealed tx; in production employer pre-signs during payroll commit.
-            setProvingLabel("MagicBlock — sealed transfer queued…");
-            console.log("[MagicBlock PP] Private transfer tx sealed. requiredSigners:", transferData.requiredSigners);
-            console.log("[MagicBlock PP] Sealed tx (base64):", transferData.transactionBase64?.slice(0, 60) + "…");
-          } else {
-            console.log("[MagicBlock PP] Demo transfer registered — payments.magicblock.app in production");
-          }
-
-          // 6. Build withdraw tx for employee to pull their ephemeral balance → base wallet
-          setProvingLabel("MagicBlock — building withdraw transaction…");
-          const withdrawRes = await fetch("/api/payroll/private-pay", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "withdraw",
-              owner: address,
-              amount: amountStr,
-              mint: usdcMint,
-            }),
-          });
-          const withdrawData = await withdrawRes.json();
-
-          if (withdrawData.success && !withdrawData.isDemo && withdrawData.transactionBase64) {
-            // Employee signs + submits the withdraw VersionedTransaction
-            setProvingLabel("MagicBlock — signing withdraw…");
-            try {
-              const { VersionedTransaction, Connection } = await import("@solana/web3.js");
-              const { PROGRAM_ID: _p, RPC_ENDPOINT } = await import("@/lib/solana-program");
-              const txBytes = Buffer.from(withdrawData.transactionBase64, "base64");
-              const withdrawTx = VersionedTransaction.deserialize(txBytes);
-
-              if ((window as any).solana?.signTransaction) {
-                const signed = await (window as any).solana.signTransaction(withdrawTx);
-                const connUrl =
-                  withdrawData.sendTo === "ephemeral"
-                    ? (process.env.NEXT_PUBLIC_MAGICBLOCK_ROUTER ?? "https://devnet-router.magicblock.app")
-                    : RPC_ENDPOINT;
-                const conn = new Connection(connUrl, "confirmed");
-                const withdrawSig = await conn.sendRawTransaction(signed.serialize(), {
-                  skipPreflight: false,
-                  preflightCommitment: "confirmed",
-                });
-                await conn.confirmTransaction(withdrawSig, "confirmed");
-                console.log("[MagicBlock PP] ✓ Withdraw confirmed:", withdrawSig);
-              } else {
-                console.log("[MagicBlock PP] Withdraw tx ready (wallet unavailable):", withdrawData.transactionBase64?.slice(0, 60) + "…");
-              }
-            } catch (withdrawSignErr: any) {
-              console.warn("[MagicBlock PP] Withdraw signing failed (non-fatal):", withdrawSignErr.message);
-            }
-          } else {
-            console.log("[MagicBlock PP] Withdraw tx ready. sendTo:", withdrawData.sendTo, "isDemo:", withdrawData.isDemo);
-          }
-
-          setProvingLabel("MagicBlock Private Payment complete ✓");
-        } catch (ppErr: any) {
-          console.warn("[Claim] MagicBlock private payment (non-critical):", ppErr.message);
-          setProvingLabel("MagicBlock Private Payment (demo mode)");
-        }
-      }
+      }).catch((e) => console.warn("[Claim] settle record failed (non-fatal):", e));
 
       updateVoucher(commitmentStr, {
-        status: "prepared",
-        claimTxHash: payload.redemption?.reference,
-        merkleRoot: proof.merkleRoot,
+        status: "claimed",
+        claimTxHash: sig,
         nullifier: proof.nullifier,
       } as any);
-      setStatus(`Voucher claimed. Reference: ${payload.redemption?.reference ?? "pending"}`);
-    } catch (err: any) {
-      const msg: string = err.message ?? String(err);
+
+      setProvingStep("cloak");
+      setStatus(`Settled on-chain ✓ USDC transferred. Tx: ${sig.slice(0, 20)}…`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
       const friendly = msg.includes("unreachable")
-        ? "Circuit constraint failed — your credential does not match the registered employee tag for this voucher. Make sure you loaded the correct credential file."
+        ? "Circuit constraint failed — your credential does not match this voucher. Verify you loaded the correct credential file."
         : msg;
-      setStatus(`Error: ${friendly}`);
+      console.error("[Claim] FULL ERROR:", err);
+      setStatus(`Claim error: ${friendly}`);
+      setProvingStep("error");
     } finally {
       setProvingCommitment(null);
       setProvingPct(0);
       setProvingLabel("");
-      setProvingStep("idle");
     }
-  }, [credential, connected, address, updateVoucher]);
+  }, [credential, connected, address, signAndSendTransaction, updateVoucher]);
+
+  // ── small local helpers ───────────────────────────────────────────────
+
+  function fieldToBE32Local(n: bigint): Uint8Array {
+    const out = new Uint8Array(32);
+    let x = n;
+    for (let i = 31; i >= 0; i--) {
+      out[i] = Number(x & 0xffn);
+      x >>= 8n;
+    }
+    return out;
+  }
+
+  function uuidStringToBytes(uuid: string): Uint8Array {
+    const clean = (uuid || "").replace(/-/g, "");
+    const out = new Uint8Array(16);
+    if (clean.length === 32) {
+      for (let i = 0; i < 16; i++) {
+        out[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+      }
+    }
+    return out;
+  }
+
 
   return (
     <main className="min-h-screen bg-[#040404] text-white">
@@ -940,18 +713,18 @@ export default function EmployeesPage() {
                           <ClaimStepper currentStep={provingStep} pct={provingPct} label={provingLabel} />
                         )}
 
-                        {/* Claim button — only for pending vouchers */}
-                        {isPending && (
+                        {/* Claim button — single-tx claim_payment */}
+                        {(isPending || voucher.status === "prepared") && (
                           <button
                             type="button"
-                            onClick={() => void handleClaimVoucher(voucher)}
+                            onClick={() => void handleClaim(voucher)}
                             disabled={anyProving}
                             className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-[14px] border border-emerald-500/25 bg-emerald-500/10 py-3 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/18 disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             {isThisProving ? (
                               <>
                                 <Loader2 className="h-4 w-4 animate-spin" />
-                                Generating ZK proof…
+                                {provingLabel || "Claiming…"}
                               </>
                             ) : (
                               <>
@@ -960,37 +733,6 @@ export default function EmployeesPage() {
                               </>
                             )}
                           </button>
-                        )}
-
-                        {voucher.status === "prepared" && (
-                          <div className="mt-4 flex flex-col gap-2">
-                            <button
-                              type="button"
-                              onClick={() => void handleSettleVoucher(voucher)}
-                              disabled={settlingCommitment === vCommitment || anyProving}
-                              className="inline-flex w-full items-center justify-center gap-2 rounded-[14px] border border-teal-500/25 bg-teal-500/10 py-3 text-sm font-semibold text-teal-300 transition hover:bg-teal-500/18 disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              {settlingCommitment === vCommitment ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                  Finalising settlement…
-                                </>
-                              ) : (
-                                <>
-                                  <ArrowRightCircle className="h-4 w-4" />
-                                  Complete settlement — {usdcAmount} USDC
-                                </>
-                              )}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void handleClaimVoucher(voucher)}
-                              disabled={anyProving}
-                              className="inline-flex items-center justify-center text-xs text-white/40 hover:text-white/70 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {isThisProving ? "Re-generating proof..." : "Missing proof? Re-generate it"}
-                            </button>
-                          </div>
                         )}
 
                         {voucher.status === "claimed" && (

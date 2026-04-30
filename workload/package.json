@@ -1,13 +1,10 @@
 {
   "name": "civitas-nilcc-workload",
-  "version": "2.0.0",
-  "description": "Civitas nilCC TEE workload — BN254 Poseidon, Solana-compatible",
+  "version": "3.0.0",
+  "description": "Civitas nilCC TEE workload — BN254 Poseidon merkle tree compute (no NilDB writes; orchestrator handles persistence)",
   "private": true,
   "type": "commonjs",
   "dependencies": {
-    "@nillion/nuc": "^0.1.1",
-    "@nillion/nilauth-client": "^0.1.0",
-    "@nillion/secretvaults": "^0.1.5",
     "node-fetch": "^2.7.0",
     "poseidon-lite": "^0.3.0"
   }

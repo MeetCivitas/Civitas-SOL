@@ -54,16 +54,9 @@ pub struct PayrollBatchCommitted {
     pub slot: u64,
 }
 
-/// Emitted when Tx-A (begin_verification) succeeds.
-#[event]
-pub struct VerificationStarted {
-    pub session_pda: Pubkey,
-    pub submitter: Pubkey,
-    pub proof_hash: [u8; 32],
-}
-
-/// Emitted when a payment is successfully claimed (Tx-B succeeds).
-/// Only the nullifier is emitted — no amount, no identity.
+/// Emitted when a payment is successfully claimed (Groth16 proof verified,
+/// USDC transferred, nullifier registered). Only the nullifier is emitted —
+/// no amount, no identity.
 #[event]
 pub struct PaymentClaimed {
     pub nullifier: [u8; 32],

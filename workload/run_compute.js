@@ -34,30 +34,49 @@ let computeResult = null;
 let computeError = null;
 let computeStatus = "pending"; // pending | computing | done | error
 
-// ── BN254 Poseidon (matches Noir circuit + on-chain light-poseidon) ─────────
+// ── BN254 Poseidon (matches Noir circuit + on-chain solana-poseidon syscall
+// + frontend lib/bn128-poseidon.ts). MUST use the per-arity functions:
+// poseidon-lite v0.3+ removed the generic `poseidon(inputs)` dispatcher,
+// and using a missing function silently produces wrong hashes.
 
-let poseidonBN254;
+let poseidon1Fn, poseidon2Fn, poseidon3Fn, poseidon4Fn;
 
 async function loadBN254Poseidon() {
-  // poseidon-lite uses BN128 / BN254 scalar field — correct for Solana/Noir
   const mod = await import("poseidon-lite");
-  poseidonBN254 = mod.poseidon;
+  poseidon1Fn = mod.poseidon1;
+  poseidon2Fn = mod.poseidon2;
+  poseidon3Fn = mod.poseidon3;
+  poseidon4Fn = mod.poseidon4;
+  for (const [name, fn] of Object.entries({
+    poseidon1: poseidon1Fn,
+    poseidon2: poseidon2Fn,
+    poseidon3: poseidon3Fn,
+    poseidon4: poseidon4Fn,
+  })) {
+    if (typeof fn !== "function") {
+      throw new Error(
+        `poseidon-lite is missing ${name} — workload would compute mismatched ` +
+        `hashes vs the frontend prover. Bump poseidon-lite to a version that ` +
+        `exports poseidon1/2/3/4.`,
+      );
+    }
+  }
 }
 
 function bn254Hash1(a) {
-  return poseidonBN254([BigInt(a)]);
+  return poseidon1Fn([BigInt(a)]);
 }
 
 function bn254Hash2(a, b) {
-  return poseidonBN254([BigInt(a), BigInt(b)]);
+  return poseidon2Fn([BigInt(a), BigInt(b)]);
 }
 
 function bn254Hash3(a, b, c) {
-  return poseidonBN254([BigInt(a), BigInt(b), BigInt(c)]);
+  return poseidon3Fn([BigInt(a), BigInt(b), BigInt(c)]);
 }
 
 function bn254Hash4(a, b, c, d) {
-  return poseidonBN254([BigInt(a), BigInt(b), BigInt(c), BigInt(d)]);
+  return poseidon4Fn([BigInt(a), BigInt(b), BigInt(c), BigInt(d)]);
 }
 
 function parseBigIntSafe(val) {
@@ -156,70 +175,15 @@ function toBytes32Hex(bigintVal) {
 }
 
 // ── nilDB Integration ────────────────────────────────────────────────────────
+// V3: NilDB writes happen exclusively in the orchestrator (after fetching
+// /result), not from within the TEE workload. This keeps the workload
+// dependency-light, fast to build, and version-pinned to the orchestrator's
+// @nillion/secretvaults version. The TEE attestation still covers the
+// computation (Merkle tree + commitments), which is what matters
+// cryptographically. No NilDB write from inside the enclave.
 
-async function writeToNilDB(companyId, vouchers, runId, epoch, merkleRoot, totalAmount) {
-  if (!NILLION_ORG_KEY) return false;
-
-  try {
-    const { SecretVaultBuilderClient } = require("@nillion/secretvaults");
-    const { Keypair } = require("@nillion/nuc");
-
-    const keypair = Keypair.from(NILLION_ORG_KEY);
-    const client = await SecretVaultBuilderClient.from({
-      keypair,
-      urls: {
-        chain: "http://rpc.testnet.nilchain-rpc-proxy.nilogy.xyz",
-        auth: "https://nilauth.sandbox.app-cluster.sandbox.nilogy.xyz",
-        dbs: [
-          "https://nildb-stg-n1.nillion.network",
-          "https://nildb-stg-n2.nillion.network",
-          "https://nildb-stg-n3.nillion.network",
-        ],
-      },
-    });
-
-    // PayrollRuns collection
-    const runsCollectionId = `civitas_payroll_runs`;
-    await client.createData({
-      collection: runsCollectionId,
-      data: [
-        {
-          run_id: runId,
-          company_id: companyId,
-          merkle_root: merkleRoot,
-          total_amount: { "%share": totalAmount.toString() },
-          employee_count: vouchers.length,
-          status: "committed",
-          nilcc_attestation: JSON.stringify({ workload: "civitas-payroll-v3", run_id: runId }),
-          created_at: new Date().toISOString(),
-        },
-      ],
-    });
-
-    // Vouchers collection
-    const vouchersCollectionId = `civitas_vouchers_${companyId}`;
-    const voucherData = vouchers.map((v) => ({
-      commitment: v.commitment,
-      employee_tag: v.employee_tag,
-      amount: { "%share": v.amount },
-      epoch: epoch.toString(),
-      voucher_nonce: { "%share": v.voucher_nonce },
-      run_id: runId,
-      merkle_root: merkleRoot,
-      merkle_path: JSON.stringify(v.merkle_proof?.path ?? []),
-      path_index: v.leaf_index.toString(),
-      status: "pending",
-      nullifier: "",
-      created_at: new Date().toISOString(),
-    }));
-
-    await client.createData({ collection: vouchersCollectionId, data: voucherData });
-    console.log(`[nilCC] ✓ Wrote ${voucherData.length} vouchers to nilDB (Solana schema)`);
-    return true;
-  } catch (err) {
-    console.warn("[nilCC] nilDB write failed, falling back to file output:", err.message);
-    return false;
-  }
+async function writeToNilDB(_companyId, _vouchers, _runId, _epoch, _merkleRoot, _totalAmount) {
+  return false;
 }
 
 // ── Main Computation ─────────────────────────────────────────────────────────

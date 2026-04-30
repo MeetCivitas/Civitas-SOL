@@ -36,8 +36,12 @@ pub struct AppendCommitmentsChunk<'info> {
     )]
     pub payroll_run: Account<'info, PayrollRunAccount>,
 
+    /// `init_if_needed` so a retry of a partially-completed commit doesn't
+    /// fail with AccountAlreadyInUse. The handler short-circuits when the
+    /// chunk has already been appended with the same hash, and rejects
+    /// chunks that change content.
     #[account(
-        init,
+        init_if_needed,
         payer = owner,
         space = 8 + CommitmentChunkAccount::INIT_SPACE,
         seeds = [b"chunk".as_ref(), run_id.as_ref(), chunk_index.to_le_bytes().as_ref()],
@@ -65,6 +69,17 @@ pub fn handler(
     let chunk_hash = keccak::hash(&flat).0;
 
     let chunk = &mut ctx.accounts.chunk_account;
+
+    // Idempotent retry: if this chunk PDA was already populated with the
+    // same commitments, do nothing. Reject if content differs.
+    let was_populated = chunk.run_id != [0u8; 16];
+    if was_populated {
+        require!(chunk.run_id == run_id, CivitasError::ChunkIndexOutOfRange);
+        require!(chunk.chunk_index == chunk_index, CivitasError::ChunkIndexOutOfRange);
+        require!(chunk.chunk_hash == chunk_hash, CivitasError::PublicInputMismatch);
+        return Ok(());
+    }
+
     chunk.run_id = run_id;
     chunk.chunk_index = chunk_index;
     chunk.commitments = commitments.clone();
@@ -72,7 +87,7 @@ pub fn handler(
     chunk.appended_by = ctx.accounts.owner.key();
     chunk.bump = ctx.bumps.chunk_account;
 
-    // Increment the received chunk counter on the run.
+    // Increment the received chunk counter on the run only on first insert.
     let run = &mut ctx.accounts.payroll_run;
     run.received_chunk_count = run
         .received_chunk_count

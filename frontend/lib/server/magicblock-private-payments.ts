@@ -1,28 +1,25 @@
 /**
  * lib/server/magicblock-private-payments.ts
- * MagicBlock Private Payments — real API integration.
+ * MagicBlock Private Payments — production integration (no fallbacks).
  *
  * Base URL: https://payments.magicblock.app
  * API ref:  https://docs.magicblock.gg/pages/private-ephemeral-rollups-pers/api-reference/per/introduction
  *
  * Privacy model:
- *   Token-2022 ZK ElGamal / Confidential Transfers is DISABLED on devnet and mainnet
- *   (Solana security audit, April 2026). MagicBlock Private Payments provides
- *   equivalent payment amount privacy via Permissioned Ephemeral Rollup sessions.
+ *   Token-2022 ZK ElGamal / Confidential Transfers is DISABLED on Solana
+ *   (April 2026 audit). MagicBlock Private Payments provides equivalent
+ *   payment-amount privacy via Permissioned Ephemeral Rollup sessions.
  *
  *   Flow:
  *     1. Employer deposits USDC → MagicBlock ephemeral (during payroll commit)
- *        POST /v1/spl/deposit → unsigned tx → employer wallet signs
  *     2. Private transfer: employer ephemeral → employee ephemeral
- *        POST /v1/spl/transfer  visibility=private, split, delays → unsigned tx
- *        (requires auth token from challenge-response flow)
+ *        visibility=private, split=5, randomized delay 500–30000ms
  *     3. Employee withdraws privately
- *        POST /v1/spl/withdraw → unsigned tx → employee wallet signs
  *
- *   Amount privacy: split=5 distributes across multiple ephemeral queue entries;
- *   minDelayMs/maxDelayMs schedules execution at a random future time.
- *   On-chain observers see transfer occurred but cannot correlate amount or timing
- *   to the original payroll run.
+ *   On-chain observers see deposits + withdrawals, not the internal links.
+ *
+ * NO FALLBACKS: every error throws. Callers must surface the failure to the
+ * user — there are no demo / silent paths.
  */
 
 export const MAGICBLOCK_PAYMENTS_BASE =
@@ -33,11 +30,45 @@ export const MAGICBLOCK_ER_ROUTER =
 
 const DEFAULT_CLUSTER = "devnet";
 
+class MagicBlockError extends Error {
+  constructor(message: string, readonly status?: number) {
+    super(message);
+    this.name = "MagicBlockError";
+  }
+}
+
+async function readBody(res: Response): Promise<string> {
+  try { return (await res.text()).slice(0, 400); } catch { return "<no body>"; }
+}
+
+// ── Health gate ───────────────────────────────────────────────────────────
+
+/**
+ * Hard health check — throws if either MagicBlock endpoint is unreachable.
+ * Call this from the server-side entry of any flow that depends on PER.
+ */
+export async function assertMagicBlockHealthy(): Promise<void> {
+  const checks = [
+    fetch(`${MAGICBLOCK_PAYMENTS_BASE}/health`, { signal: AbortSignal.timeout(4_000) })
+      .then(async (r) => ({ url: MAGICBLOCK_PAYMENTS_BASE, ok: r.ok, body: r.ok ? null : await readBody(r) }))
+      .catch((e) => ({ url: MAGICBLOCK_PAYMENTS_BASE, ok: false, body: e.message })),
+    fetch(`${MAGICBLOCK_ER_ROUTER}`, { signal: AbortSignal.timeout(4_000) })
+      .then((r) => ({ url: MAGICBLOCK_ER_ROUTER, ok: r.status < 500, body: null }))
+      .catch((e) => ({ url: MAGICBLOCK_ER_ROUTER, ok: false, body: e.message })),
+  ];
+  const results = await Promise.all(checks);
+  const failed = results.filter((r) => !r.ok);
+  if (failed.length) {
+    throw new MagicBlockError(
+      `MagicBlock unreachable: ${failed.map((f) => `${f.url} (${f.body ?? "no response"})`).join("; ")}`,
+    );
+  }
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────
 
 /**
- * Step 1 of auth: get a challenge string for the wallet to sign.
- * GET /v1/spl/challenge?pubkey={pubkey}&cluster={cluster}
+ * GET /v1/spl/challenge?pubkey=...&cluster=...
  */
 export async function getAuthChallenge(
   pubkey: string,
@@ -53,23 +84,22 @@ export async function getAuthChallenge(
   });
 
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`MagicBlock challenge fetch failed (${res.status}): ${body.slice(0, 200)}`);
+    throw new MagicBlockError(
+      `challenge fetch failed: ${await readBody(res)}`,
+      res.status,
+    );
   }
 
   const { challenge } = await res.json();
   if (!challenge || typeof challenge !== "string") {
-    throw new Error("MagicBlock challenge: unexpected response format");
+    throw new MagicBlockError("challenge response missing 'challenge' field");
   }
   return challenge;
 }
 
 /**
- * Step 2 of auth: exchange challenge + wallet signature for a Bearer token.
- * POST /v1/spl/login
- *
- * The signature is produced by: wallet.signMessage(Buffer.from(challenge))
- * and base58-encoded by the caller.
+ * POST /v1/spl/login — exchange a signed challenge for a Bearer token.
+ * Signature must be the wallet's signMessage(challenge) output, base58-encoded.
  */
 export async function loginWithSignature(
   pubkey: string,
@@ -85,23 +115,22 @@ export async function loginWithSignature(
   });
 
   if (res.status === 403) {
-    throw new Error("MagicBlock auth: signature verification failed. Re-sign the challenge.");
+    throw new MagicBlockError("signature verification failed; wallet must re-sign", 403);
   }
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`MagicBlock login failed (${res.status}): ${body.slice(0, 200)}`);
+    throw new MagicBlockError(`login failed: ${await readBody(res)}`, res.status);
   }
 
   const { token } = await res.json();
   if (!token || typeof token !== "string") {
-    throw new Error("MagicBlock login: no token in response");
+    throw new MagicBlockError("login response missing 'token' field");
   }
   return token;
 }
 
 // ── Unsigned transaction builders ─────────────────────────────────────────
-// All builders return unsigned VersionedTransactions (base64).
-// The frontend/wallet is responsible for signing and submitting.
+// Every builder returns an unsigned base64-encoded VersionedTransaction.
+// The frontend wallet signs and submits.
 
 export interface UnsignedTxResponse {
   transactionBase64: string;
@@ -109,13 +138,10 @@ export interface UnsignedTxResponse {
   recentBlockhash: string;
   lastValidBlockHeight: number;
   requiredSigners: string[];
-  isDemo: boolean;
 }
 
 /**
- * Build a deposit transaction: move USDC from owner's base wallet → MagicBlock ER.
- * No auth required. Owner signs the returned transaction.
- * POST /v1/spl/deposit
+ * POST /v1/spl/deposit — owner USDC base wallet → MagicBlock ER escrow.
  */
 export async function buildDepositTx(
   owner: string,
@@ -142,18 +168,19 @@ export async function buildDepositTx(
   });
 
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`MagicBlock deposit build failed (${res.status}): ${err.slice(0, 200)}`);
+    throw new MagicBlockError(`deposit build failed: ${await readBody(res)}`, res.status);
   }
 
   const data = await res.json();
+  if (!data.transactionBase64) {
+    throw new MagicBlockError("deposit response missing transactionBase64");
+  }
   return {
     transactionBase64: data.transactionBase64,
     sendTo: data.sendTo ?? "base",
     recentBlockhash: data.recentBlockhash ?? "",
     lastValidBlockHeight: data.lastValidBlockHeight ?? 0,
     requiredSigners: data.requiredSigners ?? [owner],
-    isDemo: false,
   };
 }
 
@@ -169,10 +196,8 @@ export interface PrivateTransferOptions {
 }
 
 /**
- * Build a PRIVATE transfer transaction: employer ephemeral → employee ephemeral.
- * Requires a valid Bearer auth token (from loginWithSignature).
- * Amount is split across multiple queue entries — not visible in a single L1 tx.
- * POST /v1/spl/transfer  visibility="private"
+ * POST /v1/spl/transfer — private employer ER → employee ER transfer.
+ * Requires a Bearer auth token from loginWithSignature.
  */
 export async function buildPrivateTransferTx(
   from: string,
@@ -219,70 +244,61 @@ export async function buildPrivateTransferTx(
     signal: AbortSignal.timeout(12_000),
   });
 
-  if (res.status === 400) {
-    const err = await res.text();
-    // Could be "unsupported route" (e.g. ephemeral→ephemeral not yet live on devnet)
-    throw new Error(`MagicBlock private transfer rejected (400): ${err.slice(0, 200)}`);
-  }
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`MagicBlock private transfer failed (${res.status}): ${err.slice(0, 200)}`);
+    throw new MagicBlockError(`private transfer failed: ${await readBody(res)}`, res.status);
   }
 
   const data = await res.json();
+  if (!data.transactionBase64) {
+    throw new MagicBlockError("transfer response missing transactionBase64");
+  }
   return {
     transactionBase64: data.transactionBase64,
     sendTo: data.sendTo ?? "ephemeral",
     recentBlockhash: data.recentBlockhash ?? "",
     lastValidBlockHeight: data.lastValidBlockHeight ?? 0,
     requiredSigners: data.requiredSigners ?? [from],
-    isDemo: false,
   };
 }
 
 /**
- * Build a withdrawal transaction: employee ephemeral → employee base wallet.
- * No auth required. Owner signs the returned transaction.
- * POST /v1/spl/withdraw
+ * POST /v1/spl/withdraw — employee ER → employee base wallet.
  */
 export async function buildWithdrawTx(
   owner: string,
   amountUsdc: bigint,
-  mint?: string,
+  mint: string,
   cluster = DEFAULT_CLUSTER,
 ): Promise<UnsignedTxResponse> {
-  if (!mint) throw new Error("buildWithdrawTx: mint is required");
-
-  const body: Record<string, unknown> = {
-    owner,
-    mint,
-    amount: Number(amountUsdc),
-    cluster,
-    initIfMissing: true,
-    initAtasIfMissing: true,
-    idempotent: false,
-  };
-
   const res = await fetch(`${MAGICBLOCK_PAYMENTS_BASE}/v1/spl/withdraw`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      owner,
+      mint,
+      amount: Number(amountUsdc),
+      cluster,
+      initIfMissing: true,
+      initAtasIfMissing: true,
+      idempotent: false,
+    }),
     signal: AbortSignal.timeout(12_000),
   });
 
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`MagicBlock withdraw build failed (${res.status}): ${err.slice(0, 200)}`);
+    throw new MagicBlockError(`withdraw build failed: ${await readBody(res)}`, res.status);
   }
 
   const data = await res.json();
+  if (!data.transactionBase64) {
+    throw new MagicBlockError("withdraw response missing transactionBase64");
+  }
   return {
     transactionBase64: data.transactionBase64,
     sendTo: data.sendTo ?? "base",
     recentBlockhash: data.recentBlockhash ?? "",
     lastValidBlockHeight: data.lastValidBlockHeight ?? 0,
     requiredSigners: data.requiredSigners ?? [owner],
-    isDemo: false,
   };
 }
 
@@ -296,7 +312,7 @@ export interface BalanceResponse {
   balance: string;
 }
 
-/** Public (base) USDC balance on MagicBlock ER. No auth needed. */
+/** Public (base) USDC balance. No auth needed. */
 export async function getPublicBalance(
   address: string,
   mint: string,
@@ -308,7 +324,7 @@ export async function getPublicBalance(
   url.searchParams.set("cluster", cluster);
 
   const res = await fetch(url.toString(), { signal: AbortSignal.timeout(6_000) });
-  if (!res.ok) throw new Error(`MagicBlock balance failed (${res.status})`);
+  if (!res.ok) throw new MagicBlockError(`balance failed: ${await readBody(res)}`, res.status);
   return res.json();
 }
 
@@ -328,62 +344,10 @@ export async function getPrivateBalance(
     headers: { "Authorization": `Bearer ${authToken}` },
     signal: AbortSignal.timeout(6_000),
   });
-  if (!res.ok) throw new Error(`MagicBlock private-balance failed (${res.status})`);
+  if (!res.ok) {
+    throw new MagicBlockError(`private-balance failed: ${await readBody(res)}`, res.status);
+  }
   return res.json();
 }
 
-// ── Health ────────────────────────────────────────────────────────────────
-
-export async function checkPaymentsHealth(): Promise<boolean> {
-  try {
-    const res = await fetch(`${MAGICBLOCK_PAYMENTS_BASE}/health`, {
-      signal: AbortSignal.timeout(4_000),
-    });
-    const data = await res.json();
-    return data?.status === "ok";
-  } catch {
-    return false;
-  }
-}
-
-// ── Demo-mode fallbacks ───────────────────────────────────────────────────
-// Used when the payments endpoint is unreachable (local dev, CI, offline demo).
-
-const DEMO_TX_PREFIX = "CIVITAS_DEMO_TX_";
-
-export function isDemoTx(tx: string): boolean {
-  return tx.startsWith(DEMO_TX_PREFIX);
-}
-
-export function makeDemoDepositTx(owner: string, amount: bigint): UnsignedTxResponse {
-  return {
-    transactionBase64: `${DEMO_TX_PREFIX}DEPOSIT_${owner.slice(0, 8)}_${amount}`,
-    sendTo: "base",
-    recentBlockhash: "11111111111111111111111111111111",
-    lastValidBlockHeight: 0,
-    requiredSigners: [owner],
-    isDemo: true,
-  };
-}
-
-export function makeDemoTransferTx(from: string, to: string, amount: bigint): UnsignedTxResponse {
-  return {
-    transactionBase64: `${DEMO_TX_PREFIX}TRANSFER_${from.slice(0, 8)}_${to.slice(0, 8)}_${amount}`,
-    sendTo: "ephemeral",
-    recentBlockhash: "11111111111111111111111111111111",
-    lastValidBlockHeight: 0,
-    requiredSigners: [from],
-    isDemo: true,
-  };
-}
-
-export function makeDemoWithdrawTx(owner: string, amount: bigint): UnsignedTxResponse {
-  return {
-    transactionBase64: `${DEMO_TX_PREFIX}WITHDRAW_${owner.slice(0, 8)}_${amount}`,
-    sendTo: "base",
-    recentBlockhash: "11111111111111111111111111111111",
-    lastValidBlockHeight: 0,
-    requiredSigners: [owner],
-    isDemo: true,
-  };
-}
+export { MagicBlockError };

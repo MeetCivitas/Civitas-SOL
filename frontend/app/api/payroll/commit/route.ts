@@ -94,21 +94,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Payroll run has no commitments to commit" }, { status: 400 });
     }
 
-    const commitments: Uint8Array[] = runData.commitments.map((c: string) => {
-      // Each commitment is a BN254 field element — encode as 32-byte LE
-      const big = BigInt(c);
-      const buf = Buffer.alloc(32);
-      let tmp = big;
-      for (let i = 0; i < 32; i++) {
-        buf[i] = Number(tmp & BigInt(0xff));
-        tmp >>= BigInt(8);
+    // ── Field-element ↔ 32 BE bytes helper ───────────────────────────────
+    // BigInt(s) accepts BOTH decimal (NilCC) and "0x..." hex (local fallback).
+    // We always write 32 BE bytes so the on-chain merkle_root and commitments
+    // round-trip cleanly through Poseidon (which is endianness-agnostic at the
+    // field level but the bytes must be consistent).
+    const fieldToBE32 = (s: string): Uint8Array => {
+      const buf = new Uint8Array(32);
+      let n = BigInt(s);
+      for (let i = 31; i >= 0; i--) {
+        buf[i] = Number(n & 0xffn);
+        n >>= 8n;
       }
-      return new Uint8Array(buf);
-    });
+      if (n !== 0n) throw new Error(`field element ${s} doesn't fit in 32 bytes`);
+      return buf;
+    };
 
-    // Convert merkle root hex to bytes32
-    const merkleRootHex = runData.merkleRoot.replace(/^0x/, "");
-    const merkleRootBytes = Buffer.from(merkleRootHex.padStart(64, "0"), "hex");
+    const commitments: Uint8Array[] = runData.commitments.map(fieldToBE32);
+    const merkleRootBytes = Buffer.from(fieldToBE32(runData.merkleRoot));
 
     // UUID → bytes16
     const runIdBytes = Buffer.from(runId.replace(/-/g, ""), "hex");

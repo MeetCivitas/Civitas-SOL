@@ -36,19 +36,6 @@ pub enum CivitasError {
     #[msg("Commitments vector must not be empty")]
     EmptyChunk,
 
-    // ── Verification Session ─────────────────────────────────────────────
-    #[msg("Verification session not found or already closed")]
-    SessionNotFound,
-
-    #[msg("Verification step 1 (begin_verification) has not passed yet")]
-    Step1NotComplete,
-
-    #[msg("Verification session has expired — resubmit the proof")]
-    SessionExpired,
-
-    #[msg("Proof public inputs do not match the verification session")]
-    PublicInputMismatch,
-
     // ── Domain / Replay Protection ───────────────────────────────────────
     #[msg("Proof domain tag does not match the deployment network")]
     DomainTagMismatch,
@@ -65,12 +52,18 @@ pub enum CivitasError {
     #[msg("Proof is bound to a different mint")]
     MintMismatch,
 
-    // ── ZK / Pairing ─────────────────────────────────────────────────────
-    #[msg("UltraHonk proof verification failed in step 1 (constraints check)")]
-    ProofVerificationStep1Failed,
+    #[msg("Proof public inputs do not match authoritative on-chain state")]
+    PublicInputMismatch,
 
-    #[msg("UltraHonk proof verification failed in step 2 (KZG pairing check)")]
-    ProofVerificationStep2Failed,
+    // ── ZK / Pairing ─────────────────────────────────────────────────────
+    #[msg("Groth16 proof bytes are malformed (must be exactly 256 bytes)")]
+    ProofMalformed,
+
+    #[msg("Embedded Groth16 verifying key is malformed")]
+    VerifyingKeyMalformed,
+
+    #[msg("Groth16 proof verification failed (pairing check rejected)")]
+    ProofVerificationFailed,
 
     // ── Authorization ─────────────────────────────────────────────────────
     #[msg("Signer is not the vault owner")]

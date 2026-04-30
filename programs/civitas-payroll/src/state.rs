@@ -18,9 +18,8 @@ pub const MAX_SNS_DOMAIN_LEN: usize = 64;
 /// Maximum length of an on-chain metadata CID string (IPFS/Arweave).
 pub const MAX_METADATA_CID_LEN: usize = 128;
 
-/// Maximum length of proof bytes stored in a VerificationSession.
-/// UltraHonk proofs are typically ~2 KB but we reserve 8 KB.
-pub const MAX_PROOF_BYTES: usize = 8192;
+/// Groth16 BN254 proof — exactly 256 bytes (A: 64, B: 128, C: 64).
+pub const GROTH16_PROOF_BYTES: usize = 256;
 
 /// Deployment domain tag baked into proof public inputs for replay protection.
 /// Must match the tag used by the Noir circuit.
@@ -184,53 +183,25 @@ pub struct CommitmentChunkAccount {
     pub bump: u8,
 }
 
-// ── VerificationSession ───────────────────────────────────────────────────
+// ── ClaimContext ──────────────────────────────────────────────────────────
+//
+// The claim flow is now a single instruction (`claim_payment`) — Groth16's
+// 256-byte proof + a single 32-byte pi_hash all fit in one tx, so the
+// previous two-step VerificationSession PDA is no longer needed.
+//
+// pi_hash is a single BN254 field element committing to:
+//   merkle_root, nullifier, recipient_token_account, amount, epoch,
+//   mint, vault_pda, program_id, run_id, domain_tag
+// All of these are checked on-chain against authoritative state below
+// before the proof is invoked.
 
-/// Intermediate state for the split UltraHonk verifier (Tx-A → Tx-B).
-/// Seeds: [b"verify", proof_hash (first 32 bytes of keccak256(proof_data))]
-#[account]
-#[derive(InitSpace)]
-pub struct VerificationSession {
-    /// Who submitted the proof (employee's wallet).
-    pub submitter: Pubkey,
-    /// Keccak256 of the full proof blob (used as PDA seed & integrity check).
-    pub proof_hash: [u8; 32],
-    /// The claimed nullifier (to be registered on successful Tx-B).
-    pub nullifier: [u8; 32],
-    /// The claimed commitment (must exist in vault's Merkle tree).
-    pub commitment: [u8; 32],
-    /// Public inputs supplied with the proof.
-    pub public_inputs: VerificationPublicInputs,
-    /// Serialised proof bytes stored here for Tx-B to load.
-    #[max_len(MAX_PROOF_BYTES)]
-    pub proof_data: Vec<u8>,
-    /// Whether Tx-A constraints check passed.
-    pub step1_passed: bool,
-    /// Solana slot of Tx-A (for expiry checks).
-    pub created_slot: u64,
-    pub bump: u8,
-}
-
-/// Public inputs for UltraHonk proof verification.
+/// Public input components the on-chain handler binds to authoritative
+/// state. These are independently verified (not just hashed); the same
+/// values are then folded into pi_hash for the Groth16 verifier.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
-pub struct VerificationPublicInputs {
-    /// Must match VaultState.merkle_root.
-    pub merkle_root: [u8; 32],
-    /// Amount field committed in the proof.
+pub struct ClaimPublicInputs {
     pub amount: u64,
-    /// Epoch committed in the proof.
     pub epoch: u64,
-    /// Solana pubkey of the recipient token account (front-run protection).
-    pub recipient_token_account: Pubkey,
-    /// Bound to the program's own ID.
-    pub program_id: Pubkey,
-    /// Bound to the employer's vault PDA.
-    pub vault_pda: Pubkey,
-    /// Token mint (USDC Token-2022).
-    pub mint: Pubkey,
-    /// Run ID the voucher belongs to.
     pub run_id: [u8; 16],
-    /// Deployment domain tag (devnet vs mainnet replay protection).
-    #[max_len(32)]
-    pub domain_tag: Vec<u8>,
+    pub recipient_token_account: Pubkey,
 }
