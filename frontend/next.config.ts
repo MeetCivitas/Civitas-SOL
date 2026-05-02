@@ -15,7 +15,7 @@ const nextConfig: NextConfig = {
 
   // 3. Webpack config
   webpack: (config, { isServer }) => {
-    // Enable async WASM for @noir-lang/backend_barretenberg (Barretenberg proving key)
+    // Enable async WASM for snarkjs (Groth16 prover) — voucher.wasm + voucher.zkey
     config.experiments = {
       ...config.experiments,
       asyncWebAssembly: true,

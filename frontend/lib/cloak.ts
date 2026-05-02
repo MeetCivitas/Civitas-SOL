@@ -1,10 +1,11 @@
 /**
- * lib/cloak.ts — Civitas Cloak Privacy Integration (Layer 4)
+ * lib/cloak.ts — Civitas Cloak Privacy Integration (Layer 5)
  *
  * Layer 1: Nillion nilDB — encrypted salary storage
  * Layer 2: Nillion nilCC TEE — private payroll computation
- * Layer 3: Noir UltraHonk — anonymous on-chain claiming
- * Layer 4: Cloak shielded pool — post-claim settlement privacy
+ * Layer 3: Groth16 (circom + snarkjs) — anonymous on-chain claiming
+ * Layer 4: MagicBlock Private Payments — sealed ER→ER settlement
+ * Layer 5: Cloak viewing keys — selective disclosure for whitelisted auditors
  *
  * Program: zh1eLd6rSphLejbFfJEneUwzHRfMKxgzrgkfwA6qRkW (devnet)
  */

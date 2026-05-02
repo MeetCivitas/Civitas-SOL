@@ -714,10 +714,11 @@ export default function EmployeesPage() {
               <Shield className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
               <p className="text-xs text-white/55 leading-5">
                 <span className="font-semibold text-blue-300">ZK Proof:</span>{" "}
-                UltraHonk proofs are generated in your browser via Barretenberg (bb.js).
-                On-chain verification enforces proof size, nullifier non-zero, and Fiat-Shamir transcript binding —
-                the full KZG pairing check requires porting Barretenberg to BPF Rust (post-hackathon milestone).
-                Anti-double-spend via nullifier PDA is enforced unconditionally on every claim.
+                256-byte Groth16 proofs are generated in your browser via snarkjs from the
+                <code className="mx-1 px-1 py-0.5 rounded bg-white/[0.06] text-white/70">voucher.circom</code>
+                circuit. On-chain verification runs the full alt-bn128 pairing check natively on Solana —
+                fitting inside the CU budget. Anti-double-spend via the nullifier PDA is enforced
+                unconditionally on every claim, then settlement is routed through MagicBlock private payments.
               </p>
             </div>
 

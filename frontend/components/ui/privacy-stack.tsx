@@ -35,27 +35,27 @@ export const PRIVACY_LAYERS: PrivacyLayer[] = [
     color: "text-purple-400",
     glow: "shadow-[0_0_15px_rgba(168,85,247,0.3)] border-purple-500/30 bg-purple-500/5"
   },
-  { 
-    id: 2, 
-    icon: <Shield className="h-4 w-4" />, 
-    label: "Noir UltraHonk ZK", 
-    sublabel: "Anonymous claiming", 
+  {
+    id: 2,
+    icon: <Shield className="h-4 w-4" />,
+    label: "Groth16 ZK",
+    sublabel: "circom + snarkjs claim",
     color: "text-blue-400",
     glow: "shadow-[0_0_15px_rgba(59,130,246,0.3)] border-blue-500/30 bg-blue-500/5"
   },
-  { 
-    id: 3, 
-    icon: <Zap className="h-4 w-4" />, 
-    label: "MagicBlock Private Pay", 
-    sublabel: "Sealed amount transfer", 
+  {
+    id: 3,
+    icon: <Zap className="h-4 w-4" />,
+    label: "MagicBlock Private Pay",
+    sublabel: "ER split + delay routing",
     color: "text-amber-400",
     glow: "shadow-[0_0_15px_rgba(245,158,11,0.3)] border-amber-500/30 bg-amber-500/5"
   },
-  { 
-    id: 4, 
-    icon: <Lock className="h-4 w-4" />, 
-    label: "Cloak Pool", 
-    sublabel: "Unlinkable settlement", 
+  {
+    id: 4,
+    icon: <Lock className="h-4 w-4" />,
+    label: "Cloak Viewing Keys",
+    sublabel: "Selective disclosure",
     color: "text-emerald-400",
     glow: "shadow-[0_0_15px_rgba(16,185,129,0.3)] border-emerald-500/30 bg-emerald-500/5"
   },

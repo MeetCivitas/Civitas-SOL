@@ -9,7 +9,7 @@ import {
   Shield, Lock, Zap, ArrowRight, KeyRound, Copy, Download,
   CheckCircle2, Briefcase, UserCircle, ChevronRight, Github,
   Twitter, Send, ExternalLink, Database, Cpu, BookOpen,
-  X, PlayCircle, Users, Mail, User, Building2
+  X, Mail, Building2
 } from "lucide-react"
 import { redirect } from "next/navigation"
 import { PrivacyStackVisualizer } from "@/components/ui/privacy-stack"
@@ -133,12 +133,10 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-black text-white selection:bg-emerald-500/30 selection:text-white relative overflow-hidden font-sans">
 
-      {/* ── Background Video & Overlay ── */}
+      {/* ── Ambient Background ── */}
       <div className="fixed inset-0 z-0 pointer-events-none">
-        <video autoPlay loop muted playsInline className="w-full h-full object-cover opacity-60 mix-blend-screen">
-          <source src="/videos/Animated_Privacy_Video_Element.mp4" type="video/mp4" />
-        </video>
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(153,69,255,0.18),_transparent_55%),radial-gradient(ellipse_at_bottom,_rgba(20,241,149,0.14),_transparent_55%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_75%)]" />
         <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/80" />
       </div>
 
@@ -192,12 +190,12 @@ export default function HomePage() {
             <div className="flex-1 text-left">
               <motion.div variants={fadeInUp} className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-white/[0.03] border border-white/[0.05] text-[10px] font-bold uppercase tracking-[0.2em] text-white/60 mb-8 backdrop-blur-md">
                 <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#14F195] opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#14F195]"></span>
                 </span>
-                MagicBlock Frontier Hackathon
+                Built on Solana
                 <span className="h-3 w-px bg-white/20 mx-1" />
-                V2 Production Stack
+                MagicBlock Frontier Hackathon
               </motion.div>
 
               <motion.h1 variants={fadeInUp} className="text-5xl md:text-7xl lg:text-[84px] font-medium tracking-tighter mb-8 leading-[0.95]">
@@ -209,9 +207,9 @@ export default function HomePage() {
               </motion.h1>
 
               <motion.p variants={fadeInUp} className="text-lg text-white/60 max-w-lg mb-12 leading-relaxed font-light tracking-wide">
-                While Token-2022 Confidential Transfers are under security audit, 
-                Civitas delivers production-grade payroll privacy through a 5-layer 
-                stack — powered by Nillion, MagicBlock, and Noir.
+                While Solana's Token-2022 Confidential Transfers are under security audit,
+                Civitas delivers production-grade payroll privacy on Solana through a 5-layer
+                stack — Nillion, MagicBlock, Noir, and Cloak, settling natively on Solana L1.
               </motion.p>
 
               <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row items-center gap-6">
@@ -523,7 +521,8 @@ export default function HomePage() {
 
           {/* ── Underlying Technologies ── */}
           <motion.div variants={fadeInUp} className="max-w-7xl mx-auto pt-24 border-t border-white/[0.05]" id="architecture">
-            <p className="text-center text-[10px] font-bold uppercase tracking-[0.3em] text-white/30 mb-16">Underlying Technologies</p>
+            <p className="text-center text-[10px] font-bold uppercase tracking-[0.3em] text-white/30 mb-4">The Solana Privacy Stack</p>
+            <p className="text-center text-[10px] font-mono uppercase tracking-[0.25em] text-white/20 mb-16">Settled on Solana L1 · Powered by the Solana ecosystem</p>
             <div className="grid md:grid-cols-4 gap-6">
               {[
                 {
@@ -537,22 +536,22 @@ export default function HomePage() {
                   icon: <Cpu className="h-5 w-5" />,
                   accent: "blue",
                   label: "ZK Proving",
-                  title: "Noir UltraHonk",
-                  desc: "Barretenberg-powered UltraHonk proofs generated client-side. Employees claim salary anonymously — no identity revealed on-chain. Nullifier prevents double-spend.",
+                  title: "Groth16 (circom + snarkjs)",
+                  desc: "256-byte Groth16 proofs generated client-side via snarkjs from the voucher.circom circuit. Verified by Solana's native alt-bn128 syscalls — fits inside the Solana CU budget. Nullifier PDA blocks double-spend.",
                 },
                 {
                   icon: <Zap className="h-5 w-5" />,
                   accent: "amber",
                   label: "Payment Privacy",
                   title: "MagicBlock Private Pay",
-                  desc: "Payment amounts sealed inside MagicBlock Permissioned Ephemeral Rollup sessions. On-chain observers see a transfer happened — never the amount. Works today on devnet.",
+                  desc: "Claim settlement is routed employer-ER → employee-ER through MagicBlock Permissioned Ephemeral Rollups, with split transfers and randomized 500–30000 ms delays. The base layer sees a transfer happened — never the amount or pairing.",
                 },
                 {
                   icon: <Lock className="h-5 w-5" />,
                   accent: "emerald",
                   label: "Settlement Privacy",
-                  title: "Cloak Shielded Pool",
-                  desc: "Received payments shielded in Cloak's Groth16 UTXO pool. Transaction graph is unlinkable. Auditors access compliance data via selective viewing keys.",
+                  title: "Cloak Viewing Keys",
+                  desc: "Employees mint a Cloak keypair on registration. Spend keys stay client-side; viewing keys are escrowed for selective compliance disclosure to whitelisted auditors.",
                 },
               ].map((card) => {
                 const colors: Record<string, { border: string; iconBg: string; iconText: string; labelText: string; glow: string }> = {
@@ -662,7 +661,8 @@ export default function HomePage() {
                 { label: "Nillion Network", href: "https://nillion.com", ext: true },
                 { label: "MagicBlock", href: "https://magicblock.gg", ext: true },
                 { label: "Cloak", href: "https://cloak.dev", ext: true },
-                { label: "Noir Lang", href: "https://noir-lang.org", ext: true },
+                { label: "circom", href: "https://docs.circom.io", ext: true },
+                { label: "snarkjs", href: "https://github.com/iden3/snarkjs", ext: true },
               ]
             },
             {
@@ -709,7 +709,7 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col md:flex-row items-center justify-between gap-4 border-b border-white/[0.04]">
           <p className="text-[10px] font-mono text-white/20 tracking-widest">© 2026 CIVITAS PROTOCOL · ALL RIGHTS RESERVED</p>
           <div className="flex items-center gap-3">
-            {["Solana Devnet", "Nillion Testnet", "Noir ZK"].map(tag => (
+            {["Solana Devnet", "Nillion Testnet", "Groth16 ZK", "MagicBlock ER"].map(tag => (
               <span key={tag} className="text-[9px] font-mono px-2 py-1 rounded border border-white/[0.06] text-white/20 tracking-widest">{tag}</span>
             ))}
           </div>
