@@ -4,7 +4,7 @@
   "buildCommand": "cd frontend && npm run build",
   "outputDirectory": "frontend/.next",
   "installCommand": "cd frontend && npm install --legacy-peer-deps",
-  "regions": ["sfo1", "iad1"],
+  "regions": ["iad1"],
   "functions": {
     "frontend/app/api/**/*.ts": {
       "runtime": "nodejs20.x",
