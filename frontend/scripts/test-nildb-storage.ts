@@ -75,8 +75,8 @@ async function main() {
     // ── Test 3: Employees ───────────────────────────────────────────
     await test("3a. createEmployees", async () => {
         await createEmployees(TEST_COMPANY, [
-            { employeeTag: "tag_alice_" + Date.now(), salaryPolicy: "5000" },
-            { employeeTag: "tag_bob_" + Date.now(), salaryPolicy: "6000" },
+            { employeeTag: "tag_alice_" + Date.now(), salary: "5000" },
+            { employeeTag: "tag_bob_" + Date.now(), salary: "6000" },
         ]);
     });
 

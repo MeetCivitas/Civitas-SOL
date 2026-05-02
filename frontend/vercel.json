@@ -1,12 +1,12 @@
 {
   "version": 2,
   "framework": "nextjs",
-  "buildCommand": "cd frontend && npm run build",
-  "outputDirectory": "frontend/.next",
-  "installCommand": "cd frontend && npm install --legacy-peer-deps",
+  "installCommand": "npm install --legacy-peer-deps",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
   "regions": ["iad1"],
   "functions": {
-    "frontend/app/api/**/*.ts": {
+    "app/api/**/*.ts": {
       "runtime": "nodejs20.x",
       "maxDuration": 60
     }

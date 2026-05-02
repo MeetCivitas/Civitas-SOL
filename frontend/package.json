@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "node --max-old-space-size=4096 node_modules/.bin/next build",
+    "build": "node --max-old-space-size=4096 node_modules/.bin/next build --webpack",
     "start": "next start",
     "lint": "eslint .",
     "postinstall": "node scripts/patch-nillion.js"
