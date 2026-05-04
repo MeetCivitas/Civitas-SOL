@@ -7,7 +7,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { Shield, Lock, Zap, Cpu, Database } from "lucide-react";
+import { Shield, Zap, Cpu, Database } from "lucide-react";
 
 export interface PrivacyLayer {
   id: number;
@@ -47,17 +47,9 @@ export const PRIVACY_LAYERS: PrivacyLayer[] = [
     id: 3,
     icon: <Zap className="h-4 w-4" />,
     label: "MagicBlock Private Pay",
-    sublabel: "ER split + delay routing",
+    sublabel: "TEE split + delay routing",
     color: "text-amber-400",
     glow: "shadow-[0_0_15px_rgba(245,158,11,0.3)] border-amber-500/30 bg-amber-500/5"
-  },
-  {
-    id: 4,
-    icon: <Lock className="h-4 w-4" />,
-    label: "Cloak Viewing Keys",
-    sublabel: "Selective disclosure",
-    color: "text-emerald-400",
-    glow: "shadow-[0_0_15px_rgba(16,185,129,0.3)] border-emerald-500/30 bg-emerald-500/5"
   },
 ];
 

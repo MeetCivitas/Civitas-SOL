@@ -65,7 +65,7 @@ export function LandingHero() {
             </div>
             <div className="text-left">
               <p className="text-sm font-medium text-foreground">Privacy Stack</p>
-              <p className="text-xs text-muted-foreground">Nillion · Cloak · MagicBlock</p>
+              <p className="text-xs text-muted-foreground">Nillion · MagicBlock · Groth16</p>
             </div>
           </div>
           <div className="flex items-center justify-center gap-3 rounded-xl border border-border/50 bg-card/50 p-4 backdrop-blur-sm">

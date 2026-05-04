@@ -133,11 +133,20 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-black text-white selection:bg-emerald-500/30 selection:text-white relative overflow-hidden font-sans">
 
-      {/* ── Ambient Background ── */}
+      {/* ── Ambient Background (animated video + gradient overlays) ── */}
       <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(153,69,255,0.18),_transparent_55%),radial-gradient(ellipse_at_bottom,_rgba(20,241,149,0.14),_transparent_55%)]" />
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 h-full w-full object-cover opacity-40 mix-blend-screen"
+        >
+          <source src="/videos/Animated_Privacy_Video_Element.mp4" type="video/mp4" />
+        </video>
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(153,69,255,0.22),_transparent_55%),radial-gradient(ellipse_at_bottom,_rgba(20,241,149,0.18),_transparent_55%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_75%)]" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/80" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/55 to-black/85" />
       </div>
 
       {/* ── Navbar ── */}
@@ -207,9 +216,10 @@ export default function HomePage() {
               </motion.h1>
 
               <motion.p variants={fadeInUp} className="text-lg text-white/60 max-w-lg mb-12 leading-relaxed font-light tracking-wide">
-                While Solana's Token-2022 Confidential Transfers are under security audit,
-                Civitas delivers production-grade payroll privacy on Solana through a 5-layer
-                stack — Nillion, MagicBlock, Noir, and Cloak, settling natively on Solana L1.
+                Civitas delivers production-grade payroll privacy on Solana through a 4-layer
+                stack — Nillion nilDB + nilCC, circom Groth16 ZK proofs verified by Solana&rsquo;s
+                native alt-bn128 syscalls, and MagicBlock Private Payments — settling natively
+                on Solana L1.
               </motion.p>
 
               <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row items-center gap-6">
@@ -546,13 +556,6 @@ export default function HomePage() {
                   title: "MagicBlock Private Pay",
                   desc: "Claim settlement is routed employer-ER → employee-ER through MagicBlock Permissioned Ephemeral Rollups, with split transfers and randomized 500–30000 ms delays. The base layer sees a transfer happened — never the amount or pairing.",
                 },
-                {
-                  icon: <Lock className="h-5 w-5" />,
-                  accent: "emerald",
-                  label: "Settlement Privacy",
-                  title: "Cloak Viewing Keys",
-                  desc: "Employees mint a Cloak keypair on registration. Spend keys stay client-side; viewing keys are escrowed for selective compliance disclosure to whitelisted auditors.",
-                },
               ].map((card) => {
                 const colors: Record<string, { border: string; iconBg: string; iconText: string; labelText: string; glow: string }> = {
                   emerald: { border: "hover:border-emerald-500/30", iconBg: "bg-emerald-500/10", iconText: "text-emerald-400", labelText: "text-emerald-400/70", glow: "group-hover:shadow-[0_0_30px_rgba(16,185,129,0.08)]" },
@@ -660,7 +663,6 @@ export default function HomePage() {
                 { label: "Solana", href: "https://solana.com", ext: true },
                 { label: "Nillion Network", href: "https://nillion.com", ext: true },
                 { label: "MagicBlock", href: "https://magicblock.gg", ext: true },
-                { label: "Cloak", href: "https://cloak.dev", ext: true },
                 { label: "circom", href: "https://docs.circom.io", ext: true },
                 { label: "snarkjs", href: "https://github.com/iden3/snarkjs", ext: true },
               ]

@@ -15,9 +15,9 @@ const features = [
   },
   {
     icon: Link2,
-    title: "5-Layer Privacy Stack on Solana",
+    title: "4-Layer Privacy Stack on Solana",
     description:
-      "Nillion nilDB encrypts salaries at rest. Nillion nilCC TEE computes payroll privately. Groth16 ZK proofs (circom + snarkjs) let employees claim anonymously on Solana. MagicBlock Private Payments seal the on-chain transfer. Cloak viewing keys gate auditor disclosure.",
+      "Nillion nilDB encrypts salaries at rest. Nillion nilCC TEE computes payroll privately. Groth16 ZK proofs (circom + snarkjs) let employees claim anonymously on Solana. MagicBlock Private Payments seal the on-chain transfer with TEE-cranked split + delay routing.",
   },
   {
     icon: Users,

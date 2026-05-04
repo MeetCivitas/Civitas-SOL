@@ -12,7 +12,6 @@ import {
   FileUp,
   KeyRound,
   Loader2,
-  Lock,
   Shield,
   ShieldCheck,
   Wallet,
@@ -57,7 +56,6 @@ const CLAIM_STEPS = [
   { id: "proof",   icon: Shield,   label: "Generate ZK Proof",    color: "text-blue-400" },
   { id: "verify",  icon: ShieldCheck, label: "Verify On-Chain",   color: "text-teal-400" },
   { id: "payment", icon: Zap,      label: "Private Payment",      color: "text-amber-400" },
-  { id: "cloak",   icon: Lock,     label: "Shield to Cloak",      color: "text-emerald-400" },
 ] as const;
 
 type ClaimStepId = typeof CLAIM_STEPS[number]["id"] | "idle" | "error";
@@ -80,79 +78,6 @@ function ClaimStepper({ currentStep, pct, label }: { currentStep: ClaimStepId; p
         </div>
       )}
     </div>
-  );
-}
-
-function CloakShieldSection({ walletAddress }: { walletAddress: string | null }) {
-  const [shielding, setShielding] = useState(false);
-  const [cloakNote, setCloakNote] = useState<string | null>(null);
-  const [cloakTx, setCloakTx] = useState<string | null>(null);
-  const [cloakErr, setCloakErr] = useState<string | null>(null);
-  const [viewingKey, setViewingKey] = useState<string | null>(null);
-
-  const handleGenerateViewingKey = async () => {
-    try {
-      const { generateCloakViewingKey } = await import("@/lib/cloak");
-      const keys = await generateCloakViewingKey();
-      setViewingKey(keys.viewingKeyHex);
-    } catch (e: any) {
-      setCloakErr(e.message);
-    }
-  };
-
-  return (
-    <section className="rounded-[32px] border border-violet-500/20 bg-violet-500/5 p-6 backdrop-blur-xl">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-400/70">Layer 4 — Settlement Privacy</p>
-          <h2 className="mt-2 text-xl font-semibold text-white">Shield with Cloak</h2>
-        </div>
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-500/20 bg-violet-500/10">
-          <ShieldCheck className="h-5 w-5 text-violet-400" />
-        </div>
-      </div>
-
-      <p className="mt-3 text-sm leading-6 text-white/55">
-        Route your USDC payout through Cloak&rsquo;s Groth16 UTXO shielded pool to break the transaction
-        graph link between your employer vault and your personal wallet.
-      </p>
-
-      <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <button
-          type="button"
-          onClick={() => void handleGenerateViewingKey()}
-          className="rounded-[20px] border border-violet-500/20 bg-violet-500/8 px-4 py-4 text-left transition hover:bg-violet-500/14"
-        >
-          <p className="text-sm font-semibold text-white">Generate auditor key</p>
-          <p className="mt-1 text-xs text-white/50">Create a viewing key so your employer&rsquo;s auditor can verify compliance without seeing amounts.</p>
-        </button>
-
-        <div className="rounded-[20px] border border-white/10 bg-black/20 px-4 py-4">
-          <p className="text-sm font-semibold text-white">Shield payout</p>
-          <p className="mt-1 text-xs text-white/50">Available after claim is settled on-chain. Routes through Cloak devnet pool.</p>
-          <p className="mt-2 text-[10px] uppercase tracking-widest text-violet-400/60">Coming after Tx-B confirms</p>
-        </div>
-      </div>
-
-      {viewingKey && (
-        <div className="mt-4 rounded-[20px] border border-violet-500/20 bg-black/20 px-4 py-3">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-violet-400/70">Auditor Viewing Key</p>
-          <p className="mt-2 break-all font-mono text-xs text-white/70">{viewingKey.slice(0, 64)}…</p>
-          <p className="mt-2 text-xs text-white/40">Share this with your employer&rsquo;s compliance team. They can scan the Cloak pool but cannot spend your funds.</p>
-        </div>
-      )}
-
-      {cloakTx && (
-        <div className="mt-4 rounded-[20px] border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-400">
-          Shielded ✓ Tx: {cloakTx.slice(0, 20)}…
-        </div>
-      )}
-      {cloakErr && (
-        <div className="mt-4 rounded-[20px] border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-400">
-          {cloakErr}
-        </div>
-      )}
-    </section>
   );
 }
 
@@ -540,7 +465,6 @@ export default function EmployeesPage() {
         privateTransferSig: dispatchJson?.privateTransferSig,
       } as any);
 
-      setProvingStep("cloak");
       const fullDispatchSig = String(dispatchJson?.privateTransferSig || "");
       setStatus(
         `ZK gate ✓  Private transfer queued ✓  Dispatch tx: ${fullDispatchSig} — USDC settles to your USDC ATA within ~30s as the TEE validator cranks the queue.`,
@@ -881,11 +805,6 @@ export default function EmployeesPage() {
           </div>
 
           <div className="space-y-6">
-            {/* Layer 4 — Cloak Privacy Shield */}
-            {myVouchers.some((v) => v.status === "prepared" || v.status === "claimed" || v.status === "settled") && (
-              <CloakShieldSection walletAddress={address} />
-            )}
-
             <section className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl">
               <div className="flex items-center justify-between gap-3">
                 <div>
