@@ -145,7 +145,7 @@ flowchart LR
     E -->|no| F[REJECT<br/>InvalidPublicInputs]
     E -->|yes| G["alt_bn128_pairing<br/>e(-A,B)·e(α,β)·e(L,γ)·e(C,δ) = 1"]
     G -->|fail| H[REJECT<br/>InvalidProof]
-    G -->|pass| I[init nullifier PDA<br/>seeds=[b'null', N]]
+    G -->|pass| I["init nullifier PDA<br/>seeds = (b'null', N)"]
     I -->|exists?| J{double-spend}
     J -->|yes| K[REJECT<br/>NullifierAlreadyExists]
     J -->|no| L[emit VoucherConsumed<br/>n, run_id, pi_hash, slot]
@@ -344,10 +344,10 @@ mindmap
       Private Ephemeral Rollup
       TEE-validated splits
       Randomized delay
-    Cloak
-      ZK voucher circuit
+    Zero Knowledge
+      Voucher circuit
       Groth16 BN254
-      Poseidon Merkle
+      Poseidon Merkle depth-20
 ```
 
 ---
