@@ -12,27 +12,34 @@ interface KPICardProps {
   subtitle?: string
 }
 
+/**
+ * Monochrome KPI card. Subtle hairline frame, mono-font value,
+ * neutral hover lift. No color accents — hierarchy via type weight.
+ */
 export function KPICard({ title, value, icon: Icon, trend, subtitle }: KPICardProps) {
   return (
     <motion.div
-      whileHover={{ y: -5, scale: 1.02 }}
-      transition={{ type: "spring", stiffness: 300, damping: 20 }}
-      className="glass-card rounded-2xl p-6 relative overflow-hidden group"
+      whileHover={{ y: -3 }}
+      transition={{ type: "spring", stiffness: 280, damping: 22 }}
+      className="surface rounded-2xl p-5 relative overflow-hidden group backdrop-blur-xl"
     >
-      <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-      <div className="flex items-start justify-between relative z-10">
-        <div>
-          <p className="text-sm font-medium text-white/50">{title}</p>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]">{value}</p>
+      <div className="absolute inset-x-0 top-0 h-px hairline opacity-60" />
+      <div className="flex items-start justify-between relative z-10 gap-4">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/45">{title}</p>
+          <p className="mt-3 num text-[28px] font-semibold tracking-[-0.02em] text-white leading-none truncate">
+            {value}
+          </p>
           {trend && (
-            <p className={`mt-2 font-medium text-xs flex items-center gap-1 ${trend.positive ? "text-emerald-400 drop-shadow-[0_0_5px_rgba(52,211,153,0.3)]" : "text-red-400 drop-shadow-[0_0_5px_rgba(248,113,113,0.3)]"}`}>
-              <span className="text-lg leading-none">{trend.positive ? "↑" : "↓"}</span> {trend.value}
+            <p className={`mt-3 text-[11px] font-medium flex items-center gap-1.5 ${trend.positive ? "text-white/75" : "text-red-400/85"}`}>
+              <span className="inline-flex h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
+              {trend.value}
             </p>
           )}
-          {subtitle && <p className="mt-1 text-xs text-white/40">{subtitle}</p>}
+          {subtitle && <p className="mt-2 text-[11px] text-white/35">{subtitle}</p>}
         </div>
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/10 border border-purple-500/20 group-hover:bg-purple-500/20 group-hover:border-purple-500/30 transition-all duration-300 shadow-[0_0_15px_rgba(168,85,247,0.1)] group-hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]">
-          <Icon className="h-6 w-6 text-purple-400 group-hover:text-purple-300 transition-colors" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.04] border border-white/10 text-white/80 group-hover:bg-white/[0.08] group-hover:text-white transition-colors duration-300 shrink-0">
+          <Icon className="h-4 w-4" />
         </div>
       </div>
     </motion.div>

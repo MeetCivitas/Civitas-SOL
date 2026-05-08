@@ -1,14 +1,18 @@
 # workload/docker-compose.nilcc.yml
-# nilCC Workload Definition — submitted to Nillion's CVM agent
-# The nilCC-agent launches a Container Virtual Machine (CVM)
-# using this compose file inside a SEV-SNP enclave.
+# nilCC Workload Definition — submitted to Nillion's CVM agent.
+# The nilCC-agent launches a Container Virtual Machine (CVM) using this
+# compose file inside a SEV-SNP enclave.
+#
+# V4: long-running HTTP service. No manifest baked in at boot — the
+# orchestrator POSTs manifests to /run/payroll and /run/onboard.
 
 services:
-  civitas-payroll:
+  civitas-workload:
     image: ${NILCC_WORKLOAD_IMAGE:-rythmerrn/civitas-nilcc:latest}
     environment:
       - NILLION_ORG_SECRET_KEY
-      - PAYROLL_MANIFEST
-      - INPUT_DIR=/media/cvm-agent-entrypoint/files
-      - OUTPUT_DIR=/outputs
-    restart: "no"
+      - CIVITAS_REQUEST_PUBKEY  # Ed25519 pubkey for /run/* signature verify (Step 2)
+      - PORT=80
+    ports:
+      - "80:80"
+    restart: unless-stopped

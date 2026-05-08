@@ -32,7 +32,6 @@ export function PayrollsList() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Use context runs if available (already fetched)
     if (contextRuns.length > 0) {
       setPayrollRuns(
         contextRuns.map((r: any) => ({
@@ -45,13 +44,13 @@ export function PayrollsList() {
           declaredTotal: r.totalAmount || r.declaredTotal || "***",
           currency: "USDC",
           payrollRoot: r.merkleRoot || r.payrollRoot || "",
-        }))
+        })),
       )
       setLoading(false)
       return
     }
     loadPayrolls()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contextRuns])
 
   const loadPayrolls = async () => {
@@ -59,9 +58,7 @@ export function PayrollsList() {
     try {
       const res = await fetch(`/api/employer/payrolls?address=${encodeURIComponent(ownerAddress)}`)
       const data = await res.json()
-      if (data.success) {
-        setPayrollRuns(data.payrollRuns || [])
-      }
+      if (data.success) setPayrollRuns(data.payrollRuns || [])
     } catch (err) {
       console.error("Failed to load payrolls:", err)
     } finally {
@@ -71,67 +68,66 @@ export function PayrollsList() {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.35 }}
     >
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60 tracking-tight">Payroll Runs</h1>
-          <p className="text-white/50 mt-1">View and manage all payroll runs</p>
+          <p className="text-[10px] font-semibold tracking-[0.28em] uppercase text-white/40 mb-2">ZK Engine</p>
+          <h1 className="text-3xl md:text-4xl font-light tracking-[-0.03em] text-white">Payroll Runs</h1>
+          <p className="text-white/45 mt-1.5 text-sm">View and manage all payroll runs</p>
         </div>
         <Link href="/employer/payrolls/create">
-          <Button className="gap-2 bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_15px_rgba(147,51,234,0.4)] border border-purple-400/30 transition-all rounded-full px-6">
+          <Button className="gap-2 bg-white text-black hover:bg-white/90 rounded-full px-6 py-5 text-[11px] font-semibold uppercase tracking-[0.2em]">
             <Plus className="h-4 w-4" />
             Create Payroll Run
           </Button>
         </Link>
       </div>
 
-      <div className="glass-card rounded-2xl overflow-hidden">
+      <div className="surface rounded-2xl overflow-hidden backdrop-blur-xl">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-white/5 bg-white/5 backdrop-blur-md">
-                <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-widest text-white/50">Run ID</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-widest text-white/50">Date</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-widest text-white/50">Status</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-widest text-white/50"># Employees</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-widest text-white/50">Total Amount</th>
-                <th className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-widest text-white/50">Actions</th>
+              <tr className="border-b border-white/[0.06] bg-white/[0.02]">
+                {["Run ID", "Date", "Status", "# Employees", "Total Amount", "Actions"].map((h, i) => (
+                  <th
+                    key={h}
+                    className={`px-6 py-3.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/45 ${
+                      i === 5 ? "text-right" : "text-left"
+                    }`}
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-white/[0.04]">
               {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-white/40">Loading payroll runs...</td>
-                </tr>
+                <tr><td colSpan={6} className="px-6 py-10 text-center text-white/40 text-sm">Loading payroll runs…</td></tr>
               ) : payrollRuns.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-white/40">No payroll runs yet. Create your first payroll!</td>
-                </tr>
+                <tr><td colSpan={6} className="px-6 py-10 text-center text-white/40 text-sm">No payroll runs yet. Create your first.</td></tr>
               ) : (
                 payrollRuns.map((run: any) => (
-                  <tr key={run.runId} className="hover:bg-white/5 transition-colors">
+                  <tr key={run.runId} className="hover:bg-white/[0.03] transition-colors">
                     <td className="whitespace-nowrap px-6 py-4">
                       <code className="text-sm font-medium text-white">{run.runId}</code>
                     </td>
-                    <td className="whitespace-nowrap px-6 py-4 text-sm text-white/60 font-mono">
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-white/55 font-mono">
                       {new Date(run.createdAt).toLocaleDateString()}
                     </td>
-                    <td className="whitespace-nowrap px-6 py-4">
-                      <StatusBadge status={run.status} />
-                    </td>
-                    <td className="whitespace-nowrap px-6 py-4 text-sm text-white/60 font-mono">{run.employeeCount}</td>
-                    <td className="whitespace-nowrap px-6 py-4 text-sm text-white/60 font-mono">*** {run.currency}</td>
+                    <td className="whitespace-nowrap px-6 py-4"><StatusBadge status={run.status} /></td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-white/65 num">{run.employeeCount}</td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-white/65 num">*** {run.currency}</td>
                     <td className="whitespace-nowrap px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="icon" title="Re-run simulation" className="text-white/40 hover:text-white">
-                          <RefreshCw className="h-4 w-4" />
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Button variant="ghost" size="icon" title="Re-run simulation" className="h-8 w-8 text-white/45 hover:text-white hover:bg-white/[0.08]">
+                          <RefreshCw className="h-3.5 w-3.5" />
                         </Button>
                         <Link href={`/employer/payrolls/${run.runId}`}>
-                          <Button variant="ghost" size="sm" className="gap-1 text-white/60 hover:text-white hover:bg-white/10">
-                            <Eye className="h-4 w-4" />
+                          <Button variant="ghost" size="sm" className="gap-1 text-white/65 hover:text-white hover:bg-white/[0.08]">
+                            <Eye className="h-3.5 w-3.5" />
                             View
                           </Button>
                         </Link>

@@ -14,12 +14,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import crypto from "crypto";
-import { 
-  isNilCCConfigured, 
-  submitPayrollJob, 
-  pollJobResult, 
+import {
+  isNilCCConfigured,
+  submitPayrollJob,
+  pollJobResult,
   deleteWorkload,
-  verifyAttestation 
+  verifyAttestation,
+  isWarmWorkloadConfigured,
+  runOnWorkload,
+  verifyFreshAttestation,
 } from "@/lib/server/nilcc-client";
 
 // ── BN254 field prime ─────────────────────────────────────────────────────
@@ -162,9 +165,43 @@ async function computeLocalPayroll(manifest: {
   };
 }
 
-// ── nilCC invocation (with timeout + fallback) ─────────────────────────────
+// ── nilCC invocation ──────────────────────────────────────────────────────
+// Two paths. V4 (warm) is the default when NILCC_WORKLOAD_DOMAIN is set.
+// Legacy (ephemeral CVM per run) is reachable via USE_LEGACY_NILCC=1 for
+// rollback safety — kept until the warm path has been demoed reliably.
 
-async function invokeNilCCCluster(manifest: {
+async function invokeWarmWorkload(manifest: {
+  run_id: string;
+  epoch: string;
+  company_id: string;
+  employees: Array<{ employee_tag: string; salary: number | string }>;
+}): Promise<any> {
+  // Fresh attestation check first — best-effort, never blocks compute. If the
+  // workload is in dev mode (stub) and NILCC_ALLOW_STUB_ATTESTATION isn't set,
+  // we log a warning but still proceed (vs failing closed) because the demo
+  // also needs to work pre-cluster. Production hardening: flip to fail-closed.
+  let attMeta: any = null;
+  try {
+    const att = await verifyFreshAttestation();
+    attMeta = { kind: att.kind, trusted: att.trusted, source: att.source };
+    if (!att.trusted) {
+      console.warn(`[nilCC] ⚠ attestation not trusted (kind=${att.kind}); proceeding anyway`);
+    }
+  } catch (err: any) {
+    console.warn(`[nilCC] attestation probe failed: ${err.message} — proceeding anyway`);
+  }
+
+  const result = await runOnWorkload<any>("payroll", manifest);
+
+  // Bind the orchestrator-side attestation verdict into the persisted record
+  // so audit/UI can show "fresh attestation X at run time".
+  if (attMeta) {
+    result.attestation = { ...(result.attestation || {}), fresh: attMeta };
+  }
+  return result;
+}
+
+async function invokeLegacyEphemeralCVM(manifest: {
   run_id: string;
   epoch: string;
   company_id: string;
@@ -173,29 +210,33 @@ async function invokeNilCCCluster(manifest: {
   if (!isNilCCConfigured()) {
     throw new Error("nilCC Cluster is not configured (missing NILCC_CLUSTER_URL or NILCC_SIGNING_KEY)");
   }
-
-  // 1. Submit the workload to the Nillion SEV-SNP enclave cluster
   const jobId = await submitPayrollJob(manifest);
-  
   try {
-    // 2. Poll until the enclave finishes computation and returns results
     const result = await pollJobResult(jobId);
-
-    // 3. Verify the TEE attestation
-    if (result.attestation) {
-      const isValid = verifyAttestation(result.attestation);
-      if (!isValid) {
-        console.warn("[nilCC] ⚠ TEE attestation verification failed - results may be untrusted");
-      }
+    if (result.attestation && !verifyAttestation(result.attestation)) {
+      console.warn("[nilCC] ⚠ TEE attestation verification failed");
     }
-
     return result;
   } finally {
-    // 4. Always delete the workload to stop credit consumption
-    await deleteWorkload(jobId).catch(err => 
-      console.warn(`[nilCC] Failed to cleanup workload ${jobId}:`, err.message)
+    await deleteWorkload(jobId).catch((err) =>
+      console.warn(`[nilCC] Failed to cleanup workload ${jobId}:`, err.message),
     );
   }
+}
+
+async function invokeNilCC(manifest: {
+  run_id: string;
+  epoch: string;
+  company_id: string;
+  employees: Array<{ employee_tag: string; salary: number | string }>;
+}): Promise<any> {
+  const useLegacy = process.env.USE_LEGACY_NILCC === "1";
+  if (!useLegacy && isWarmWorkloadConfigured()) {
+    console.log("[nilCC] Path: V4 warm workload (per-request /run/payroll)");
+    return invokeWarmWorkload(manifest);
+  }
+  console.log("[nilCC] Path: legacy ephemeral CVM (cold-start per run)");
+  return invokeLegacyEphemeralCVM(manifest);
 }
 
 // ── Address → companyId (consistent with employer/employees route) ─────────
@@ -259,14 +300,15 @@ export async function POST(req: NextRequest) {
     // ── Try nilCC TEE (Strict) ───────────────────────────────────────────
     let result: any;
 
-    if (!isNilCCConfigured()) {
+    const teePathAvailable = isWarmWorkloadConfigured() || isNilCCConfigured();
+    if (!teePathAvailable) {
       console.warn("[nilCC] Not configured — using local Poseidon compute. TEE badge will show amber.");
       result = computeLocalPayroll(manifest);
     } else {
       try {
-        console.log(`[payroll/generate] Step 2 — Dispatching job to Nillion nilCC Cluster...`);
-        result = await invokeNilCCCluster(manifest);
-        console.log("[payroll/generate] Step 2 complete — nilCC cluster computation succeeded");
+        console.log(`[payroll/generate] Step 2 — Dispatching job to nilCC...`);
+        result = await invokeNilCC(manifest);
+        console.log("[payroll/generate] Step 2 complete — nilCC computation succeeded");
       } catch (nilccErr) {
         const reason = nilccErr instanceof Error ? nilccErr.message : String(nilccErr);
         console.error(`[payroll/generate] FATAL: nilCC computation failed: ${reason}`);

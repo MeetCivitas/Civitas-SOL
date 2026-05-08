@@ -1,9 +1,13 @@
 {
   "name": "civitas-nilcc-workload",
-  "version": "3.0.0",
-  "description": "Civitas nilCC TEE workload — BN254 Poseidon merkle tree compute (no NilDB writes; orchestrator handles persistence)",
+  "version": "4.0.0",
+  "description": "Civitas nilCC TEE workload — long-running HTTP service for payroll + onboarding (BN254 Poseidon)",
   "private": true,
   "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
     "node-fetch": "^2.7.0",
     "poseidon-lite": "^0.3.0"

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useCivitas } from "@/lib/civitas-provider"
 import { useSolanaWallet } from "@/lib/solana-wallet"
-import { buildExplorerUrl, formatUsdc, SOLANA_CLUSTER_LABEL } from "@/lib/solana"
+import { buildExplorerUrl, formatUsdc, formatUsdcFromMicro, SOLANA_CLUSTER_LABEL } from "@/lib/solana"
 import { RPC_ENDPOINT } from "@/lib/solana-program"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -261,7 +261,15 @@ export function CreatePayrollWizard() {
         createdAt: now,
         status: "Draft",
         employeeCount: data.commitmentCount || selectedEmployees.length,
-        declaredTotal: String(data.totalUsdcApprox ?? formatUsdc(data.totalAmount || totalPayroll)),
+        // totalAmount comes back as a micro-USDC string (6 decimals).
+        // Prefer the API-provided human approximation; fall back to dividing
+        // the atomic value with BigInt math so big totals can't lose precision.
+        declaredTotal:
+          typeof data.totalUsdcApprox === "number"
+            ? formatUsdc(data.totalUsdcApprox)
+            : data.totalAmount
+              ? formatUsdcFromMicro(data.totalAmount)
+              : formatUsdc(totalPayroll),
         currency: "USDC",
         payrollRoot: data.merkleRoot || data.merkle_root,
         commitments: data.commitments || [],

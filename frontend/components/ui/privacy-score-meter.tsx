@@ -1,6 +1,6 @@
 /**
  * frontend/components/ui/privacy-score-meter.tsx
- * Circular/Arc meter showing organization privacy health score.
+ * Monochrome arc meter — score on a single white→fade gradient ring.
  */
 "use client";
 
@@ -16,18 +16,8 @@ export function PrivacyScoreMeter({ score = 98 }: { score?: number }) {
   return (
     <div className="flex flex-col items-center">
       <div className="relative h-32 w-32">
-        {/* Background Circle */}
-        <svg className="h-full w-full transform -rotate-90">
-          <circle
-            cx="64"
-            cy="64"
-            r={radius}
-            fill="transparent"
-            stroke="currentColor"
-            strokeWidth="8"
-            className="text-white/5"
-          />
-          {/* Progress Circle */}
+        <svg className="h-full w-full transform -rotate-90" viewBox="0 0 128 128">
+          <circle cx="64" cy="64" r={radius} fill="transparent" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
           <motion.circle
             cx="64"
             cy="64"
@@ -38,27 +28,26 @@ export function PrivacyScoreMeter({ score = 98 }: { score?: number }) {
             strokeDasharray={circumference}
             initial={{ strokeDashoffset: circumference }}
             animate={{ strokeDashoffset: offset }}
-            transition={{ duration: 2, ease: "easeOut" }}
+            transition={{ duration: 1.6, ease: [0.16, 1, 0.3, 1] }}
             strokeLinecap="round"
           />
           <defs>
-            <linearGradient id="privacy-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#8b5cf6" />
-              <stop offset="100%" stopColor="#10b981" />
+            <linearGradient id="privacy-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="rgba(255,255,255,1)" />
+              <stop offset="100%" stopColor="rgba(255,255,255,0.35)" />
             </linearGradient>
           </defs>
         </svg>
-        
-        {/* Center Content */}
+
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-3xl font-bold text-white leading-none">{score}</span>
-          <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest mt-1">Grade A</span>
+          <span className="num text-[34px] font-semibold text-white leading-none tracking-[-0.03em]">{score}</span>
+          <span className="text-[9px] font-semibold text-white/45 uppercase tracking-[0.25em] mt-1.5">Grade A</span>
         </div>
       </div>
-      
-      <div className="mt-4 flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-        <ShieldCheck className="h-3.5 w-3.5" />
-        <span className="text-[10px] font-bold uppercase tracking-widest">Enterprise Privacy Active</span>
+
+      <div className="mt-5 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.10] text-white/85">
+        <ShieldCheck className="h-3 w-3" />
+        <span className="text-[9px] font-semibold uppercase tracking-[0.22em]">Enterprise Privacy Active</span>
       </div>
     </div>
   );

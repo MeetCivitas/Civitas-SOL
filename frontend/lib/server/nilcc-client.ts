@@ -1,13 +1,26 @@
 // lib/server/nilcc-client.ts
 // NilCC Job Dispatch Client for Civitas
-// Submits payroll compute jobs to the Nillion nilCC TEE cluster,
-// polls for results, and verifies TEE attestations.
+//
+// Two execution paths coexist:
+//   • LEGACY (ephemeral CVM per run): submitPayrollJob → pollUntilComplete →
+//     deleteWorkload. Each call cold-starts a CVM, computes once, tears down.
+//     Kept exported for rollback safety; gated by USE_LEGACY_NILCC=1 in routes.
+//   • V4 (warm CVM, manifest per request): runOnWorkload → POST /run/{kind}
+//     with an Ed25519 signature; verifyFreshAttestation → GET /attestation.
+//     Single CVM, persists across runs. Provisioned once by scripts/provision-nilcc.ts.
+
+import crypto from "crypto";
 
 // ── Configuration ───────────────────────────────────────────────────────
 
 const NILCC_CLUSTER_URL = (process.env.NILCC_CLUSTER_URL || "").trim();
 const NILCC_SIGNING_KEY = process.env.NILCC_SIGNING_KEY || "";
 const NILCC_WORKLOAD_IMAGE = process.env.NILCC_WORKLOAD_IMAGE || "";
+
+// V4 — warm workload coordinates (set by scripts/provision-nilcc.ts)
+const NILCC_WORKLOAD_DOMAIN = (process.env.NILCC_WORKLOAD_DOMAIN || "").trim();
+const CIVITAS_REQUEST_PRIVKEY_HEX = (process.env.CIVITAS_REQUEST_PRIVKEY || "").trim();
+const NILCC_GOLDEN_MEASUREMENT = (process.env.NILCC_GOLDEN_MEASUREMENT || "").trim();
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -426,4 +439,189 @@ export async function pollOnboardingResult(
     }
 
     throw new Error(`[nilCC-onboard] Timed out after ${timeoutMs / 1000}s`);
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// V4: warm workload, signed per-request execution
+// ────────────────────────────────────────────────────────────────────────
+
+const ED25519_PKCS8_PREFIX = Buffer.from("302e020100300506032b657004220420", "hex");
+
+let cachedPrivKey: crypto.KeyObject | null = null;
+
+function loadRequestPrivKey(): crypto.KeyObject | null {
+    if (cachedPrivKey) return cachedPrivKey;
+    if (!CIVITAS_REQUEST_PRIVKEY_HEX) return null;
+    const raw = Buffer.from(CIVITAS_REQUEST_PRIVKEY_HEX, "hex");
+    if (raw.length !== 32) {
+        throw new Error(
+            `CIVITAS_REQUEST_PRIVKEY must be 32 raw bytes hex-encoded (got ${raw.length})`,
+        );
+    }
+    const der = Buffer.concat([ED25519_PKCS8_PREFIX, raw]);
+    cachedPrivKey = crypto.createPrivateKey({ key: der, format: "der", type: "pkcs8" });
+    return cachedPrivKey;
+}
+
+export function isWarmWorkloadConfigured(): boolean {
+    return !!NILCC_WORKLOAD_DOMAIN;
+}
+
+/**
+ * Execute a manifest on the warm nilCC workload.
+ *
+ * Signs the request body with the orchestrator's Ed25519 key (matched by the
+ * workload's CIVITAS_REQUEST_PUBKEY). Sends the EXACT signed bytes — never
+ * re-stringify the manifest after signing, or the workload will reject with 403.
+ *
+ * @param kind     "payroll" or "onboard" — selects /run/{kind} on the workload
+ * @param manifest the payload (PayrollManifest for payroll, OnboardManifest for onboard)
+ * @returns the parsed `data` field of the workload response
+ */
+export async function runOnWorkload<T = unknown>(
+    kind: "payroll" | "onboard",
+    manifest: unknown,
+    opts: { timeoutMs?: number; domainOverride?: string } = {},
+): Promise<T> {
+    const domain = (opts.domainOverride || NILCC_WORKLOAD_DOMAIN).trim();
+    if (!domain) {
+        throw new Error(
+            "[nilCC] NILCC_WORKLOAD_DOMAIN not set — provision a warm workload via scripts/provision-nilcc.ts",
+        );
+    }
+
+    const bodyBytes = Buffer.from(JSON.stringify(manifest), "utf8");
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Content-Length": String(bodyBytes.length),
+    };
+
+    const privKey = loadRequestPrivKey();
+    if (privKey) {
+        const sig = crypto.sign(null, bodyBytes, privKey);
+        headers["x-civitas-sig"] = sig.toString("base64");
+    } else {
+        console.warn(
+            "[nilCC] CIVITAS_REQUEST_PRIVKEY not set — sending /run/" +
+                kind +
+                " unsigned (workload must be in dev mode for this to succeed)",
+        );
+    }
+
+    const url = `https://${domain}/run/${kind}`;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? 60_000);
+
+    let res: Response;
+    try {
+        res = await fetch(url, { method: "POST", headers, body: bodyBytes, signal: ctrl.signal });
+    } finally {
+        clearTimeout(t);
+    }
+
+    if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(`[nilCC] POST /run/${kind} → HTTP ${res.status}: ${text.slice(0, 200)}`);
+    }
+
+    const json = (await res.json()) as { status?: string; data?: T; error?: string };
+    if (json.status !== "done" || !json.data) {
+        throw new Error(`[nilCC] /run/${kind} returned unexpected payload: ${JSON.stringify(json).slice(0, 200)}`);
+    }
+    return json.data;
+}
+
+export interface FreshAttestation {
+    kind: "real" | "stub";
+    nonce: string;
+    source?: string;
+    report?: unknown;
+    note?: string;
+    enclave?: { type?: string; verified?: boolean; measurement?: string };
+    timestamp?: string;
+    /** True if this attestation should be trusted by the orchestrator under the
+     * current policy. False for stubs unless NILCC_ALLOW_STUB_ATTESTATION=1. */
+    trusted: boolean;
+}
+
+/**
+ * Fetch and verify a fresh attestation from the warm workload's nilcc-attester
+ * sidecar.
+ *
+ * Hits `https://{domain}/nilcc/api/v2/report` directly (the public path
+ * exposed by nilCC's reverse proxy). This is more reliable than proxying
+ * through our app's `/attestation` endpoint, which would require the in-CVM
+ * docker network to resolve `nilcc-attester` by service name — that DNS can
+ * be unreliable depending on nilCC's compose injection.
+ *
+ * Verification model: nilCC binds the AMD-SEV-SNP report to the workload's
+ * TLS cert fingerprint (not to a per-request nonce), so freshness comes from
+ * the TLS handshake. The `measurement` field in the report is the SNP launch
+ * measurement — pin it via NILCC_GOLDEN_MEASUREMENT.
+ *
+ * Full AMD signature-chain verification (AMD VCEK against SNP root) is not
+ * implemented here. For the hackathon path we trust the report if its
+ * `measurement` matches our pinned golden value. Production hardening: swap
+ * in `@virtee/snpguest` or `verify_snp_attestation` for full chain validation.
+ */
+export async function verifyFreshAttestation(
+    opts: { domainOverride?: string; timeoutMs?: number } = {},
+): Promise<FreshAttestation> {
+    const domain = (opts.domainOverride || NILCC_WORKLOAD_DOMAIN).trim();
+    if (!domain) {
+        throw new Error("[nilCC] NILCC_WORKLOAD_DOMAIN not set");
+    }
+
+    const nonce = crypto.randomBytes(16).toString("hex");
+    const url = `https://${domain}/nilcc/api/v2/report?nonce=${nonce}`;
+
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? 5_000);
+    let res: Response;
+    try {
+        res = await fetch(url, { signal: ctrl.signal });
+    } finally {
+        clearTimeout(t);
+    }
+    if (!res.ok) {
+        throw new Error(`[nilCC] GET /nilcc/api/v2/report → HTTP ${res.status}`);
+    }
+    const reportBody = (await res.json()) as {
+        report?: { measurement?: string; [k: string]: unknown };
+        raw_report?: string;
+        environment?: unknown;
+    };
+
+    const measurement = reportBody.report?.measurement || "";
+    const allowStub = process.env.NILCC_ALLOW_STUB_ATTESTATION === "1";
+    let trusted = false;
+    if (measurement) {
+        if (NILCC_GOLDEN_MEASUREMENT) {
+            trusted = measurement.toLowerCase() === NILCC_GOLDEN_MEASUREMENT.toLowerCase();
+            if (!trusted) {
+                console.warn(
+                    `[nilCC] measurement mismatch: got ${measurement.slice(0, 16)}…, ` +
+                        `expected ${NILCC_GOLDEN_MEASUREMENT.slice(0, 16)}…`,
+                );
+            }
+        } else {
+            console.warn(
+                `[nilCC] NILCC_GOLDEN_MEASUREMENT unset — trusting attestation without measurement check`,
+            );
+            trusted = true;
+        }
+    } else {
+        // No measurement returned — fall back to stub semantics
+        trusted = allowStub;
+    }
+
+    return {
+        kind: measurement ? "real" : "stub",
+        nonce,
+        source: url,
+        report: reportBody.report,
+        enclave: { type: "SEV-SNP", verified: trusted, measurement },
+        timestamp: new Date().toISOString(),
+        trusted,
+    };
 }

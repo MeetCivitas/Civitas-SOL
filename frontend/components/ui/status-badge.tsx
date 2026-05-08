@@ -5,31 +5,35 @@ interface StatusBadgeProps {
   className?: string
 }
 
+/**
+ * Monochrome status pill. We rely on a leading dot for a hint of state
+ * (committed/active = green pulse) but the chip itself is neutral.
+ */
 export function StatusBadge({ status, className }: StatusBadgeProps) {
-  const statusStyles: Record<string, string> = {
-    Draft: "bg-muted text-muted-foreground",
-    Committed: "bg-primary/10 text-primary",
-    committed: "bg-primary/10 text-primary",
-    Settled: "bg-accent/10 text-accent",
-    settled: "bg-accent/10 text-accent",
-    Unopened: "bg-muted text-muted-foreground",
-    Opened: "bg-accent/10 text-accent",
-    Registered: "bg-accent/10 text-accent",
-    Pending: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400",
-    pending: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400",
-    active: "bg-accent/10 text-accent",
-    provisional: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400",
-    terminated: "bg-destructive/10 text-destructive",
-  }
+  const s = status.toLowerCase()
+
+  // single rule: committed/settled/active/opened/registered = "live" dot
+  const isLive = ["committed", "settled", "active", "opened", "registered"].includes(s)
+  const isWarn = ["pending", "provisional"].includes(s)
+  const isError = s === "terminated"
+
+  const dot = isLive
+    ? "bg-[var(--clr-pulse)]"
+    : isWarn
+      ? "bg-amber-400"
+      : isError
+        ? "bg-red-400"
+        : "bg-white/40"
 
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-        statusStyles[status] || "bg-muted text-muted-foreground",
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em]",
+        "border border-white/[0.10] bg-white/[0.04] text-white/75",
         className,
       )}
     >
+      <span className={cn("h-1.5 w-1.5 rounded-full", dot)} aria-hidden />
       {status}
     </span>
   )

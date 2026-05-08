@@ -1,43 +1,50 @@
 "use client"
 
-import { useState, useCallback, useRef } from "react"
+import { useCallback, useRef, useState } from "react"
 import { useCivitas } from "@/lib/civitas-provider"
-import { generateDownloadUrl } from "@/lib/identity"
 import Link from "next/link"
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "framer-motion"
 import {
-  Shield, Lock, Zap, ArrowRight, KeyRound, Copy, Download,
-  CheckCircle2, Briefcase, UserCircle, ChevronRight, Github,
-  Twitter, Send, ExternalLink, Database, Cpu, BookOpen,
-  X, Mail, Building2
+  Shield, Lock, Zap, ArrowRight, CheckCircle2, Briefcase, UserCircle,
+  ChevronRight, Github, Twitter, ExternalLink, Database, Cpu,
+  X, Mail, Building2,
 } from "lucide-react"
-import { redirect } from "next/navigation"
 import { PrivacyStackVisualizer } from "@/components/ui/privacy-stack"
 
-// ── Tilt Card wrapper ────────────────────────────────────────────
-function TiltCard({ children, className = "", onClick }: { children: React.ReactNode; className?: string; onClick?: () => void }) {
+/* ───────────────────────────────────────────────────────────────────
+   Tilt Card — subtle 3D parallax on hover (uiverse-inspired, mono)
+   ─────────────────────────────────────────────────────────────────── */
+function TiltCard({
+  children,
+  className = "",
+  onClick,
+}: {
+  children: React.ReactNode
+  className?: string
+  onClick?: () => void
+}) {
   const ref = useRef<HTMLDivElement>(null)
   const x = useMotionValue(0)
   const y = useMotionValue(0)
-  const springX = useSpring(x, { stiffness: 150, damping: 20 })
-  const springY = useSpring(y, { stiffness: 150, damping: 20 })
-  const rotateX = useTransform(springY, [-0.5, 0.5], [6, -6])
-  const rotateY = useTransform(springX, [-0.5, 0.5], [-6, 6])
+  const sx = useSpring(x, { stiffness: 180, damping: 22 })
+  const sy = useSpring(y, { stiffness: 180, damping: 22 })
+  const rotateX = useTransform(sy, [-0.5, 0.5], [4, -4])
+  const rotateY = useTransform(sx, [-0.5, 0.5], [-4, 4])
 
-  const handleMouse = (e: React.MouseEvent<HTMLDivElement>) => {
+  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!ref.current) return
-    const rect = ref.current.getBoundingClientRect()
-    x.set((e.clientX - rect.left) / rect.width - 0.5)
-    y.set((e.clientY - rect.top) / rect.height - 0.5)
+    const r = ref.current.getBoundingClientRect()
+    x.set((e.clientX - r.left) / r.width - 0.5)
+    y.set((e.clientY - r.top) / r.height - 0.5)
   }
-  const handleLeave = () => { x.set(0); y.set(0) }
+  const onLeave = () => { x.set(0); y.set(0) }
 
   return (
     <motion.div
       ref={ref}
       style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
-      onMouseMove={handleMouse}
-      onMouseLeave={handleLeave}
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
       onClick={onClick}
       className={className}
     >
@@ -46,33 +53,73 @@ function TiltCard({ children, className = "", onClick }: { children: React.React
   )
 }
 
+/* ───────────────────────────────────────────────────────────────────
+   Magnetic CTA — pointer-tracked highlight, uiverse-inspired
+   ─────────────────────────────────────────────────────────────────── */
+function MagneticPrimary({
+  children,
+  onClick,
+  href,
+  className = "",
+  type = "button",
+}: {
+  children: React.ReactNode
+  onClick?: () => void
+  href?: string
+  className?: string
+  type?: "button" | "submit"
+}) {
+  const ref = useRef<HTMLButtonElement | HTMLAnchorElement | null>(null)
+  const onMove = (e: React.MouseEvent) => {
+    const el = ref.current as HTMLElement | null
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    el.style.setProperty("--mx", `${e.clientX - r.left}px`)
+    el.style.setProperty("--my", `${e.clientY - r.top}px`)
+  }
+  const cls =
+    "btn-magnetic group relative inline-flex items-center justify-center gap-2.5 px-7 py-3.5 rounded-full bg-white text-black text-[12px] font-semibold tracking-[0.18em] uppercase shadow-[0_8px_30px_rgba(255,255,255,0.18)] hover:shadow-[0_12px_40px_rgba(255,255,255,0.28)] transition-shadow duration-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-black " +
+    className
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        ref={ref as React.Ref<HTMLAnchorElement>}
+        onMouseMove={onMove}
+        className={cls}
+      >
+        {children}
+      </Link>
+    )
+  }
+  return (
+    <button
+      ref={ref as React.Ref<HTMLButtonElement>}
+      type={type}
+      onMouseMove={onMove}
+      onClick={onClick}
+      className={cls}
+    >
+      {children}
+    </button>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────────── */
+
 export default function HomePage() {
-  const { userRole, setUserRole, credential, createNewCredential } = useCivitas()
-  const [newCred, setNewCred] = useState<any>(null)
-  const [copied, setCopied] = useState(false)
+  const { userRole, setUserRole } = useCivitas()
+
   const [email, setEmail] = useState("")
   const [subscribed, setSubscribed] = useState(false)
   const [isSubscribing, setIsSubscribing] = useState(false)
 
-  // Waitlist State
   const [showWaitlist, setShowWaitlist] = useState(false)
   const [waitlistForm, setWaitlistForm] = useState({ email: "", company: "", twitter: "" })
   const [waitlistStatus, setWaitlistStatus] = useState<"idle" | "submitting" | "success" | "error">("idle")
 
-  const handleGenerateCredential = useCallback(async () => {
-    const cred = await createNewCredential()
-    setNewCred(cred)
-  }, [createNewCredential])
-
-  const handleCopyTag = useCallback(() => {
-    if (credential) {
-      navigator.clipboard.writeText(credential.employeeTag)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
-  }, [credential])
-
-  const handleSubscribe = async (e: React.FormEvent) => {
+  const handleSubscribe = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email) return
     setIsSubscribing(true)
@@ -80,27 +127,24 @@ export default function HomePage() {
       const res = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, company: "Newsletter Subscriber", twitter: "" })
+        body: JSON.stringify({ email, company: "Newsletter Subscriber", twitter: "" }),
       })
-      if (res.ok) {
-        setSubscribed(true)
-        setEmail("")
-      }
+      if (res.ok) { setSubscribed(true); setEmail("") }
     } catch (err) {
       console.error("Failed to subscribe:", err)
     } finally {
       setIsSubscribing(false)
     }
-  }
+  }, [email])
 
-  const handleJoinWaitlist = async (e: React.FormEvent) => {
+  const handleJoinWaitlist = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
     setWaitlistStatus("submitting")
     try {
       const res = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(waitlistForm)
+        body: JSON.stringify(waitlistForm),
       })
       if (!res.ok) throw new Error("Failed to submit")
       setWaitlistStatus("success")
@@ -109,57 +153,52 @@ export default function HomePage() {
         setWaitlistStatus("idle")
         setWaitlistForm({ email: "", company: "", twitter: "" })
       }, 2500)
-    } catch (error) {
+    } catch {
       setWaitlistStatus("error")
       setTimeout(() => setWaitlistStatus("idle"), 2500)
     }
-  }
+  }, [waitlistForm])
 
-  const staggerContainer: any = {
-    hidden: { opacity: 0 },
-    show: { opacity: 1, transition: { staggerChildren: 0.12 } }
-  }
-  const fadeInUp: any = {
-    hidden: { opacity: 0, y: 32 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.9, ease: [0.16, 1, 0.3, 1] } }
-  }
-
-  const scanLine = {
-    initial: { top: "-10%", opacity: 0 },
-    animate: { top: "110%", opacity: [0, 0.6, 0] },
-    transition: { duration: 2.4, repeat: Infinity, repeatDelay: 3, ease: "linear" }
+  const stagger: any = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.08 } } }
+  const fadeUp: any = {
+    hidden: { opacity: 0, y: 24 },
+    show: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] } },
   }
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-emerald-500/30 selection:text-white relative overflow-hidden font-sans">
+    <div className="min-h-screen bg-black text-white relative overflow-x-clip font-sans antialiased">
 
-      {/* ── Ambient Background (animated video + gradient overlays) ── */}
+      {/* ── Ambient background: animated chains video + monochrome veils ── */}
       <div className="fixed inset-0 z-0 pointer-events-none">
         <video
           autoPlay
           loop
           muted
           playsInline
-          className="absolute inset-0 h-full w-full object-cover opacity-40 mix-blend-screen"
+          aria-hidden
+          className="absolute inset-0 h-full w-full object-cover opacity-[0.55] [filter:grayscale(100%)_contrast(1.15)_brightness(0.85)]"
         >
           <source src="/videos/Animated_Privacy_Video_Element.mp4" type="video/mp4" />
         </video>
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(153,69,255,0.22),_transparent_55%),radial-gradient(ellipse_at_bottom,_rgba(20,241,149,0.18),_transparent_55%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_75%)]" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/55 to-black/85" />
+        {/* Vignettes — pure black, no chroma */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_transparent_30%,_rgba(0,0,0,0.55)_70%,_#000_100%)]" />
+        {/* Hairline grid */}
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_75%)]" />
+        {/* Top + bottom black gradient to anchor type */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black via-black/30 to-black" />
       </div>
 
       {/* ── Navbar ── */}
-      <header className="fixed top-0 w-full z-50 transition-all duration-300">
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-xl border-b border-white/[0.05]" />
+      <header className="fixed top-0 w-full z-50">
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-xl border-b border-white/[0.06]" />
         <div className="max-w-7xl mx-auto px-6 py-4 relative">
           <motion.div
-            initial={{ opacity: 0, y: -20 }}
+            initial={{ opacity: 0, y: -16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
             className="flex items-center justify-between"
           >
-            <Link href="/" className="flex items-center gap-3 group">
+            <Link href="/" className="flex items-center gap-3 group" aria-label="Civitas home">
               <img
                 src="/logo-light.svg"
                 alt="Civitas"
@@ -167,13 +206,19 @@ export default function HomePage() {
               />
             </Link>
 
-            <nav className="hidden md:flex items-center gap-8">
+            <nav className="hidden md:flex items-center gap-9" aria-label="Primary">
               {[
                 { label: "Architecture", href: "https://github.com/MeetCivitas/Civitas-Sol/blob/main/WHITEPAPER.pdf" },
-                { label: "Solutions", href: "https://x.com/RythmeNagr64107/status/2034605883200806945?s=20" },
-                { label: "Developers", href: "https://github.com/MeetCivitas/Civitas-Sol" },
+                { label: "Solutions",    href: "https://x.com/RythmeNagr64107/status/2034605883200806945?s=20" },
+                { label: "Developers",   href: "https://github.com/MeetCivitas/Civitas-Sol" },
               ].map(item => (
-                <a key={item.label} href={item.href} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold uppercase tracking-widest text-white/50 hover:text-white transition-all duration-300">
+                <a
+                  key={item.label}
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55 hover:text-white transition-colors duration-300"
+                >
                   {item.label}
                 </a>
               ))}
@@ -181,210 +226,203 @@ export default function HomePage() {
 
             <Link
               href="/login"
-              className="group relative flex items-center gap-2 px-6 py-2.5 rounded-lg border border-white/20 bg-white/5 hover:bg-white text-white hover:text-black font-semibold text-xs tracking-wider uppercase transition-all duration-500 overflow-hidden"
+              className="group relative inline-flex items-center gap-2 pl-5 pr-4 py-2.5 rounded-full border border-white/15 bg-white/[0.04] hover:bg-white hover:text-black text-white text-[11px] font-semibold tracking-[0.18em] uppercase transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
             >
-              <span className="relative z-10 transition-colors duration-500">Access Portal</span>
-              <ChevronRight className="relative z-10 h-4 w-4 transform group-hover:translate-x-1 transition-transform duration-300" />
+              <span>Access Portal</span>
+              <ChevronRight className="h-4 w-4 transform group-hover:translate-x-0.5 transition-transform duration-200" />
             </Link>
           </motion.div>
         </div>
       </header>
 
-      {/* ── Main Content ── */}
-      <main className="relative z-10 pt-48 pb-0 px-6">
-        <motion.div variants={staggerContainer} initial="hidden" animate="show" className="max-w-7xl mx-auto">
+      {/* ── Main ── */}
+      <main className="relative z-10 pt-44 pb-24 px-6">
+        <motion.div variants={stagger} initial="hidden" animate="show" className="max-w-7xl mx-auto">
 
-          {/* Hero */}
-          <div className="flex flex-col lg:flex-row items-center gap-16 mb-40 max-w-6xl mx-auto">
+          {/* ─ Hero ─────────────────────────────────────────── */}
+          <section className="flex flex-col lg:flex-row items-center gap-16 mb-32 max-w-6xl mx-auto">
             <div className="flex-1 text-left">
-              <motion.div variants={fadeInUp} className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-white/[0.03] border border-white/[0.05] text-[10px] font-bold uppercase tracking-[0.2em] text-white/60 mb-8 backdrop-blur-md">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#14F195] opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#14F195]"></span>
+              <motion.div
+                variants={fadeUp}
+                className="inline-flex items-center gap-3 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-[10px] font-semibold uppercase tracking-[0.2em] text-white/65 mb-8 backdrop-blur-md"
+              >
+                <span className="relative flex h-2 w-2" aria-hidden>
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-[var(--clr-pulse)] opacity-70 animate-ping" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--clr-pulse)]" />
                 </span>
                 Built on Solana
-                <span className="h-3 w-px bg-white/20 mx-1" />
+                <span className="h-3 w-px bg-white/15 mx-1" />
                 MagicBlock Frontier Hackathon
               </motion.div>
 
-              <motion.h1 variants={fadeInUp} className="text-5xl md:text-7xl lg:text-[84px] font-medium tracking-tighter mb-8 leading-[0.95]">
-                <span className="text-white/90">Private Payroll.</span>
+              <motion.h1
+                variants={fadeUp}
+                className="text-5xl md:text-7xl lg:text-[88px] font-medium tracking-[-0.04em] leading-[0.95] mb-7 text-mono-fade"
+              >
+                Private Payroll.
                 <br />
-                <span className="text-gradient italic font-light pr-4">
-                  On Solana. Today.
-                </span>
+                <span className="italic font-light text-white/85">On Solana. Today.</span>
               </motion.h1>
 
-              <motion.p variants={fadeInUp} className="text-lg text-white/60 max-w-lg mb-12 leading-relaxed font-light tracking-wide">
+              <motion.p
+                variants={fadeUp}
+                className="text-[17px] text-white/55 max-w-xl mb-10 leading-[1.6] font-light"
+              >
                 Civitas delivers production-grade payroll privacy on Solana through a 4-layer
                 stack — Nillion nilDB + nilCC, circom Groth16 ZK proofs verified by Solana&rsquo;s
-                native alt-bn128 syscalls, and MagicBlock Private Payments — settling natively
-                on Solana L1.
+                native alt-bn128 syscalls, and MagicBlock Private Payments — settling natively on
+                Solana L1.
               </motion.p>
 
-              <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row items-center gap-6">
-                <button
-                  onClick={() => setShowWaitlist(true)}
-                  className="group flex items-center justify-center gap-3 px-10 py-5 rounded-xl bg-white text-black font-semibold text-sm tracking-widest uppercase hover:bg-emerald-400 hover:scale-105 hover:shadow-[0_0_40px_rgba(16,185,129,0.4)] transition-all duration-500 w-full sm:w-auto"
-                >
-                  Join Early Access <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                </button>
-
+              <motion.div variants={fadeUp} className="flex flex-col sm:flex-row items-center gap-4">
+                <MagneticPrimary onClick={() => setShowWaitlist(true)}>
+                  Join Early Access
+                  <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+                </MagneticPrimary>
                 <Link
                   href="/login"
-                  className="flex items-center justify-center gap-3 px-8 py-5 rounded-xl border border-white/20 bg-black/20 backdrop-blur-md text-white font-semibold text-sm tracking-widest uppercase hover:bg-white/10 hover:border-white/40 transition-all duration-300 w-full sm:w-auto"
+                  className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full border border-white/15 bg-white/[0.03] backdrop-blur-md text-white/85 text-[12px] font-semibold tracking-[0.18em] uppercase hover:bg-white/[0.07] hover:border-white/25 transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
                 >
                   Launch Portal
                 </Link>
               </motion.div>
             </div>
 
-            <motion.div 
-              variants={fadeInUp}
-              className="relative p-8 rounded-3xl border border-white/5 bg-white/[0.01] backdrop-blur-3xl shadow-2xl"
+            {/* Hero side panel — privacy stack */}
+            <motion.div
+              variants={fadeUp}
+              className="relative w-full max-w-md p-8 rounded-3xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-3xl overflow-hidden"
             >
-              <div className="absolute -inset-1 rounded-[33px] bg-gradient-to-br from-violet-500/20 via-transparent to-emerald-500/20 opacity-50 blur-xl" />
+              {/* hairline frame accents */}
+              <div className="absolute top-0 left-6 right-6 h-px hairline" />
+              <div className="absolute bottom-0 left-6 right-6 h-px hairline" />
+
               <div className="relative z-10 flex flex-col items-center">
-                <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-white/30 mb-6">Deep Privacy Stack</p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/35 mb-6">
+                  Privacy Stack
+                </p>
                 <PrivacyStackVisualizer />
-                <div className="mt-8 grid grid-cols-2 gap-4 w-full">
-                  <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 text-center">
-                    <p className="text-xs font-bold text-white/70">100%</p>
-                    <p className="text-[8px] uppercase tracking-widest text-white/30">Shielded</p>
+                <div className="mt-8 grid grid-cols-2 gap-3 w-full">
+                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 text-center">
+                    <p className="num text-base font-semibold text-white">100%</p>
+                    <p className="text-[8px] uppercase tracking-[0.22em] text-white/35 mt-0.5">Shielded</p>
                   </div>
-                  <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 text-center">
-                    <p className="text-xs font-bold text-white/70">&lt; 1s</p>
-                    <p className="text-[8px] uppercase tracking-widest text-white/30">Settlement</p>
+                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 text-center">
+                    <p className="num text-base font-semibold text-white">&lt; 1s</p>
+                    <p className="text-[8px] uppercase tracking-[0.22em] text-white/35 mt-0.5">Settlement</p>
                   </div>
                 </div>
               </div>
             </motion.div>
-          </div>
+          </section>
 
-          {/* ── The Proof (Loom Video Demo) ── */}
-          <motion.div variants={fadeInUp} id="proof" className="max-w-5xl mx-auto mb-40 relative z-20 scroll-mt-32">
-            <div className="absolute -inset-4 rounded-3xl bg-gradient-to-b from-emerald-500/10 via-transparent to-transparent opacity-50 blur-3xl" />
-
+          {/* ─ Demo video (Rythme) ─────────────────────────── */}
+          <motion.section variants={fadeUp} id="proof" className="max-w-5xl mx-auto mb-32 relative scroll-mt-32">
             <div className="mb-10 text-center">
-              <p className="text-[10px] font-bold tracking-[0.3em] uppercase text-emerald-400 mb-3">The Proof is in the Execution</p>
-              <h2 className="text-3xl md:text-4xl font-light tracking-tight text-white mb-4">Actual Builders. Working Product.</h2>
-              <p className="text-white/50 text-sm max-w-2xl mx-auto font-light leading-relaxed">
-                Watch Swarna execute a fully shielded zero-knowledge transaction on the testnet. We aren't just another whitepaper—we are shipping production infrastructure today.
+              <p className="text-[10px] font-semibold tracking-[0.3em] uppercase text-white/45 mb-3">
+                The Proof Is in the Execution
+              </p>
+              <h2 className="text-3xl md:text-5xl font-light tracking-[-0.03em] text-mono-fade mb-3">
+                Actual builders. Working product.
+              </h2>
+              <p className="text-white/55 text-[15px] max-w-2xl mx-auto leading-relaxed">
+                Watch <span className="text-white">Rythme</span> execute a fully shielded zero-knowledge
+                payroll on Solana devnet. Not a whitepaper — production infrastructure today.
               </p>
             </div>
 
-            <div className="relative rounded-2xl border border-white/[0.08] bg-black/60 backdrop-blur-3xl overflow-hidden p-2 shadow-2xl">
-              <div className="flex items-center gap-4 px-6 py-4 border-b border-white/[0.04] bg-white/[0.01]">
-                <div className="flex gap-2">
-                  <div className="w-3 h-3 rounded-full bg-red-500/80" />
-                  <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
-                  <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
+            <div className="relative rounded-2xl border border-white/[0.08] bg-black/60 backdrop-blur-3xl overflow-hidden p-1.5 shadow-[0_30px_120px_-30px_rgba(255,255,255,0.08)]">
+              <div className="flex items-center gap-4 px-5 py-3 border-b border-white/[0.06] bg-white/[0.02]">
+                <div className="flex gap-1.5" aria-hidden>
+                  <div className="w-2.5 h-2.5 rounded-full bg-white/20" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-white/15" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-white/10" />
                 </div>
                 <div className="flex-1 flex justify-center">
-                  <div className="flex items-center gap-2 text-xs font-mono text-white/40 bg-black/50 px-4 py-1.5 rounded-lg border border-white/[0.05]">
-                    <Lock className="h-3 w-3 text-emerald-400/50" />
+                  <div className="flex items-center gap-2 text-[11px] font-mono text-white/45 bg-black/40 px-3 py-1 rounded-md border border-white/[0.06]">
+                    <Lock className="h-3 w-3 text-white/55" />
                     <span>civitas-platform-demo.mp4</span>
                   </div>
                 </div>
+                <div className="w-12" aria-hidden />
               </div>
 
-              <div className="relative w-full aspect-video bg-[#050505] rounded-b-xl overflow-hidden group">
+              <div className="relative w-full aspect-video bg-black rounded-b-xl overflow-hidden">
                 <iframe
                   src="https://www.youtube.com/embed/YK5ZtIX1Fig?rel=0&modestbranding=1"
                   frameBorder="0"
                   allowFullScreen
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  className="absolute top-0 left-0 w-full h-full opacity-90 group-hover:opacity-100 transition-opacity duration-700"
-                ></iframe>
+                  className="absolute top-0 left-0 w-full h-full"
+                  title="Civitas demo by Rythme"
+                />
               </div>
             </div>
-          </motion.div>
+          </motion.section>
 
-          {/* ── Solutions / Role Cards ── */}
-          <div id="solutions" className="scroll-mt-32 mb-32">
-            <motion.div variants={fadeInUp} className="mb-16 text-center">
-              <p className="text-[10px] font-bold tracking-[0.3em] uppercase text-white/30 mb-3">Dual-Party Architecture</p>
-              <div className="h-px w-32 bg-gradient-to-r from-transparent via-white/15 to-transparent mx-auto" />
+          {/* ─ Role cards ─────────────────────────────────── */}
+          <section id="solutions" className="scroll-mt-32 mb-32">
+            <motion.div variants={fadeUp} className="mb-12 text-center">
+              <p className="text-[10px] font-semibold tracking-[0.3em] uppercase text-white/35 mb-3">Dual-Party Architecture</p>
+              <div className="h-px w-32 hairline mx-auto" />
             </motion.div>
 
-            <motion.div variants={staggerContainer} className="grid md:grid-cols-2 gap-6 max-w-5xl mx-auto">
-
-              {/* Enterprise Node */}
-              <motion.div variants={fadeInUp} className="relative" style={{ perspective: 1000 }}>
-                <TiltCard
-                  className="cursor-pointer"
-                  onClick={() => setUserRole("employer")}
-                >
-                  {/* Ambient glow */}
-                  <div className={`absolute -inset-px rounded-2xl bg-gradient-to-br from-emerald-500/20 via-transparent to-blue-500/20 transition-opacity duration-700 ${userRole === "employer" ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`} />
-
-                  <div className={`relative rounded-2xl overflow-hidden transition-all duration-500 ${userRole === "employer" ? "bg-[#050a06] border border-emerald-500/30 shadow-[0_0_60px_rgba(16,185,129,0.12)]" : "bg-black/60 border border-white/[0.06] hover:border-white/[0.12] backdrop-blur-md"}`}>
-
-                    {/* Scanning laser line on hover/active */}
-                    {userRole === "employer" && (
-                      <motion.div
-                        className="absolute left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-400/70 to-transparent pointer-events-none z-10"
-                        initial={{ top: "-5%" }}
-                        animate={{ top: ["−5%", "105%"] }}
-                        transition={{ duration: 2.5, repeat: Infinity, repeatDelay: 2.5, ease: "linear" }}
-                      />
-                    )}
-
-                    {/* Corner accents */}
-                    <div className="absolute top-0 left-0 w-8 h-8 border-t border-l border-emerald-500/40 rounded-tl-2xl pointer-events-none" />
-                    <div className="absolute top-0 right-0 w-8 h-8 border-t border-r border-emerald-500/40 rounded-tr-2xl pointer-events-none" />
-                    <div className="absolute bottom-0 left-0 w-8 h-8 border-b border-l border-emerald-500/20 rounded-bl-2xl pointer-events-none" />
-                    <div className="absolute bottom-0 right-0 w-8 h-8 border-b border-r border-emerald-500/20 rounded-br-2xl pointer-events-none" />
+            <motion.div variants={stagger} className="grid md:grid-cols-2 gap-5 max-w-5xl mx-auto">
+              {/* Enterprise */}
+              <motion.div variants={fadeUp} className="relative" style={{ perspective: 1000 }}>
+                <TiltCard className="cursor-pointer" onClick={() => setUserRole("employer")}>
+                  <div
+                    className={`relative rounded-2xl overflow-hidden transition-colors duration-400 ${
+                      userRole === "employer"
+                        ? "bg-white/[0.04] border border-white/30"
+                        : "bg-black/50 border border-white/[0.08] hover:border-white/[0.18] backdrop-blur-md"
+                    }`}
+                  >
+                    {/* corner brackets — pure white */}
+                    <div className="absolute top-0 left-0 w-8 h-8 border-t border-l border-white/30 rounded-tl-2xl pointer-events-none" />
+                    <div className="absolute top-0 right-0 w-8 h-8 border-t border-r border-white/30 rounded-tr-2xl pointer-events-none" />
+                    <div className="absolute bottom-0 left-0 w-8 h-8 border-b border-l border-white/15 rounded-bl-2xl pointer-events-none" />
+                    <div className="absolute bottom-0 right-0 w-8 h-8 border-b border-r border-white/15 rounded-br-2xl pointer-events-none" />
 
                     <div className="p-8 lg:p-10">
-                      {/* Header row */}
-                      <div className="flex justify-between items-start mb-10">
-                        <div className="relative">
-                          <div className={`h-14 w-14 rounded-xl flex items-center justify-center transition-all duration-500 ${userRole === "employer" ? "bg-emerald-500/15 border border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.2)]" : "bg-white/5 border border-white/10"}`}>
-                            <Briefcase className={`h-6 w-6 transition-colors duration-500 ${userRole === "employer" ? "text-emerald-400" : "text-white/40"}`} />
-                          </div>
-                          {userRole === "employer" && (
-                            <motion.div
-                              className="absolute -inset-1 rounded-xl border border-emerald-500/30"
-                              animate={{ scale: [1, 1.08, 1], opacity: [0.4, 0, 0.4] }}
-                              transition={{ duration: 2, repeat: Infinity }}
-                            />
-                          )}
+                      <div className="flex justify-between items-start mb-9">
+                        <div className={`h-12 w-12 rounded-xl flex items-center justify-center transition-colors duration-300 ${userRole === "employer" ? "bg-white text-black" : "bg-white/[0.05] border border-white/10 text-white/70"}`}>
+                          <Briefcase className="h-5 w-5" />
                         </div>
                         <div className="flex flex-col items-end gap-1.5">
-                          <span className={`text-[9px] font-mono uppercase tracking-widest px-2 py-0.5 rounded border ${userRole === "employer" ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" : "text-white/20 border-white/10"}`}>
+                          <span className={`text-[9px] font-mono uppercase tracking-[0.22em] px-2 py-0.5 rounded-md border ${userRole === "employer" ? "text-white border-white/30 bg-white/[0.05]" : "text-white/30 border-white/10"}`}>
                             NODE-01
                           </span>
                           {userRole === "employer" && (
-                            <span className="flex items-center gap-1 text-[9px] font-mono text-emerald-400">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> ACTIVE
+                            <span className="flex items-center gap-1 text-[9px] font-mono text-white">
+                              <span className="w-1.5 h-1.5 rounded-full bg-[var(--clr-pulse)] animate-pulse" /> ACTIVE
                             </span>
                           )}
                         </div>
                       </div>
 
-                      <h3 className={`text-2xl font-light tracking-tight mb-3 transition-colors duration-500 ${userRole === "employer" ? "text-white" : "text-white/80"}`}>
+                      <h3 className={`text-2xl font-light tracking-[-0.02em] mb-3 ${userRole === "employer" ? "text-white" : "text-white/85"}`}>
                         Enterprise Node
                       </h3>
-                      <p className={`text-sm leading-relaxed mb-8 font-light transition-colors duration-500 ${userRole === "employer" ? "text-white/60" : "text-white/40"}`}>
-                        Manage global treasuries, register cryptographic employee tags, and initiate private payroll runs sealed inside Nillion nilCC TEE + MagicBlock Permissioned ER.
+                      <p className={`text-sm leading-relaxed mb-7 font-light ${userRole === "employer" ? "text-white/65" : "text-white/45"}`}>
+                        Manage global treasuries, register cryptographic employee tags, and initiate
+                        private payroll runs sealed inside Nillion nilCC TEE + MagicBlock Permissioned ER.
                       </p>
 
-                      {/* Stats row */}
-                      <div className="grid grid-cols-3 gap-3 mb-8">
+                      <div className="grid grid-cols-3 gap-2 mb-7">
                         {[["∞", "Treasury"], ["ZK", "Execution"], ["L1", "Settlement"]].map(([val, lbl]) => (
-                          <div key={lbl} className={`rounded-lg p-3 text-center border transition-all duration-500 ${userRole === "employer" ? "bg-emerald-500/5 border-emerald-500/20" : "bg-white/[0.02] border-white/[0.05]"}`}>
-                            <div className={`text-base font-bold mono mb-0.5 ${userRole === "employer" ? "text-emerald-400" : "text-white/40"}`}>{val}</div>
-                            <div className="text-[9px] uppercase tracking-widest text-white/30">{lbl}</div>
+                          <div key={lbl} className="rounded-lg p-2.5 text-center border border-white/[0.06] bg-white/[0.02]">
+                            <div className="num text-base font-semibold text-white">{val}</div>
+                            <div className="text-[9px] uppercase tracking-[0.2em] text-white/35 mt-0.5">{lbl}</div>
                           </div>
                         ))}
                       </div>
 
-                      <ul className="space-y-3 mb-8">
+                      <ul className="space-y-2.5 mb-7">
                         {["Treasury Custody & Escrow", "ZK Payroll Execution", "Merkle Set Commitments"].map(f => (
-                          <li key={f} className="flex items-center gap-3 text-xs tracking-wider">
-                            <CheckCircle2 className={`h-3.5 w-3.5 flex-shrink-0 transition-colors duration-500 ${userRole === "employer" ? "text-emerald-400" : "text-white/20"}`} />
-                            <span className={`transition-colors duration-500 ${userRole === "employer" ? "text-white/70" : "text-white/35"}`}>{f}</span>
+                          <li key={f} className="flex items-center gap-3 text-[13px] tracking-[0.01em]">
+                            <CheckCircle2 className={`h-3.5 w-3.5 flex-shrink-0 ${userRole === "employer" ? "text-white" : "text-white/30"}`} />
+                            <span className={userRole === "employer" ? "text-white/75" : "text-white/40"}>{f}</span>
                           </li>
                         ))}
                       </ul>
@@ -392,7 +430,10 @@ export default function HomePage() {
                       <AnimatePresence>
                         {userRole === "employer" && (
                           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
-                            <Link href="/login" className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl border border-emerald-500/50 text-emerald-400 text-xs font-bold uppercase tracking-widest hover:bg-emerald-500 hover:text-black hover:border-emerald-500 transition-all duration-400">
+                            <Link
+                              href="/login"
+                              className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-white text-black text-[11px] font-semibold uppercase tracking-[0.2em] hover:bg-white/90 transition-colors duration-300"
+                            >
                               Authenticate Node <ChevronRight className="h-4 w-4" />
                             </Link>
                           </motion.div>
@@ -403,85 +444,71 @@ export default function HomePage() {
                 </TiltCard>
               </motion.div>
 
-              {/* Recipient Client */}
-              <motion.div variants={fadeInUp} className="relative" style={{ perspective: 1000 }}>
-                <TiltCard
-                  className="cursor-pointer"
-                  onClick={() => setUserRole("employee")}
-                >
-                  <div className={`absolute -inset-px rounded-2xl bg-gradient-to-br from-blue-500/20 via-transparent to-indigo-500/20 transition-opacity duration-700 ${userRole === "employee" ? "opacity-100" : "opacity-0"}`} />
-
-                  <div className={`relative rounded-2xl overflow-hidden transition-all duration-500 ${userRole === "employee" ? "bg-[#03050a] border border-blue-500/30 shadow-[0_0_60px_rgba(59,130,246,0.12)]" : "bg-black/60 border border-white/[0.06] hover:border-white/[0.12] backdrop-blur-md"}`}>
-
-                    {userRole === "employee" && (
-                      <motion.div
-                        className="absolute left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-400/70 to-transparent pointer-events-none z-10"
-                        initial={{ top: "-5%" }}
-                        animate={{ top: ["−5%", "105%"] }}
-                        transition={{ duration: 2.5, repeat: Infinity, repeatDelay: 2.5, ease: "linear" }}
-                      />
-                    )}
-
-                    <div className="absolute top-0 left-0 w-8 h-8 border-t border-l border-blue-500/40 rounded-tl-2xl pointer-events-none" />
-                    <div className="absolute top-0 right-0 w-8 h-8 border-t border-r border-blue-500/40 rounded-tr-2xl pointer-events-none" />
-                    <div className="absolute bottom-0 left-0 w-8 h-8 border-b border-l border-blue-500/20 rounded-bl-2xl pointer-events-none" />
-                    <div className="absolute bottom-0 right-0 w-8 h-8 border-b border-r border-blue-500/20 rounded-br-2xl pointer-events-none" />
+              {/* Recipient */}
+              <motion.div variants={fadeUp} className="relative" style={{ perspective: 1000 }}>
+                <TiltCard className="cursor-pointer" onClick={() => setUserRole("employee")}>
+                  <div
+                    className={`relative rounded-2xl overflow-hidden transition-colors duration-400 ${
+                      userRole === "employee"
+                        ? "bg-white/[0.04] border border-white/30"
+                        : "bg-black/50 border border-white/[0.08] hover:border-white/[0.18] backdrop-blur-md"
+                    }`}
+                  >
+                    <div className="absolute top-0 left-0 w-8 h-8 border-t border-l border-white/30 rounded-tl-2xl pointer-events-none" />
+                    <div className="absolute top-0 right-0 w-8 h-8 border-t border-r border-white/30 rounded-tr-2xl pointer-events-none" />
+                    <div className="absolute bottom-0 left-0 w-8 h-8 border-b border-l border-white/15 rounded-bl-2xl pointer-events-none" />
+                    <div className="absolute bottom-0 right-0 w-8 h-8 border-b border-r border-white/15 rounded-br-2xl pointer-events-none" />
 
                     <div className="p-8 lg:p-10">
-                      <div className="flex justify-between items-start mb-10">
-                        <div className="relative">
-                          <div className={`h-14 w-14 rounded-xl flex items-center justify-center transition-all duration-500 ${userRole === "employee" ? "bg-blue-500/15 border border-blue-500/40 shadow-[0_0_20px_rgba(59,130,246,0.2)]" : "bg-white/5 border border-white/10"}`}>
-                            <UserCircle className={`h-6 w-6 transition-colors duration-500 ${userRole === "employee" ? "text-blue-400" : "text-white/40"}`} />
-                          </div>
-                          {userRole === "employee" && (
-                            <motion.div
-                              className="absolute -inset-1 rounded-xl border border-blue-500/30"
-                              animate={{ scale: [1, 1.08, 1], opacity: [0.4, 0, 0.4] }}
-                              transition={{ duration: 2, repeat: Infinity }}
-                            />
-                          )}
+                      <div className="flex justify-between items-start mb-9">
+                        <div className={`h-12 w-12 rounded-xl flex items-center justify-center transition-colors duration-300 ${userRole === "employee" ? "bg-white text-black" : "bg-white/[0.05] border border-white/10 text-white/70"}`}>
+                          <UserCircle className="h-5 w-5" />
                         </div>
                         <div className="flex flex-col items-end gap-1.5">
-                          <span className={`text-[9px] font-mono uppercase tracking-widest px-2 py-0.5 rounded border ${userRole === "employee" ? "text-blue-400 border-blue-500/30 bg-blue-500/10" : "text-white/20 border-white/10"}`}>
+                          <span className={`text-[9px] font-mono uppercase tracking-[0.22em] px-2 py-0.5 rounded-md border ${userRole === "employee" ? "text-white border-white/30 bg-white/[0.05]" : "text-white/30 border-white/10"}`}>
                             NODE-02
                           </span>
                           {userRole === "employee" && (
-                            <span className="flex items-center gap-1 text-[9px] font-mono text-blue-400">
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" /> ACTIVE
+                            <span className="flex items-center gap-1 text-[9px] font-mono text-white">
+                              <span className="w-1.5 h-1.5 rounded-full bg-[var(--clr-pulse)] animate-pulse" /> ACTIVE
                             </span>
                           )}
                         </div>
                       </div>
 
-                      <h3 className={`text-2xl font-light tracking-tight mb-3 transition-colors duration-500 ${userRole === "employee" ? "text-white" : "text-white/80"}`}>
+                      <h3 className={`text-2xl font-light tracking-[-0.02em] mb-3 ${userRole === "employee" ? "text-white" : "text-white/85"}`}>
                         Recipient Client
                       </h3>
-                      <p className={`text-sm leading-relaxed mb-8 font-light transition-colors duration-500 ${userRole === "employee" ? "text-white/60" : "text-white/40"}`}>
-                        Generate client-side cryptographic credentials, retrieve encrypted salary packets, and execute sovereign withdrawals on Layer 2.
+                      <p className={`text-sm leading-relaxed mb-7 font-light ${userRole === "employee" ? "text-white/65" : "text-white/45"}`}>
+                        Generate client-side cryptographic credentials, retrieve encrypted salary packets,
+                        and execute sovereign withdrawals on Layer&nbsp;2.
                       </p>
 
-                      <div className="grid grid-cols-3 gap-3 mb-8">
+                      <div className="grid grid-cols-3 gap-2 mb-7">
                         {[["SK", "Private Key"], ["ZK", "Proof"], ["L2", "Withdrawal"]].map(([val, lbl]) => (
-                          <div key={lbl} className={`rounded-lg p-3 text-center border transition-all duration-500 ${userRole === "employee" ? "bg-blue-500/5 border-blue-500/20" : "bg-white/[0.02] border-white/[0.05]"}`}>
-                            <div className={`text-base font-bold mono mb-0.5 ${userRole === "employee" ? "text-blue-400" : "text-white/40"}`}>{val}</div>
-                            <div className="text-[9px] uppercase tracking-widest text-white/30">{lbl}</div>
+                          <div key={lbl} className="rounded-lg p-2.5 text-center border border-white/[0.06] bg-white/[0.02]">
+                            <div className="num text-base font-semibold text-white">{val}</div>
+                            <div className="text-[9px] uppercase tracking-[0.2em] text-white/35 mt-0.5">{lbl}</div>
                           </div>
                         ))}
                       </div>
 
-                      <ul className="space-y-3 mb-8">
+                      <ul className="space-y-2.5 mb-7">
                         {["Local Key Generation", "Shielded Routing", "Anonymous Settlement"].map(f => (
-                          <li key={f} className="flex items-center gap-3 text-xs tracking-wider">
-                            <CheckCircle2 className={`h-3.5 w-3.5 flex-shrink-0 transition-colors duration-500 ${userRole === "employee" ? "text-blue-400" : "text-white/20"}`} />
-                            <span className={`transition-colors duration-500 ${userRole === "employee" ? "text-white/70" : "text-white/35"}`}>{f}</span>
+                          <li key={f} className="flex items-center gap-3 text-[13px] tracking-[0.01em]">
+                            <CheckCircle2 className={`h-3.5 w-3.5 flex-shrink-0 ${userRole === "employee" ? "text-white" : "text-white/30"}`} />
+                            <span className={userRole === "employee" ? "text-white/75" : "text-white/40"}>{f}</span>
                           </li>
                         ))}
                       </ul>
 
                       <AnimatePresence>
                         {userRole === "employee" && (
-                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="flex flex-col gap-3">
-                            <Link href="/login" className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl border border-blue-500/50 text-blue-400 text-xs font-bold uppercase tracking-widest hover:bg-blue-500 hover:text-black hover:border-blue-500 transition-all duration-400">
+                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+                            <Link
+                              href="/login"
+                              className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-white text-black text-[11px] font-semibold uppercase tracking-[0.2em] hover:bg-white/90 transition-colors duration-300"
+                            >
                               Access Dashboard <ChevronRight className="h-4 w-4" />
                             </Link>
                           </motion.div>
@@ -492,213 +519,177 @@ export default function HomePage() {
                 </TiltCard>
               </motion.div>
             </motion.div>
-          </div>
+          </section>
 
-          {/* Identity Setup */}
-          <AnimatePresence>
-            {userRole === "employee" && (
-              <motion.div
-                id="cred-setup"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="max-w-4xl mx-auto mb-32 scroll-mt-32"
-              >
-                <div className="rounded-2xl border border-white/10 bg-black/60 backdrop-blur-2xl p-8 lg:p-12 shadow-2xl">
-                  <div className="flex flex-col md:flex-row gap-12 items-center">
-                    <div className="flex-1 space-y-6">
-                      <div className="inline-flex items-center gap-3 px-3 py-1.5 rounded-md bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-widest text-emerald-400">
-                        <Shield className="h-3 w-3" /> Zero-Knowledge Keypair
-                      </div>
-                      <h3 className="text-3xl font-light text-white tracking-tight">Cryptographic Root</h3>
-                      <p className="text-sm font-light text-white/40 leading-relaxed">
-                        To receive funds privately, you must establish an identity root. The protocol generates a hardware-entropy backed <span className="text-white/80">Secret Nonce</span> locally. From this, a <span className="text-white/80">Poseidon Hash</span> acts as your public tag.
-                      </p>
-                      {!credential && (
-                        <button
-                          onClick={handleGenerateCredential}
-                          className="inline-flex items-center justify-center gap-3 px-6 py-3 rounded-lg border border-white text-white hover:bg-white hover:text-black font-semibold text-xs tracking-wider uppercase transition-all duration-300 mt-4"
-                        >
-                          Synthesize Keypair
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* ── Underlying Technologies ── */}
-          <motion.div variants={fadeInUp} className="max-w-7xl mx-auto pt-24 border-t border-white/[0.05]" id="architecture">
-            <p className="text-center text-[10px] font-bold uppercase tracking-[0.3em] text-white/30 mb-4">The Solana Privacy Stack</p>
-            <p className="text-center text-[10px] font-mono uppercase tracking-[0.25em] text-white/20 mb-16">Settled on Solana L1 · Powered by the Solana ecosystem</p>
-            <div className="grid md:grid-cols-4 gap-6">
+          {/* ─ Underlying tech ─ Solana privacy stack ─────── */}
+          <motion.section variants={fadeUp} id="architecture" className="max-w-7xl mx-auto pt-20 border-t border-white/[0.06]">
+            <p className="text-center text-[10px] font-semibold uppercase tracking-[0.3em] text-white/35 mb-3">The Solana Privacy Stack</p>
+            <p className="text-center text-[10px] font-mono uppercase tracking-[0.22em] text-white/25 mb-14">
+              Settled on Solana L1 · Powered by the Solana ecosystem
+            </p>
+            <div className="grid md:grid-cols-3 gap-4">
               {[
                 {
                   icon: <Database className="h-5 w-5" />,
-                  accent: "violet",
                   label: "Data Privacy",
                   title: "Nillion nilDB + nilCC",
                   desc: "Salary data stored as %allot secret shares across Nillion nodes. Payroll computation runs inside a Trusted Execution Environment — amounts never leave the enclave.",
                 },
                 {
                   icon: <Cpu className="h-5 w-5" />,
-                  accent: "blue",
                   label: "ZK Proving",
                   title: "Groth16 (circom + snarkjs)",
                   desc: "256-byte Groth16 proofs generated client-side via snarkjs from the voucher.circom circuit. Verified by Solana's native alt-bn128 syscalls — fits inside the Solana CU budget. Nullifier PDA blocks double-spend.",
                 },
                 {
                   icon: <Zap className="h-5 w-5" />,
-                  accent: "amber",
                   label: "Payment Privacy",
                   title: "MagicBlock Private Pay",
-                  desc: "Claim settlement is routed employer-ER → employee-ER through MagicBlock Permissioned Ephemeral Rollups, with split transfers and randomized 500–30000 ms delays. The base layer sees a transfer happened — never the amount or pairing.",
+                  desc: "Claim settlement is routed employer-ER → employee-ER through MagicBlock Permissioned Ephemeral Rollups, with split transfers and randomized 500–30,000 ms delays. The base layer sees a transfer happened — never the amount or pairing.",
                 },
-              ].map((card) => {
-                const colors: Record<string, { border: string; iconBg: string; iconText: string; labelText: string; glow: string }> = {
-                  emerald: { border: "hover:border-emerald-500/30", iconBg: "bg-emerald-500/10", iconText: "text-emerald-400", labelText: "text-emerald-400/70", glow: "group-hover:shadow-[0_0_30px_rgba(16,185,129,0.08)]" },
-                  blue: { border: "hover:border-blue-500/30", iconBg: "bg-blue-500/10", iconText: "text-blue-400", labelText: "text-blue-400/70", glow: "group-hover:shadow-[0_0_30px_rgba(59,130,246,0.08)]" },
-                  violet: { border: "hover:border-violet-500/30", iconBg: "bg-violet-500/10", iconText: "text-violet-400", labelText: "text-violet-400/70", glow: "group-hover:shadow-[0_0_30px_rgba(139,92,246,0.08)]" },
-                  amber: { border: "hover:border-amber-500/30", iconBg: "bg-amber-500/10", iconText: "text-amber-400", labelText: "text-amber-400/70", glow: "group-hover:shadow-[0_0_30px_rgba(245,158,11,0.08)]" },
-                }
-                const c = colors[card.accent]
-                return (
-                  <div key={card.title} className={`group relative p-8 rounded-2xl bg-[#0a0a0a] border border-white/[0.08] ${c.border} ${c.glow} transition-all duration-500`}>
-                    {/* Top label */}
-                    <p className={`text-[9px] font-bold uppercase tracking-[0.25em] mb-6 ${c.labelText}`}>{card.label}</p>
-                    {/* Icon */}
-                    <div className={`h-12 w-12 rounded-xl ${c.iconBg} border border-white/10 flex items-center justify-center mb-6 ${c.iconText} transition-all duration-300`}>
-                      {card.icon}
-                    </div>
-                    <h4 className="font-semibold text-lg mb-3 text-white tracking-tight">{card.title}</h4>
-                    <p className="text-sm text-white/50 leading-relaxed font-light">{card.desc}</p>
-                    {/* Bottom rule */}
-                    <div className={`absolute bottom-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent`} />
+              ].map((card) => (
+                <div
+                  key={card.title}
+                  className="group relative p-7 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-white/20 transition-colors duration-500"
+                >
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.28em] mb-5 text-white/45">{card.label}</p>
+                  <div className="h-11 w-11 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mb-5 text-white/85">
+                    {card.icon}
                   </div>
-                )
-              })}
+                  <h4 className="font-semibold text-lg mb-2.5 text-white tracking-[-0.01em]">{card.title}</h4>
+                  <p className="text-sm text-white/55 leading-relaxed font-light">{card.desc}</p>
+                  <div className="absolute bottom-0 left-7 right-7 h-px hairline" />
+                </div>
+              ))}
             </div>
-          </motion.div>
+          </motion.section>
 
         </motion.div>
       </main>
 
       {/* ══════════════════════════════════════════════════════════════
-           MEGA FOOTER
+           FOOTER
       ══════════════════════════════════════════════════════════════ */}
-      <footer className="relative z-10 mt-32 bg-[#030303] border-t border-white/[0.05] overflow-hidden">
+      <footer className="relative z-10 mt-24 bg-black border-t border-white/[0.06] overflow-hidden">
 
-        {/* Top section: Logo + Subscribe */}
-        <div className="max-w-7xl mx-auto px-6 pt-20 pb-16 grid md:grid-cols-2 gap-16 border-b border-white/[0.04]">
-          {/* Brand */}
+        {/* Top: brand + subscribe */}
+        <div className="max-w-7xl mx-auto px-6 pt-16 pb-14 grid md:grid-cols-2 gap-14 border-b border-white/[0.04]">
           <div>
-            <div className="flex items-center gap-3 mb-6">
-              <img
-                src="/logo-light.svg"
-                alt="Civitas"
-                className="h-6 w-auto opacity-90"
-              />
+            <div className="flex items-center gap-3 mb-5">
+              <img src="/logo-light.svg" alt="Civitas" className="h-6 w-auto opacity-90" />
             </div>
-            <p className="text-sm text-white/40 font-light leading-relaxed max-w-xs">
-              Institutional-grade private payroll infrastructure built on Solana &amp; Nillion. Compliant. Confidential. On-chain.
+            <p className="text-[14px] text-white/45 font-light leading-relaxed max-w-sm">
+              Institutional-grade private payroll infrastructure built on Solana &amp; Nillion.
+              Compliant. Confidential. On-chain.
             </p>
-            {/* Social icons */}
-            <div className="flex items-center gap-4 mt-8">
+            <div className="flex items-center gap-3 mt-7">
               {[
-                { icon: <Github className="h-4 w-4" />, href: "https://github.com/MeetCivitas/Civitas-Sol" },
-                { icon: <Twitter className="h-4 w-4" />, href: "https://x.com/meet_civitas" },
-              ].map((s, i) => (
-                <a key={i} href={s.href} target="_blank" rel="noreferrer"
-                  className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 hover:border-white/20 transition-all duration-300">
+                { icon: <Github className="h-4 w-4" />, href: "https://github.com/MeetCivitas/Civitas-Sol", label: "GitHub" },
+                { icon: <Twitter className="h-4 w-4" />, href: "https://x.com/meet_civitas", label: "Twitter" },
+              ].map(s => (
+                <a
+                  key={s.label}
+                  href={s.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={s.label}
+                  className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-white/55 hover:text-white hover:bg-white/[0.08] hover:border-white/20 transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+                >
                   {s.icon}
                 </a>
               ))}
             </div>
           </div>
 
-          {/* Subscribe */}
           <div className="flex flex-col justify-center">
-            <p className="text-[10px] font-bold tracking-[0.25em] uppercase text-white/30 mb-3">Stay Updated</p>
-            <h3 className="text-2xl font-light text-white mb-2 tracking-tight">Subscribe for the latest updates.</h3>
-            <p className="text-sm text-white/30 font-light mb-6">Protocol releases, security advisories, and feature announcements.</p>
+            <p className="text-[10px] font-semibold tracking-[0.28em] uppercase text-white/35 mb-3">Stay Updated</p>
+            <h3 className="text-2xl font-light text-white tracking-[-0.02em] mb-2">Subscribe for the latest updates.</h3>
+            <p className="text-sm text-white/40 font-light mb-5">Protocol releases, security advisories, and feature announcements.</p>
             {subscribed ? (
-              <div className="flex items-center gap-3 px-5 py-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-medium">
-                <CheckCircle2 className="h-4 w-4" /> Subscribed ! See you there
+              <div className="flex items-center gap-3 px-5 py-3.5 rounded-xl bg-white/[0.04] border border-white/15 text-white text-sm font-medium">
+                <CheckCircle2 className="h-4 w-4" /> Subscribed — see you there.
               </div>
             ) : (
-              <form onSubmit={handleSubscribe} className="flex gap-3">
+              <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-3">
+                <label htmlFor="footer-email" className="sr-only">Email address</label>
                 <input
+                  id="footer-email"
                   type="email"
+                  autoComplete="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="Your email address"
                   required
-                  className="flex-1 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/10 text-white placeholder:text-white/25 text-sm focus:outline-none focus:border-white/25 focus:bg-white/[0.06] transition-all"
+                  className="flex-1 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.10] text-white placeholder:text-white/30 text-sm focus-visible:outline-none focus-visible:border-white/35 focus-visible:bg-white/[0.06] transition-colors"
                 />
-                <button type="submit" disabled={isSubscribing} className="px-5 py-3 rounded-xl bg-white text-black text-sm font-bold tracking-wider hover:bg-emerald-400 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
-                  {isSubscribing ? "Subscribing..." : "Subscribe"}
+                <button
+                  type="submit"
+                  disabled={isSubscribing}
+                  className="px-5 py-3 rounded-xl bg-white text-black text-[12px] font-semibold tracking-[0.18em] uppercase hover:bg-white/90 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                >
+                  {isSubscribing ? "Subscribing…" : "Subscribe"}
                 </button>
               </form>
             )}
           </div>
         </div>
 
-        {/* Middle section: Nav columns */}
-        <div className="max-w-7xl mx-auto px-6 py-16 grid grid-cols-2 md:grid-cols-4 gap-12 border-b border-white/[0.04]">
+        {/* Middle: nav columns */}
+        <div className="max-w-7xl mx-auto px-6 py-14 grid grid-cols-2 md:grid-cols-4 gap-10 border-b border-white/[0.04]">
           {[
             {
               heading: "Solutions",
               links: [
                 { label: "Employer Portal", href: "/login" },
                 { label: "Employee Portal", href: "/login" },
-                { label: "Treasury Mgmt", href: "#" },
-                { label: "ZK Payroll", href: "#" },
-              ]
+                { label: "Treasury Mgmt",   href: "#" },
+                { label: "ZK Payroll",      href: "#" },
+              ],
             },
             {
               heading: "Ecosystem",
               links: [
-                { label: "Solana", href: "https://solana.com", ext: true },
-                { label: "Nillion Network", href: "https://nillion.com", ext: true },
-                { label: "MagicBlock", href: "https://magicblock.gg", ext: true },
-                { label: "circom", href: "https://docs.circom.io", ext: true },
-                { label: "snarkjs", href: "https://github.com/iden3/snarkjs", ext: true },
-              ]
+                { label: "Solana",          href: "https://solana.com",                      ext: true },
+                { label: "Nillion Network", href: "https://nillion.com",                     ext: true },
+                { label: "MagicBlock",      href: "https://magicblock.gg",                   ext: true },
+                { label: "circom",          href: "https://docs.circom.io",                  ext: true },
+                { label: "snarkjs",         href: "https://github.com/iden3/snarkjs",        ext: true },
+              ],
             },
             {
               heading: "Developers",
               links: [
-                { label: "GitHub", href: "https://github.com/MeetCivitas/Civitas-Sol", ext: true },
-                { label: "Docs", href: "#" },
+                { label: "GitHub",          href: "https://github.com/MeetCivitas/Civitas-Sol", ext: true },
+                { label: "Docs",            href: "#" },
                 { label: "Smart Contracts", href: "#" },
-                { label: "SDK", href: "#" },
-              ]
+                { label: "SDK",             href: "#" },
+              ],
             },
             {
               heading: "Legal",
               links: [
-                { label: "Privacy Policy", href: "#" },
+                { label: "Privacy Policy",   href: "#" },
                 { label: "Terms of Service", href: "#" },
-                { label: "Bug Bounty", href: "#" },
-                { label: "Audit Reports", href: "#" },
-              ]
+                { label: "Bug Bounty",       href: "#" },
+                { label: "Audit Reports",    href: "#" },
+              ],
             },
           ].map(col => (
             <div key={col.heading}>
-              <p className="text-[9px] font-bold tracking-[0.3em] uppercase text-white/30 mb-6">{col.heading}</p>
-              <ul className="space-y-4">
+              <p className="text-[9px] font-semibold tracking-[0.3em] uppercase text-white/35 mb-5">{col.heading}</p>
+              <ul className="space-y-3.5">
                 {col.links.map(link => (
                   <li key={link.label}>
                     <a
                       href={link.href}
                       target={(link as any).ext ? "_blank" : undefined}
                       rel={(link as any).ext ? "noreferrer" : undefined}
-                      className="flex items-center gap-1.5 text-sm text-white/50 hover:text-white transition-colors duration-200 group"
+                      className="inline-flex items-center gap-1.5 text-sm text-white/55 hover:text-white transition-colors duration-200 group"
                     >
                       {link.label}
-                      {(link as any).ext && <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" />}
+                      {(link as any).ext && (
+                        <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" aria-hidden />
+                      )}
                     </a>
                   </li>
                 ))}
@@ -709,36 +700,31 @@ export default function HomePage() {
 
         {/* Bottom bar */}
         <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col md:flex-row items-center justify-between gap-4 border-b border-white/[0.04]">
-          <p className="text-[10px] font-mono text-white/20 tracking-widest">© 2026 CIVITAS PROTOCOL · ALL RIGHTS RESERVED</p>
-          <div className="flex items-center gap-3">
+          <p className="text-[10px] font-mono text-white/25 tracking-[0.28em]">© 2026 CIVITAS PROTOCOL · ALL RIGHTS RESERVED</p>
+          <div className="flex flex-wrap items-center gap-2">
             {["Solana Devnet", "Nillion Testnet", "Groth16 ZK", "MagicBlock ER"].map(tag => (
-              <span key={tag} className="text-[9px] font-mono px-2 py-1 rounded border border-white/[0.06] text-white/20 tracking-widest">{tag}</span>
+              <span key={tag} className="text-[9px] font-mono px-2 py-1 rounded-md border border-white/[0.08] text-white/35 tracking-[0.22em]">
+                {tag}
+              </span>
             ))}
           </div>
         </div>
 
-        {/* ── Massive trademark typography ── */}
-        <div className="relative overflow-hidden select-none h-[180px] md:h-[260px] flex items-center justify-center">
-          {/* Soft ambient glow behind the text */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-40 blur-[100px] pointer-events-none">
-            <div className="w-[80%] h-1/2 bg-white/20 rounded-full" />
+        {/* Massive wordmark — properly bounded so 'CIVITAS' never clips */}
+        <div className="relative w-full overflow-hidden select-none">
+          <div className="px-[6vw] pb-6 pt-10">
+            <p
+              className="block text-center font-black tracking-[-0.06em] leading-none text-transparent bg-clip-text bg-gradient-to-b from-white/85 via-white/40 to-white/5"
+              style={{
+                fontSize: "clamp(64px, 18vw, 280px)",
+                letterSpacing: "-0.06em",
+              }}
+              aria-hidden
+            >
+              CIVITAS
+            </p>
           </div>
-
-          <motion.p
-            initial={{ opacity: 0, y: 30, scale: 0.96 }}
-            whileInView={{ opacity: 1, y: 0, scale: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
-            className="text-[22vw] font-black tracking-tighter leading-none text-transparent bg-clip-text bg-gradient-to-b from-white via-white/80 to-white/10 drop-shadow-[0_10px_30px_rgba(255,255,255,0.1)] relative z-10"
-            style={{
-              fontFamily: "sans-serif",
-            }}
-          >
-            CIVITAS
-          </motion.p>
-
-          {/* Subtle gradient overlay at top to blend perfectly into the section above */}
-          <div className="absolute inset-0 bg-gradient-to-b from-[#030303] via-transparent to-transparent pointer-events-none z-20" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black via-transparent to-black pointer-events-none" />
         </div>
       </footer>
 
@@ -749,85 +735,106 @@ export default function HomePage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-2xl"
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="waitlist-heading"
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-lg bg-[#050505] border border-white/10 rounded-3xl p-8 shadow-[0_0_100px_rgba(16,185,129,0.1)] overflow-hidden"
+              exit={{ opacity: 0, scale: 0.96, y: 12 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              className="relative w-full max-w-lg bg-[#070707] border border-white/[0.10] rounded-3xl p-8 overflow-hidden"
             >
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-50" />
+              <div className="absolute top-0 left-0 w-full h-px hairline" />
 
               <button
                 onClick={() => setShowWaitlist(false)}
-                className="absolute top-6 right-6 p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-colors"
+                aria-label="Close waitlist"
+                className="absolute top-5 right-5 p-2 rounded-full bg-white/[0.04] hover:bg-white/[0.10] text-white/60 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </button>
 
               {waitlistStatus === "success" ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-6">
-                    <CheckCircle2 className="h-8 w-8 text-emerald-400" />
+                  <div className="w-16 h-16 rounded-2xl bg-white/[0.05] border border-white/15 flex items-center justify-center mb-6">
+                    <CheckCircle2 className="h-8 w-8 text-white" />
                   </div>
-                  <h3 className="text-2xl font-light text-white mb-2 tracking-tight">Access Requested.</h3>
-                  <p className="text-white/50 text-sm max-w-xs font-light">
-                    You're officially on the waitlist. We'll be in touch soon with your exclusive early access code.
+                  <h3 className="text-2xl font-light text-white mb-2 tracking-[-0.02em]">Access requested.</h3>
+                  <p className="text-white/55 text-sm max-w-xs font-light">
+                    You&apos;re on the waitlist. We&apos;ll be in touch with your early-access code soon.
                   </p>
                 </div>
               ) : (
                 <>
-                  <div className="mb-8">
-                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold uppercase tracking-widest text-emerald-400 mb-6">
+                  <div className="mb-7">
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-white/[0.05] border border-white/15 text-[10px] font-semibold uppercase tracking-[0.22em] text-white mb-5">
                       <Zap className="h-3 w-3" /> Priority Queue
                     </div>
-                    <h3 className="text-3xl font-light text-white tracking-tight mb-2">Join Early Access.</h3>
-                    <p className="text-sm text-white/50 font-light pr-8">
-                      Secure your spot to experience the first institutional-grade zero-knowledge payroll infrastructure.
+                    <h3 id="waitlist-heading" className="text-3xl font-light text-white tracking-[-0.025em] mb-2">
+                      Join early access.
+                    </h3>
+                    <p className="text-sm text-white/55 font-light pr-8">
+                      Be among the first to run institutional-grade zero-knowledge payroll on Solana.
                     </p>
                   </div>
 
                   <form onSubmit={handleJoinWaitlist} className="space-y-4">
                     <div className="space-y-1.5">
-                      <label className="text-[10px] uppercase tracking-widest text-white/40 font-semibold pl-1">Work Email *</label>
-                      <div className="relative group">
-                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-white/20 group-focus-within:text-emerald-400 transition-colors duration-300" />
+                      <label htmlFor="wl-email" className="text-[10px] uppercase tracking-[0.22em] text-white/45 font-semibold pl-1">
+                        Work Email *
+                      </label>
+                      <div className="relative">
+                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" aria-hidden />
                         <input
+                          id="wl-email"
                           type="email"
+                          autoComplete="email"
                           required
                           value={waitlistForm.email}
                           onChange={e => setWaitlistForm({ ...waitlistForm, email: e.target.value })}
-                          className="w-full bg-white/[0.03] border border-white/[0.08] focus:border-emerald-500/50 rounded-xl px-12 py-3.5 text-white placeholder:text-white/20 text-sm outline-none transition-all duration-300"
+                          className="w-full bg-white/[0.03] border border-white/[0.10] focus-visible:border-white/40 rounded-xl pl-11 pr-4 py-3 text-white placeholder:text-white/25 text-sm outline-none transition-colors duration-300"
                           placeholder="satoshi@nakamoto.com"
                         />
                       </div>
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[10px] uppercase tracking-widest text-white/40 font-semibold pl-1">Company / DAO Name</label>
-                      <div className="relative group">
-                        <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-white/20 group-focus-within:text-emerald-400 transition-colors duration-300" />
+                      <label htmlFor="wl-company" className="text-[10px] uppercase tracking-[0.22em] text-white/45 font-semibold pl-1">
+                        Company / DAO Name
+                      </label>
+                      <div className="relative">
+                        <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" aria-hidden />
                         <input
+                          id="wl-company"
                           type="text"
+                          autoComplete="organization"
                           required
                           value={waitlistForm.company}
                           onChange={e => setWaitlistForm({ ...waitlistForm, company: e.target.value })}
-                          className="w-full bg-white/[0.03] border border-white/[0.08] focus:border-emerald-500/50 rounded-xl px-12 py-3.5 text-white placeholder:text-white/20 text-sm outline-none transition-all duration-300"
+                          className="w-full bg-white/[0.03] border border-white/[0.10] focus-visible:border-white/40 rounded-xl pl-11 pr-4 py-3 text-white placeholder:text-white/25 text-sm outline-none transition-colors duration-300"
                           placeholder="XYZ Foundation"
                         />
                       </div>
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[10px] uppercase tracking-widest text-white/40 font-semibold pl-1">Twitter Handle (Optional)</label>
-                      <div className="relative group">
-                        <Twitter className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-white/20 group-focus-within:text-emerald-400 transition-colors duration-300" />
+                      <label htmlFor="wl-twitter" className="text-[10px] uppercase tracking-[0.22em] text-white/45 font-semibold pl-1">
+                        Twitter Handle (Optional)
+                      </label>
+                      <div className="relative">
+                        <Twitter className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" aria-hidden />
                         <input
+                          id="wl-twitter"
                           type="text"
                           value={waitlistForm.twitter}
-                          onChange={e => setWaitlistForm({ ...waitlistForm, twitter: e.target.value.startsWith('@') ? e.target.value : `@${e.target.value}` })}
-                          className="w-full bg-white/[0.03] border border-white/[0.08] focus:border-emerald-500/50 rounded-xl px-12 py-3.5 text-white placeholder:text-white/20 text-sm outline-none transition-all duration-300"
+                          onChange={e => setWaitlistForm({
+                            ...waitlistForm,
+                            twitter: e.target.value.startsWith("@") ? e.target.value : `@${e.target.value}`,
+                          })}
+                          className="w-full bg-white/[0.03] border border-white/[0.10] focus-visible:border-white/40 rounded-xl pl-11 pr-4 py-3 text-white placeholder:text-white/25 text-sm outline-none transition-colors duration-300"
                           placeholder="@satoshinakamoto"
                         />
                       </div>
@@ -836,25 +843,26 @@ export default function HomePage() {
                     <button
                       type="submit"
                       disabled={waitlistStatus === "submitting"}
-                      className="w-full relative group overflow-hidden rounded-xl bg-white text-black font-semibold text-sm tracking-widest uppercase hover:bg-emerald-400 transition-all duration-500 mt-6"
+                      className="w-full mt-2 rounded-xl bg-white text-black font-semibold text-[12px] tracking-[0.2em] uppercase hover:bg-white/90 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                     >
-                      <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-blue-400 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                      <div className="relative flex items-center justify-center gap-2 px-8 py-4">
+                      <div className="flex items-center justify-center gap-2 px-8 py-3.5">
                         {waitlistStatus === "submitting" ? (
-                          <div className="flex items-center gap-2">
+                          <>
                             <span className="w-4 h-4 rounded-full border-2 border-black/20 border-t-black animate-spin" />
-                            <span>Processing...</span>
-                          </div>
+                            <span>Processing…</span>
+                          </>
                         ) : (
                           <>
                             Submit Application
-                            <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                            <ArrowRight className="h-4 w-4" />
                           </>
                         )}
                       </div>
                     </button>
                     {waitlistStatus === "error" && (
-                      <p className="text-red-400 text-xs text-center mt-2">Submission failed. Please try again.</p>
+                      <p className="text-red-400/90 text-xs text-center mt-2" role="alert">
+                        Submission failed. Please try again.
+                      </p>
                     )}
                   </form>
                 </>

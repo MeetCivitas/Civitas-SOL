@@ -32,17 +32,19 @@ The cryptographic primitives required to fix this — pairing-based SNARKs, hard
 
 ### 1.2 Design Goals
 
-| Property | Requirement |
-|---|---|
-| **Salary Confidentiality** | Per-employee salary amounts never appear in plaintext outside the AMD SEV-SNP enclave or the employee's own client. |
-| **Identity Confidentiality** | The employee's master credential nonce is never transmitted, stored, or escrowed; it lives exclusively in the browser. |
-| **Settlement Integrity** | Every USDC transfer is gated by a Groth16 BN254 proof verified on-chain through Solana's `alt_bn128_pairing` syscalls. |
-| **Double-Spend Prevention** | Each commitment is redeemable at most once via an append-only nullifier PDA registry. |
-| **Settlement Unlinkability** | The on-chain claim and the actual USDC movement are decoupled by a TEE-cranked private transfer queue with randomised split and delay. |
-| **Operator Independence** | Once commitments are finalised on-chain, employees claim their salaries unilaterally — no further employer interaction required. |
-| **Auditor Verifiability** | Any third party can prove that a payroll batch was processed in protocol without learning per-employee amounts. |
-| **Hardware-Attested Compute** | Payroll commitment generation runs inside an AMD SEV-SNP enclave with cryptographic attestation. |
-| **Wallet Universality** | Supports Privy embedded wallets, Phantom, Solflare, and any wallet adapter conforming to Solana's wallet standard. |
+
+| Property                      | Requirement                                                                                                                            |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **Salary Confidentiality**    | Per-employee salary amounts never appear in plaintext outside the AMD SEV-SNP enclave or the employee's own client.                    |
+| **Identity Confidentiality**  | The employee's master credential nonce is never transmitted, stored, or escrowed; it lives exclusively in the browser.                 |
+| **Settlement Integrity**      | Every USDC transfer is gated by a Groth16 BN254 proof verified on-chain through Solana's `alt_bn128_pairing` syscalls.                 |
+| **Double-Spend Prevention**   | Each commitment is redeemable at most once via an append-only nullifier PDA registry.                                                  |
+| **Settlement Unlinkability**  | The on-chain claim and the actual USDC movement are decoupled by a TEE-cranked private transfer queue with randomised split and delay. |
+| **Operator Independence**     | Once commitments are finalised on-chain, employees claim their salaries unilaterally — no further employer interaction required.       |
+| **Auditor Verifiability**     | Any third party can prove that a payroll batch was processed in protocol without learning per-employee amounts.                        |
+| **Hardware-Attested Compute** | Payroll commitment generation runs inside an AMD SEV-SNP enclave with cryptographic attestation.                                       |
+| **Wallet Universality**       | Supports Privy embedded wallets, Phantom, Solflare, and any wallet adapter conforming to Solana's wallet standard.                     |
+
 
 **Table 1.** Civitas core design goals.
 
@@ -116,20 +118,22 @@ EMPLOYER                                                       EMPLOYEE
 
 ### 2.2 Component Map
 
-| Component | Technology | Role |
-|---|---|---|
-| **`civitas-payroll` Anchor program** | Solana Rust / Anchor 0.30.x | Vault PDA, payroll runs, commitment chain, nullifier registry, on-chain Groth16 verification, Token-2022 deposits, contractor invoices. |
-| **Token-2022 USDC vault** | Solana SPL Token-2022 | Confidential employer treasury — vault ATA holds ElGamal-encrypted USDC balances. |
-| **circom voucher circuit** | circom 2.1.6 + circomlib | `circuits/voucher_circom/voucher.circom` — Poseidon BN254, depth-20 Merkle, SpongePoseidon(10) public-input binding. |
-| **snarkjs prover** | snarkjs Groth16 | Browser proof generation with the compiled `voucher.wasm` (3.1 MB) + `voucher_final.zkey` (8.4 MB). |
-| **On-chain Groth16 verifier** | Native `alt_bn128_*` syscalls | `programs/civitas-payroll/src/verifier/groth16.rs` — pairing check `e(-A,B)·e(α,β)·e(L_pub,γ)·e(C,δ) = 1`. |
-| **Nillion nilDB** | SecretVaults v2, 3-of-3 staging cluster | Secret-shared encrypted storage of employee tags, vouchers, and payroll-run metadata. |
-| **Nillion nilCC** | AMD SEV-SNP CVM | Hardware-attested payroll commitment generator; salary plaintext never leaves the encrypted VM boundary. |
-| **MagicBlock Private Payments** | `@magicblock-labs/ephemeral-rollups-sdk` v0.12 | TEE-validated ER for split + delayed private USDC transfers. |
-| **Solana Name Service** | Bonfida `@bonfida/spl-name-service` | `.sol` domain binding to employer vaults, human-readable identity. |
-| **Privy** | `@privy-io/react-auth` | Embedded wallet + email/social login for web2-native onboarding. |
-| **Phantom / Solflare** | Wallet Standard | Native Solana wallets for crypto-native users. |
-| **Client credential store** | IndexedDB | Master credential nonce η lives exclusively in the browser; never transmitted. |
+
+| Component                            | Technology                                     | Role                                                                                                                                    |
+| ------------------------------------ | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `**civitas-payroll` Anchor program** | Solana Rust / Anchor 0.30.x                    | Vault PDA, payroll runs, commitment chain, nullifier registry, on-chain Groth16 verification, Token-2022 deposits, contractor invoices. |
+| **Token-2022 USDC vault**            | Solana SPL Token-2022                          | Confidential employer treasury — vault ATA holds ElGamal-encrypted USDC balances.                                                       |
+| **circom voucher circuit**           | circom 2.1.6 + circomlib                       | `circuits/voucher_circom/voucher.circom` — Poseidon BN254, depth-20 Merkle, SpongePoseidon(10) public-input binding.                    |
+| **snarkjs prover**                   | snarkjs Groth16                                | Browser proof generation with the compiled `voucher.wasm` (3.1 MB) + `voucher_final.zkey` (8.4 MB).                                     |
+| **On-chain Groth16 verifier**        | Native `alt_bn128_`* syscalls                  | `programs/civitas-payroll/src/verifier/groth16.rs` — pairing check `e(-A,B)·e(α,β)·e(L_pub,γ)·e(C,δ) = 1`.                              |
+| **Nillion nilDB**                    | SecretVaults v2, 3-of-3 staging cluster        | Secret-shared encrypted storage of employee tags, vouchers, and payroll-run metadata.                                                   |
+| **Nillion nilCC**                    | AMD SEV-SNP CVM                                | Hardware-attested payroll commitment generator; salary plaintext never leaves the encrypted VM boundary.                                |
+| **MagicBlock Private Payments**      | `@magicblock-labs/ephemeral-rollups-sdk` v0.12 | TEE-validated ER for split + delayed private USDC transfers.                                                                            |
+| **Solana Name Service**              | Bonfida `@bonfida/spl-name-service`            | `.sol` domain binding to employer vaults, human-readable identity.                                                                      |
+| **Privy**                            | `@privy-io/react-auth`                         | Embedded wallet + email/social login for web2-native onboarding.                                                                        |
+| **Phantom / Solflare**               | Wallet Standard                                | Native Solana wallets for crypto-native users.                                                                                          |
+| **Client credential store**          | IndexedDB                                      | Master credential nonce η lives exclusively in the browser; never transmitted.                                                          |
+
 
 **Table 2.** Civitas component inventory, real packages and program IDs.
 
@@ -161,17 +165,19 @@ The on-chain `light-poseidon` syscall, the client-side `bn128-poseidon.ts`, and 
 
 Let:
 
-| Symbol | Domain | Meaning |
-|---|---|---|
-| `η` | `F_p` | Master credential nonce — employee secret, generated client-side |
-| `τ` | `F_p` | Employee tag, shared with employer at onboarding |
-| `a` | `u64` | Salary amount (USDC base units, 6 decimals) |
-| `e` | `u64` | Payroll epoch identifier |
-| `ν` | `F_p` | Per-voucher nonce — randomly sampled inside nilCC |
-| `C` | `F_p` | Voucher commitment — registered on-chain |
-| `N` | `F_p` | Nullifier — published on claim |
-| `R` | `F_p` | Merkle root of the payroll run's commitment set |
-| `π_hash` | `F_p` | SpongePoseidon binding over the 10 public inputs |
+
+| Symbol   | Domain | Meaning                                                          |
+| -------- | ------ | ---------------------------------------------------------------- |
+| `η`      | `F_p`  | Master credential nonce — employee secret, generated client-side |
+| `τ`      | `F_p`  | Employee tag, shared with employer at onboarding                 |
+| `a`      | `u64`  | Salary amount (USDC base units, 6 decimals)                      |
+| `e`      | `u64`  | Payroll epoch identifier                                         |
+| `ν`      | `F_p`  | Per-voucher nonce — randomly sampled inside nilCC                |
+| `C`      | `F_p`  | Voucher commitment — registered on-chain                         |
+| `N`      | `F_p`  | Nullifier — published on claim                                   |
+| `R`      | `F_p`  | Merkle root of the payroll run's commitment set                  |
+| `π_hash` | `F_p`  | SpongePoseidon binding over the 10 public inputs                 |
+
 
 The protocol's three fundamental cryptographic relations:
 
@@ -229,41 +235,47 @@ Civitas uses **circom 2.1.6** with the `circomlib` Poseidon, bitify, and mux1 te
 
 ### 4.1 Circuit Constraints
 
-| Constraint | Definition |
-|---|---|
-| **C1** | `employee_tag = Poseidon₁(credential_nonce)` |
-| **C2** | `commitment = Poseidon₄(employee_tag, amount, epoch, voucher_nonce)` |
-| **C3** | `Poseidon₃(credential_nonce, epoch, voucher_nonce) === nullifier` |
-| **C4** | `MerkleProofVerify(commitment, siblings, pathBits) === merkle_root` |
-| **C5** | `SpongePoseidon₁₀(merkle_root, nullifier, recipient_token_account, amount, epoch, mint, vault_pda, program_id, run_id, domain_tag) === pi_hash` |
+
+| Constraint | Definition                                                                                                                                      |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **C1**     | `employee_tag = Poseidon₁(credential_nonce)`                                                                                                    |
+| **C2**     | `commitment = Poseidon₄(employee_tag, amount, epoch, voucher_nonce)`                                                                            |
+| **C3**     | `Poseidon₃(credential_nonce, epoch, voucher_nonce) === nullifier`                                                                               |
+| **C4**     | `MerkleProofVerify(commitment, siblings, pathBits) === merkle_root`                                                                             |
+| **C5**     | `SpongePoseidon₁₀(merkle_root, nullifier, recipient_token_account, amount, epoch, mint, vault_pda, program_id, run_id, domain_tag) === pi_hash` |
+
 
 ### 4.2 Signal Map
 
-| Signal | Visibility | Type | Description |
-|---|---|---|---|
-| `credential_nonce` | private | Field | Master secret η. Never leaves the browser. |
-| `voucher_nonce` | private | Field | Per-voucher randomness ν, decrypted from the nilDB voucher record. |
-| `merkle_path[20]` | private | Field[] | Sibling hashes along the Merkle authentication path. |
-| `path_index` | private | Field | Integer leaf position (decomposed into pathBits internally). |
-| `merkle_root` | private | Field | Recomputed inside the circuit and bound via `pi_hash`. |
-| `nullifier` | private | Field | Recomputed inside the circuit and bound via `pi_hash`. |
-| `amount` | private | u64 | Salary in USDC base units; bound via `pi_hash`. |
-| `epoch` | private | u64 | Epoch index; bound via `pi_hash`. |
-| `recipient_token_account` | private | Field | Recipient USDC ATA; bound via `pi_hash`. |
-| `mint`, `vault_pda`, `program_id`, `run_id`, `domain_tag` | private | Field | All bound via `pi_hash`. |
-| `pi_hash` | **public** | Field | The single public input — the SpongePoseidon over all 10 binding fields. |
+
+| Signal                                                    | Visibility | Type    | Description                                                              |
+| --------------------------------------------------------- | ---------- | ------- | ------------------------------------------------------------------------ |
+| `credential_nonce`                                        | private    | Field   | Master secret η. Never leaves the browser.                               |
+| `voucher_nonce`                                           | private    | Field   | Per-voucher randomness ν, decrypted from the nilDB voucher record.       |
+| `merkle_path[20]`                                         | private    | Field[] | Sibling hashes along the Merkle authentication path.                     |
+| `path_index`                                              | private    | Field   | Integer leaf position (decomposed into pathBits internally).             |
+| `merkle_root`                                             | private    | Field   | Recomputed inside the circuit and bound via `pi_hash`.                   |
+| `nullifier`                                               | private    | Field   | Recomputed inside the circuit and bound via `pi_hash`.                   |
+| `amount`                                                  | private    | u64     | Salary in USDC base units; bound via `pi_hash`.                          |
+| `epoch`                                                   | private    | u64     | Epoch index; bound via `pi_hash`.                                        |
+| `recipient_token_account`                                 | private    | Field   | Recipient USDC ATA; bound via `pi_hash`.                                 |
+| `mint`, `vault_pda`, `program_id`, `run_id`, `domain_tag` | private    | Field   | All bound via `pi_hash`.                                                 |
+| `pi_hash`                                                 | **public** | Field   | The single public input — the SpongePoseidon over all 10 binding fields. |
+
 
 **Table 4.** Circuit signal table. The circuit exposes exactly one public input: `pi_hash`.
 
 ### 4.3 Proof System Properties
 
-| Property | Guarantee |
-|---|---|
-| **Completeness** | Any prover holding `(η, ν, path, path_index, …)` satisfying C1–C5 produces an accepting Groth16 proof. |
+
+| Property                | Guarantee                                                                                                                    |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Completeness**        | Any prover holding `(η, ν, path, path_index, …)` satisfying C1–C5 produces an accepting Groth16 proof.                       |
 | **Knowledge Soundness** | An accepting proof implies the prover knows witnesses satisfying the constraint system, under the q-PKE assumption on BN254. |
-| **Zero-Knowledge** | The proof reveals nothing about `(η, ν, path, path_index)` beyond what is committed in `pi_hash`. |
-| **Succinctness** | Proof size is exactly 256 bytes (G1: 64 B, G2: 128 B, G1: 64 B) regardless of circuit complexity. |
-| **Trusted Setup** | Per-circuit setup (Phase 2 of Powers-of-Tau); the verifying key is publicly auditable and embedded in the on-chain program. |
+| **Zero-Knowledge**      | The proof reveals nothing about `(η, ν, path, path_index)` beyond what is committed in `pi_hash`.                            |
+| **Succinctness**        | Proof size is exactly 256 bytes (G1: 64 B, G2: 128 B, G1: 64 B) regardless of circuit complexity.                            |
+| **Trusted Setup**       | Per-circuit setup (Phase 2 of Powers-of-Tau); the verifying key is publicly auditable and embedded in the on-chain program.  |
+
 
 **Table 5.** Groth16 / BN254 proof-system properties as instantiated by Civitas.
 
@@ -271,35 +283,39 @@ Civitas uses **circom 2.1.6** with the `circomlib` Poseidon, bitify, and mux1 te
 
 ## 5. Solana Program (`civitas-payroll`)
 
-The on-chain program is the unconditional enforcement layer. All financial invariants — solvency, double-spend prevention, run finalisation, proof validity — hold on-chain regardless of off-chain behaviour. Program ID: **`CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y`** on Solana Devnet.
+The on-chain program is the unconditional enforcement layer. All financial invariants — solvency, double-spend prevention, run finalisation, proof validity — hold on-chain regardless of off-chain behaviour. Program ID: `**CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y`** on Solana Devnet.
 
 ### 5.1 Account Layout
 
-| Account | Seeds | Purpose |
-|---|---|---|
-| `VaultState` | `[b"vault", owner]` | Employer vault — holds Merkle root, run count, USDC vault ATA, optional `.sol` SNS domain. |
-| `EmployerRecord` | `[b"employer", wallet]` | Optional display metadata: name, SNS domain, employee count. |
-| `PayrollRunAccount` | `[b"run", owner, run_id]` | Tracks one payroll batch: epoch, expected/received chunk count, status (Pending / Committed / Settled). |
+
+| Account                  | Seeds                             | Purpose                                                                                                  |
+| ------------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `VaultState`             | `[b"vault", owner]`               | Employer vault — holds Merkle root, run count, USDC vault ATA, optional `.sol` SNS domain.               |
+| `EmployerRecord`         | `[b"employer", wallet]`           | Optional display metadata: name, SNS domain, employee count.                                             |
+| `PayrollRunAccount`      | `[b"run", owner, run_id]`         | Tracks one payroll batch: epoch, expected/received chunk count, status (Pending / Committed / Settled).  |
 | `CommitmentChunkAccount` | `[b"chunk", run_id, chunk_index]` | One bounded slice (≤32 commitments) of an in-progress payroll run, with keccak chunk hash for integrity. |
-| `CommitmentAccount` | `[b"commit", commitment_hash]` | Per-commitment record materialised at `finalize_merkle_root` for O(1) commitment-existence checks. |
-| `NullifierAccount` | `[b"nullifier", nullifier_hash]` | Spent nullifier — created via `init` so duplicate claims revert atomically. |
-| `InvoiceAccount` | `[b"invoice", invoice_id]` | Contractor invoice: commitment to amount, due date, optional metadata CID, status. |
+| `CommitmentAccount`      | `[b"commit", commitment_hash]`    | Per-commitment record materialised at `finalize_merkle_root` for O(1) commitment-existence checks.       |
+| `NullifierAccount`       | `[b"nullifier", nullifier_hash]`  | Spent nullifier — created via `init` so duplicate claims revert atomically.                              |
+| `InvoiceAccount`         | `[b"invoice", invoice_id]`        | Contractor invoice: commitment to amount, due date, optional metadata CID, status.                       |
+
 
 **Table 6.** PDA layout for the `civitas-payroll` program.
 
 ### 5.2 Instruction Reference
 
-| Instruction | Caller | Effect |
-|---|---|---|
-| `initialize_vault(sns_domain)` | Employer | Creates `VaultState` PDA + Token-2022 confidential USDC vault ATA. Optionally binds an SNS `.sol` domain. |
-| `deposit_usdc(amount)` | Employer | Deposits USDC into the Token-2022 confidential vault via `apply_pending_balance`. |
-| `start_payroll_run(run_id, epoch, expected_count)` | Employer | Opens a new `PayrollRunAccount`, locks the epoch and expected commitment count. |
-| `append_commitments_chunk(run_id, chunk_index, commitments[])` | Employer | Appends one ≤32-commitment slice with a keccak integrity hash. Repeated until all chunks received. |
-| `finalize_merkle_root(run_id, new_root, chunk_count)` | Employer | Verifies all chunks present, materialises one `CommitmentAccount` per commitment, updates `VaultState.merkle_root`, marks run `Committed`. |
-| `claim_payment(proof_bytes, pi_hash, nullifier, run_id)` | **Anyone** (relayer / fresh wallet / employee) | Runs Groth16 verify via `alt_bn128_pairing`, initialises `NullifierAccount` (atomic anti-double-spend), emits `VoucherConsumed`. **No recipient or amount in IX args.** |
-| `create_invoice(invoice_id, commitment, due_ts, metadata_cid)` | Contractor | Creates an `InvoiceAccount` with a Poseidon commitment to the amount. |
-| `pay_invoice(invoice_id, …)` | Employer | Settles a contractor invoice against the vault. |
-| `close_vault()` | Employer | Closes a vault PDA after all runs are settled. |
+
+| Instruction                                                    | Caller                                         | Effect                                                                                                                                                                  |
+| -------------------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `initialize_vault(sns_domain)`                                 | Employer                                       | Creates `VaultState` PDA + Token-2022 confidential USDC vault ATA. Optionally binds an SNS `.sol` domain.                                                               |
+| `deposit_usdc(amount)`                                         | Employer                                       | Deposits USDC into the Token-2022 confidential vault via `apply_pending_balance`.                                                                                       |
+| `start_payroll_run(run_id, epoch, expected_count)`             | Employer                                       | Opens a new `PayrollRunAccount`, locks the epoch and expected commitment count.                                                                                         |
+| `append_commitments_chunk(run_id, chunk_index, commitments[])` | Employer                                       | Appends one ≤32-commitment slice with a keccak integrity hash. Repeated until all chunks received.                                                                      |
+| `finalize_merkle_root(run_id, new_root, chunk_count)`          | Employer                                       | Verifies all chunks present, materialises one `CommitmentAccount` per commitment, updates `VaultState.merkle_root`, marks run `Committed`.                              |
+| `claim_payment(proof_bytes, pi_hash, nullifier, run_id)`       | **Anyone** (relayer / fresh wallet / employee) | Runs Groth16 verify via `alt_bn128_pairing`, initialises `NullifierAccount` (atomic anti-double-spend), emits `VoucherConsumed`. **No recipient or amount in IX args.** |
+| `create_invoice(invoice_id, commitment, due_ts, metadata_cid)` | Contractor                                     | Creates an `InvoiceAccount` with a Poseidon commitment to the amount.                                                                                                   |
+| `pay_invoice(invoice_id, …)`                                   | Employer                                       | Settles a contractor invoice against the vault.                                                                                                                         |
+| `close_vault()`                                                | Employer                                       | Closes a vault PDA after all runs are settled.                                                                                                                          |
+
 
 **Table 7.** `civitas-payroll` instruction set.
 
@@ -308,6 +324,7 @@ The on-chain program is the unconditional enforcement layer. All financial invar
 `claim_payment` is the keystone — the single Anchor instruction that gates every USDC payout.
 
 **Account layout:**
+
 ```rust
 pub struct ClaimPayment<'info> {
     #[account(mut)] pub submitter: Signer<'info>,           // can be a fresh wallet
@@ -321,12 +338,14 @@ pub struct ClaimPayment<'info> {
 ```
 
 **Args** (only four — no recipient, no amount):
+
 - `proof_bytes: [u8; 256]` — Groth16 (G1 || G2 || G1)
 - `pi_hash: [u8; 32]` — public-input commitment
 - `nullifier: [u8; 32]` — Poseidon₃(η, e, ν), recomputed inside the circuit
 - `run_id: [u8; 16]` — UUIDv4 of the payroll run
 
 **Handler steps:**
+
 1. `verifier::verify_voucher_proof(&proof_bytes, &pi_hash)` — runs the Groth16 pairing check using the embedded VK and Solana's `alt_bn128_pairing` syscall.
 2. `init` of `NullifierAccount` — atomic anti-double-spend; second claim with the same nullifier reverts at PDA creation, before any state change.
 3. Records `spent_at = Clock::unix_timestamp` and emits `VoucherConsumed { nullifier, run_id, pi_hash, slot }` for off-chain dispatchers to observe.
@@ -335,16 +354,18 @@ The instruction **does not move USDC**. Settlement is intentionally off-chain vi
 
 ### 5.4 Security Invariants
 
-| # | Invariant | Mechanism | Guarantee |
-|---|---|---|---|
-| **INV-1** | Nullifier uniqueness | `NullifierAccount` is `init` — Solana System Program errors if PDA already exists. | Second spend of the same voucher unconditionally reverts. |
-| **INV-2** | Commitment registration | `CommitmentAccount` materialised only at `finalize_merkle_root`; the circuit's Merkle proof binds the spend to a registered `merkle_root`. | Fabricated commitments cannot redeem. |
-| **INV-3** | Run finalisation | `claim_payment` requires `payroll_run.status == Committed`. | No claims against an in-progress or future run. |
-| **INV-4** | Authority exclusivity | `start_payroll_run` / `append_commitments_chunk` / `finalize_merkle_root` enforce `payroll_run.owner == owner.key()`. | Only the vault owner can register commitments under their vault. |
-| **INV-5** | ZK proof verification | `verify_voucher_proof` runs `alt_bn128_pairing` before any account mutation. | Only valid Groth16 proofs pass. |
-| **INV-6** | Public-input binding | Handler recomputes `pi_hash` from authoritative on-chain state (vault PDA, mint, program ID, run ID, domain tag) before pairing. | Forged or replayed `pi_hash` is rejected with `PiHashMismatch`. |
-| **INV-7** | Cross-deployment replay | `domain_tag` baked into `pi_hash` at compile time differs per network (`civitas-mainnet-v1` / `civitas-devnet-v1`). | Devnet proofs cannot replay on Mainnet and vice versa. |
-| **INV-8** | Vault ownership | `VaultState.owner == owner.key()` checked on every mutating IX. | Cross-vault attacks impossible. |
+
+| #         | Invariant               | Mechanism                                                                                                                                  | Guarantee                                                        |
+| --------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| **INV-1** | Nullifier uniqueness    | `NullifierAccount` is `init` — Solana System Program errors if PDA already exists.                                                         | Second spend of the same voucher unconditionally reverts.        |
+| **INV-2** | Commitment registration | `CommitmentAccount` materialised only at `finalize_merkle_root`; the circuit's Merkle proof binds the spend to a registered `merkle_root`. | Fabricated commitments cannot redeem.                            |
+| **INV-3** | Run finalisation        | `claim_payment` requires `payroll_run.status == Committed`.                                                                                | No claims against an in-progress or future run.                  |
+| **INV-4** | Authority exclusivity   | `start_payroll_run` / `append_commitments_chunk` / `finalize_merkle_root` enforce `payroll_run.owner == owner.key()`.                      | Only the vault owner can register commitments under their vault. |
+| **INV-5** | ZK proof verification   | `verify_voucher_proof` runs `alt_bn128_pairing` before any account mutation.                                                               | Only valid Groth16 proofs pass.                                  |
+| **INV-6** | Public-input binding    | Handler recomputes `pi_hash` from authoritative on-chain state (vault PDA, mint, program ID, run ID, domain tag) before pairing.           | Forged or replayed `pi_hash` is rejected with `PiHashMismatch`.  |
+| **INV-7** | Cross-deployment replay | `domain_tag` baked into `pi_hash` at compile time differs per network (`civitas-mainnet-v1` / `civitas-devnet-v1`).                        | Devnet proofs cannot replay on Mainnet and vice versa.           |
+| **INV-8** | Vault ownership         | `VaultState.owner == owner.key()` checked on every mutating IX.                                                                            | Cross-vault attacks impossible.                                  |
+
 
 **Table 8.** On-chain security invariants.
 
@@ -360,11 +381,13 @@ where `L_pub = IC[0] + pi_hash · IC[1]` (single-public-input form).
 
 All curve arithmetic uses Solana's native syscalls:
 
-| Operation | Syscall | Cost |
-|---|---|---|
-| G1 addition | `sol_alt_bn128_addition` | ~150 CU |
-| G1 scalar multiplication | `sol_alt_bn128_multiplication` | ~3,840 CU |
-| 4-pair pairing check | `sol_alt_bn128_pairing` | ~165,000 CU |
+
+| Operation                | Syscall                        | Cost        |
+| ------------------------ | ------------------------------ | ----------- |
+| G1 addition              | `sol_alt_bn128_addition`       | ~150 CU     |
+| G1 scalar multiplication | `sol_alt_bn128_multiplication` | ~3,840 CU   |
+| 4-pair pairing check     | `sol_alt_bn128_pairing`        | ~165,000 CU |
+
 
 **Total on-chain verification: ~175,000 CU** — comfortably below the 1.4M per-transaction ceiling, leaving ample budget for the surrounding nullifier-init logic and event emission.
 
@@ -389,13 +412,15 @@ Civitas persists every privacy-sensitive record into a **3-of-3 Nillion nilDB cl
 
 ### 6.1 Collections
 
-| Collection | Sensitive (`%allot`) Columns | Plaintext Columns | Purpose |
-|---|---|---|---|
-| `employee_registry` | `salary_amount` | `employee_tag`, `company_id`, `salary_currency`, `status`, `created_at` | Roster of employees indexed by their public tag `τ`. |
-| `voucher_store` | `amount`, `voucher_nonce` | `employee_tag`, `epoch`, `commitment`, `company_id`, `status`, `created_at` | One voucher per (employee, epoch). Sensitive amount and nonce are secret-shared. |
-| `company_registry` | — | `company_id`, `name`, `owner_address`, `escrow_contract`, `created_at` | Public company metadata. |
-| `payroll_runs` | `merkle_root`, `epoch_start`, `epoch_end` | `run_id`, `status`, `created_at` | Per-run metadata; root and epoch encrypted to prevent pre-settlement monitoring. |
-| `credential_recovery` | `recovery_blob` | `employee_tag`, `created_at` | Optional employee-encrypted backup of their credential nonce, decryptable only by the employee. |
+
+| Collection            | Sensitive (`%allot`) Columns              | Plaintext Columns                                                           | Purpose                                                                                         |
+| --------------------- | ----------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `employee_registry`   | `salary_amount`                           | `employee_tag`, `company_id`, `salary_currency`, `status`, `created_at`     | Roster of employees indexed by their public tag `τ`.                                            |
+| `voucher_store`       | `amount`, `voucher_nonce`                 | `employee_tag`, `epoch`, `commitment`, `company_id`, `status`, `created_at` | One voucher per (employee, epoch). Sensitive amount and nonce are secret-shared.                |
+| `company_registry`    | —                                         | `company_id`, `name`, `owner_address`, `escrow_contract`, `created_at`      | Public company metadata.                                                                        |
+| `payroll_runs`        | `merkle_root`, `epoch_start`, `epoch_end` | `run_id`, `status`, `created_at`                                            | Per-run metadata; root and epoch encrypted to prevent pre-settlement monitoring.                |
+| `credential_recovery` | `recovery_blob`                           | `employee_tag`, `created_at`                                                | Optional employee-encrypted backup of their credential nonce, decryptable only by the employee. |
+
 
 **Table 9.** nilDB collection schema and encryption posture.
 
@@ -422,11 +447,13 @@ AMD SEV-SNP (Secure Encrypted Virtualization — Secure Nested Paging) provides:
 
 ### 7.2 Civitas Workloads
 
-| Workload | File | Function |
-|---|---|---|
-| **Payroll Compute** | `workload/run_compute.js` | Receives encrypted manifest of `(employee_tag, salary)` pairs. Inside the enclave: derives `voucher_nonce ← randombytes`, computes `commitment = Poseidon₄(τ, a, e, ν)`, builds the Poseidon Merkle tree, returns root + per-employee voucher records. Plaintext salaries never leave the CVM. |
-| **Blind Onboarding** | `workload/onboard_employee.js` | Generates `η ← randombytes(32)` inside the enclave, derives `τ = Poseidon₁(η)`, returns only `τ` to the employer API; `η` is delivered to the employee out-of-band over an authenticated channel. |
-| **Attestation Verifier** | `lib/server/nilcc-attestation.ts` | Validates the attestation report's ARK → ASK → VCEK certificate chain, checks the launch measurement against the pinned workload measurement, and verifies the freshness nonce. |
+
+| Workload                 | File                              | Function                                                                                                                                                                                                                                                                                       |
+| ------------------------ | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Payroll Compute**      | `workload/run_compute.js`         | Receives encrypted manifest of `(employee_tag, salary)` pairs. Inside the enclave: derives `voucher_nonce ← randombytes`, computes `commitment = Poseidon₄(τ, a, e, ν)`, builds the Poseidon Merkle tree, returns root + per-employee voucher records. Plaintext salaries never leave the CVM. |
+| **Blind Onboarding**     | `workload/onboard_employee.js`    | Generates `η ← randombytes(32)` inside the enclave, derives `τ = Poseidon₁(η)`, returns only `τ` to the employer API; `η` is delivered to the employee out-of-band over an authenticated channel.                                                                                              |
+| **Attestation Verifier** | `lib/server/nilcc-attestation.ts` | Validates the attestation report's ARK → ASK → VCEK certificate chain, checks the launch measurement against the pinned workload measurement, and verifies the freshness nonce.                                                                                                                |
+
 
 **Table 10.** nilCC TEE workloads.
 
@@ -453,11 +480,13 @@ Civitas decouples the *authorisation* of a payment from its *execution*. An obse
 
 The `civitas-payroll` integration of MagicBlock uses `@magicblock-labs/ephemeral-rollups-sdk` v0.12 with the TEE-fronted devnet at `https://tee.magicblock.app`:
 
-| Phase | SDK Call | Layer |
-|---|---|---|
-| **Auth** | `getAuthToken(rpcUrl, employerPubkey, signMessage)` | Bearer-token challenge/sign/login against the TEE auth endpoint. |
-| **Pre-fund** | `delegateSpl(employer, mint, amount, { validator, private: true, … })` | Base layer — sets up vault PDA + vault ATA + employer's delegated ephemeral ATA. One-time per mint. |
+
+| Phase                | SDK Call                                                                                                                                  | Layer                                                                                                                                                |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Auth**             | `getAuthToken(rpcUrl, employerPubkey, signMessage)`                                                                                       | Bearer-token challenge/sign/login against the TEE auth endpoint.                                                                                     |
+| **Pre-fund**         | `delegateSpl(employer, mint, amount, { validator, private: true, … })`                                                                    | Base layer — sets up vault PDA + vault ATA + employer's delegated ephemeral ATA. One-time per mint.                                                  |
 | **Private dispatch** | `transferSpl(employer, employee, mint, amount, { visibility: "private", validator, privateTransfer: { split, minDelayMs, maxDelayMs } })` | Single instruction submitted to base layer; the TEE validator's crank service then schedules `split` randomly-delayed settlements in `[500ms, 30s]`. |
+
 
 ### 8.3 Dispatcher
 
@@ -472,12 +501,14 @@ Because step (3) re-binds the payment to the same `pi_hash` that the on-chain pr
 
 ### 8.4 Settlement Privacy Properties
 
-| Property | Mechanism |
-|---|---|
-| **Amount obfuscation** | Single `amount` is split into `N` sub-transfers (default 5), each cranked at a randomised delay. |
-| **Timing obfuscation** | Each sub-transfer is scheduled by the TEE validator at `now + uniform(minDelayMs, maxDelayMs)`. |
-| **Mixing across runs** | When multiple claims are dispatched within the queue's window, their splits interleave on-chain. |
+
+| Property                  | Mechanism                                                                                                                        |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **Amount obfuscation**    | Single `amount` is split into `N` sub-transfers (default 5), each cranked at a randomised delay.                                 |
+| **Timing obfuscation**    | Each sub-transfer is scheduled by the TEE validator at `now + uniform(minDelayMs, maxDelayMs)`.                                  |
+| **Mixing across runs**    | When multiple claims are dispatched within the queue's window, their splits interleave on-chain.                                 |
 | **Settlement decoupling** | The on-chain `claim_payment` and the eventual settlement transfers occupy disjoint slots, with no shared transaction-graph edge. |
+
 
 ---
 
@@ -485,28 +516,32 @@ Because step (3) re-binds the payment to the same `pi_hash` that the on-chain pr
 
 ### 9.1 Roles
 
-| Role | Capabilities | Plaintext Access |
-|---|---|---|
-| **Employer** | `initialize_vault`, `deposit_usdc`, run lifecycle, dispatcher operation. | Salaries during nilCC computation only (inside enclave); employee tags `τ`; never `η`. |
-| **Employee** | Generate credential, derive tag, fetch voucher, generate Groth16 proof, submit `claim_payment` (or use a relayer / fresh wallet). | Own `(η, a, ν)` for their own vouchers only. |
-| **Auditor** | Verify run integrity from on-chain Merkle roots and chunk hashes, attestation reports, and nilDB metadata. | Run-level metadata only; never per-employee amounts. |
-| **Relayer** (optional) | Submits `claim_payment` on behalf of the employee, paying nullifier rent. | Cannot extract any private data — all witness data is inside the proof. |
+
+| Role                   | Capabilities                                                                                                                      | Plaintext Access                                                                       |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **Employer**           | `initialize_vault`, `deposit_usdc`, run lifecycle, dispatcher operation.                                                          | Salaries during nilCC computation only (inside enclave); employee tags `τ`; never `η`. |
+| **Employee**           | Generate credential, derive tag, fetch voucher, generate Groth16 proof, submit `claim_payment` (or use a relayer / fresh wallet). | Own `(η, a, ν)` for their own vouchers only.                                           |
+| **Auditor**            | Verify run integrity from on-chain Merkle roots and chunk hashes, attestation reports, and nilDB metadata.                        | Run-level metadata only; never per-employee amounts.                                   |
+| **Relayer** (optional) | Submits `claim_payment` on behalf of the employee, paying nullifier rent.                                                         | Cannot extract any private data — all witness data is inside the proof.                |
+
 
 **Table 11.** Role capabilities and information-access boundaries.
 
 ### 9.2 Authentication
 
-| Provider | User | Flow |
-|---|---|---|
-| **Privy** (`@privy-io/react-auth`) | Employer / Employee | Email or social login; embedded Solana wallet provisioned automatically. Web2-friendly onboarding, no seed phrase required. |
-| **Phantom / Solflare** | Employer / Employee | Native Solana wallet via the Wallet Standard. Standard for crypto-native users. |
-| **ZK Credential Login** | Employee | The employee proves knowledge of `η` to log in — derives `τ` client-side, signs an authentication challenge bound to `τ`. No wallet required for read-only access to their own vouchers. |
+
+| Provider                           | User                | Flow                                                                                                                                                                                     |
+| ---------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Privy** (`@privy-io/react-auth`) | Employer / Employee | Email or social login; embedded Solana wallet provisioned automatically. Web2-friendly onboarding, no seed phrase required.                                                              |
+| **Phantom / Solflare**             | Employer / Employee | Native Solana wallet via the Wallet Standard. Standard for crypto-native users.                                                                                                          |
+| **ZK Credential Login**            | Employee            | The employee proves knowledge of `η` to log in — derives `τ` client-side, signs an authentication challenge bound to `τ`. No wallet required for read-only access to their own vouchers. |
+
 
 **Table 12.** Authentication providers.
 
 ### 9.3 Solana Name Service Binding
 
-Vaults can optionally bind a **`.sol` SNS domain** at initialisation (`sns_domain: Option<String>` in `initialize_vault`). The Civitas frontend uses `@bonfida/spl-name-service` to resolve `.sol` domains to vault PDAs and to display human-readable employer identities. This lets employees verify "I'm claiming against `acme.sol`" rather than a 32-byte program-derived address.
+Vaults can optionally bind a `**.sol` SNS domain** at initialisation (`sns_domain: Option<String>` in `initialize_vault`). The Civitas frontend uses `@bonfida/spl-name-service` to resolve `.sol` domains to vault PDAs and to display human-readable employer identities. This lets employees verify "I'm claiming against `acme.sol`" rather than a 32-byte program-derived address.
 
 ### 9.4 Client-Side Credential Custody
 
@@ -526,11 +561,13 @@ The master credential nonce `η` is generated client-side via `crypto.getRandomV
 
 ### 10.2 Employee Onboarding
 
-| Mode | Flow |
-|---|---|
-| **Self-Generated** | Employee opens the Civitas app, generates `η` client-side, derives `τ = Poseidon₁(η)`, copies `τ` to the employer. `η` lives in IndexedDB. |
+
+| Mode                     | Flow                                                                                                                                                                                         |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Self-Generated**       | Employee opens the Civitas app, generates `η` client-side, derives `τ = Poseidon₁(η)`, copies `τ` to the employer. `η` lives in IndexedDB.                                                   |
 | **TEE Blind Onboarding** | Employer triggers nilCC `onboard_employee` workload; the enclave generates `η` inside SEV-SNP, returns only `τ`. `η` is delivered to the employee out-of-band over an authenticated channel. |
-| **Bulk Import** | Employer uploads a CSV of pre-generated `τ` values produced client-side by employees during their app onboarding. |
+| **Bulk Import**          | Employer uploads a CSV of pre-generated `τ` values produced client-side by employees during their app onboarding.                                                                            |
+
 
 **Table 13.** Employee onboarding modes.
 
@@ -561,18 +598,20 @@ The master credential nonce `η` is generated client-side via `crypto.getRandomV
 
 ## 11. Performance and Scalability
 
-| Operation | Cost / Latency | Notes |
-|---|---|---|
-| Browser Groth16 proof (depth-20 circuit) | ~10–30 s | snarkjs over WebCrypto on a modern device; no GPU required. |
-| On-chain Groth16 verification | ~175,000 CU | 4-pair `alt_bn128_pairing` plus IC scalar mul. |
-| Full `claim_payment` ix (verify + nullifier init + event) | ~200,000 CU | Well under 1.4M per-tx cap. |
-| `claim_payment` tx size | ~700 B | 256 B proof + 32 B pi_hash + 32 B nullifier + 16 B run_id + accounts. |
-| `append_commitments_chunk` (32 leaves) | ~50,000 CU | Linear in chunk size. |
-| `finalize_merkle_root` (n leaves) | O(n) | One `CommitmentAccount` `init` per leaf. |
-| Solana finality | ~400 ms | Confirmed commitment level. |
-| MagicBlock crank latency | 500 ms – 30 s (configurable) | Per-sub-transfer randomised delay. |
-| Tx fees (Devnet rate) | ~5,000 lamports | <$0.001 at typical SOL prices. |
-| Merkle tree capacity | 2²⁰ = 1,048,576 leaves | Sufficient for ~10,000 employees with monthly cycles for 100+ years. |
+
+| Operation                                                 | Cost / Latency               | Notes                                                                 |
+| --------------------------------------------------------- | ---------------------------- | --------------------------------------------------------------------- |
+| Browser Groth16 proof (depth-20 circuit)                  | ~10–30 s                     | snarkjs over WebCrypto on a modern device; no GPU required.           |
+| On-chain Groth16 verification                             | ~175,000 CU                  | 4-pair `alt_bn128_pairing` plus IC scalar mul.                        |
+| Full `claim_payment` ix (verify + nullifier init + event) | ~200,000 CU                  | Well under 1.4M per-tx cap.                                           |
+| `claim_payment` tx size                                   | ~700 B                       | 256 B proof + 32 B pi_hash + 32 B nullifier + 16 B run_id + accounts. |
+| `append_commitments_chunk` (32 leaves)                    | ~50,000 CU                   | Linear in chunk size.                                                 |
+| `finalize_merkle_root` (n leaves)                         | O(n)                         | One `CommitmentAccount` `init` per leaf.                              |
+| Solana finality                                           | ~400 ms                      | Confirmed commitment level.                                           |
+| MagicBlock crank latency                                  | 500 ms – 30 s (configurable) | Per-sub-transfer randomised delay.                                    |
+| Tx fees (Devnet rate)                                     | ~5,000 lamports              | <$0.001 at typical SOL prices.                                        |
+| Merkle tree capacity                                      | 2²⁰ = 1,048,576 leaves       | Sufficient for ~10,000 employees with monthly cycles for 100+ years.  |
+
 
 **Table 14.** Performance characteristics.
 
@@ -582,28 +621,32 @@ The master credential nonce `η` is generated client-side via `crypto.getRandomV
 
 ### 12.1 Threat Model
 
-| Adversary | Capabilities Assumed |
-|---|---|
-| **Public-chain observer** | Reads every Solana transaction and event in real time. |
-| **Network attacker** | Can MITM cleartext channels (defeated by TLS + NUC). |
-| **nilDB node operator** | Operates one of the 3 nilDB nodes; sees only one secret share per sensitive field. |
+
+| Adversary                           | Capabilities Assumed                                                                                                                                                                           |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Public-chain observer**           | Reads every Solana transaction and event in real time.                                                                                                                                         |
+| **Network attacker**                | Can MITM cleartext channels (defeated by TLS + NUC).                                                                                                                                           |
+| **nilDB node operator**             | Operates one of the 3 nilDB nodes; sees only one secret share per sensitive field.                                                                                                             |
 | **Compromised employer web server** | Can read encrypted nilDB rows but cannot decrypt sensitive fields without the org NUC; cannot forge `pi_hash` because the dispatcher's recomputation is bound to authoritative on-chain state. |
-| **Forking miner / validator** | Cannot reorder or replay transactions across deployments due to per-network domain tag. |
+| **Forking miner / validator**       | Cannot reorder or replay transactions across deployments due to per-network domain tag.                                                                                                        |
+
 
 ### 12.2 Property → Mechanism Map
 
-| Property | Defended By |
-|---|---|
-| **Salary confidentiality (chain)** | Salaries never appear in any on-chain account, IX arg, or event. |
-| **Salary confidentiality (storage)** | nilDB `%allot` 3-of-3 secret-sharing on `amount`, `voucher_nonce`, `salary_amount`. |
-| **Salary confidentiality (compute)** | nilCC AMD SEV-SNP enclave with attestation chain validation. |
-| **Credential confidentiality** | `η` lives only in browser IndexedDB; `τ` is one-way derived. |
-| **Spend uniqueness** | `NullifierAccount` `init` semantics — Solana System Program reverts on duplicate PDA. |
-| **Proof unforgeability** | Groth16 knowledge soundness over BN254 (q-PKE). |
-| **Proof binding** | 10-input SpongePoseidon `pi_hash` recomputed on-chain from authoritative state (INV-6). |
-| **Cross-deployment replay** | `domain_tag` baked into `pi_hash` at compile time (INV-7). |
-| **Settlement unlinkability** | MagicBlock TEE-validated split + delay routing decouples claim from settlement. |
-| **Vault solvency** | Token-2022 confidential vault accounting + employer pre-fund to MagicBlock vault. |
+
+| Property                             | Defended By                                                                             |
+| ------------------------------------ | --------------------------------------------------------------------------------------- |
+| **Salary confidentiality (chain)**   | Salaries never appear in any on-chain account, IX arg, or event.                        |
+| **Salary confidentiality (storage)** | nilDB `%allot` 3-of-3 secret-sharing on `amount`, `voucher_nonce`, `salary_amount`.     |
+| **Salary confidentiality (compute)** | nilCC AMD SEV-SNP enclave with attestation chain validation.                            |
+| **Credential confidentiality**       | `η` lives only in browser IndexedDB; `τ` is one-way derived.                            |
+| **Spend uniqueness**                 | `NullifierAccount` `init` semantics — Solana System Program reverts on duplicate PDA.   |
+| **Proof unforgeability**             | Groth16 knowledge soundness over BN254 (q-PKE).                                         |
+| **Proof binding**                    | 10-input SpongePoseidon `pi_hash` recomputed on-chain from authoritative state (INV-6). |
+| **Cross-deployment replay**          | `domain_tag` baked into `pi_hash` at compile time (INV-7).                              |
+| **Settlement unlinkability**         | MagicBlock TEE-validated split + delay routing decouples claim from settlement.         |
+| **Vault solvency**                   | Token-2022 confidential vault accounting + employer pre-fund to MagicBlock vault.       |
+
 
 **Table 15.** Property → defending-mechanism map.
 
@@ -629,32 +672,34 @@ Civitas turns a long-running thought experiment — "what would private on-chain
 
 ## Appendix A — Protocol Constants
 
-| Constant | Value |
-|---|---|
-| Curve | BN254 (alt_bn128) |
-| BN254 scalar field prime | `21888242871839275222246405745257275088548364400416034343698204186575808495617` |
-| Hash function | Poseidon BN254 (circomlib parameters, Bn254X5) |
-| Merkle tree depth | 20 |
-| Maximum leaves per run | 1,048,576 (2²⁰) |
-| Max commitments per chunk | 32 |
-| Groth16 proof size | 256 bytes |
-| Verifying key size | 580 bytes |
-| Public input count | 1 (`pi_hash`) |
-| `pi_hash` binding fields | 10 (merkle_root, nullifier, recipient_ATA, amount, epoch, mint, vault_PDA, program_id, run_id, domain_tag) |
-| Settlement asset | USDC (Token-2022, ConfidentialTransfer extension) |
-| Solana cluster | Devnet → Mainnet-Beta |
-| Civitas program ID (Devnet) | `CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y` |
-| Domain tag | `civitas-mainnet-v1` / `civitas-devnet-v1` |
-| Anchor version | 0.30.x |
-| circom version | 2.1.6 |
-| snarkjs version | latest (Groth16) |
-| Nillion SDK | `@nillion/secretvaults` v2 + `@nillion/nuc` v2 |
-| MagicBlock SDK | `@magicblock-labs/ephemeral-rollups-sdk` v0.12 |
-| TEE endpoint | `https://tee.magicblock.app` |
-| MagicBlock router | `https://devnet-router.magicblock.app` |
-| MagicBlock auth | NUC challenge → ed25519 signature → Bearer token |
-| Default private-transfer split | 5 |
-| Private-transfer delay range | 500 ms – 30,000 ms |
+
+| Constant                       | Value                                                                                                      |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| Curve                          | BN254 (alt_bn128)                                                                                          |
+| BN254 scalar field prime       | `21888242871839275222246405745257275088548364400416034343698204186575808495617`                            |
+| Hash function                  | Poseidon BN254 (circomlib parameters, Bn254X5)                                                             |
+| Merkle tree depth              | 20                                                                                                         |
+| Maximum leaves per run         | 1,048,576 (2²⁰)                                                                                            |
+| Max commitments per chunk      | 32                                                                                                         |
+| Groth16 proof size             | 256 bytes                                                                                                  |
+| Verifying key size             | 580 bytes                                                                                                  |
+| Public input count             | 1 (`pi_hash`)                                                                                              |
+| `pi_hash` binding fields       | 10 (merkle_root, nullifier, recipient_ATA, amount, epoch, mint, vault_PDA, program_id, run_id, domain_tag) |
+| Settlement asset               | USDC (Token-2022, ConfidentialTransfer extension)                                                          |
+| Solana cluster                 | Devnet → Mainnet-Beta                                                                                      |
+| Civitas program ID (Devnet)    | `CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y`                                                             |
+| Domain tag                     | `civitas-mainnet-v1` / `civitas-devnet-v1`                                                                 |
+| Anchor version                 | 0.30.x                                                                                                     |
+| circom version                 | 2.1.6                                                                                                      |
+| snarkjs version                | latest (Groth16)                                                                                           |
+| Nillion SDK                    | `@nillion/secretvaults` v2 + `@nillion/nuc` v2                                                             |
+| MagicBlock SDK                 | `@magicblock-labs/ephemeral-rollups-sdk` v0.12                                                             |
+| TEE endpoint                   | `https://tee.magicblock.app`                                                                               |
+| MagicBlock router              | `https://devnet-router.magicblock.app`                                                                     |
+| MagicBlock auth                | NUC challenge → ed25519 signature → Bearer token                                                           |
+| Default private-transfer split | 5                                                                                                          |
+| Private-transfer delay range   | 500 ms – 30,000 ms                                                                                         |
+
 
 **Table A1.** Protocol constants.
 
@@ -662,17 +707,19 @@ Civitas turns a long-running thought experiment — "what would private on-chain
 
 ## Appendix B — Anchor Instruction Reference
 
-| # | Instruction | Args | Required Accounts |
-|---|---|---|---|
-| 1 | `initialize_vault` | `sns_domain: Option<String>` | `owner` (signer, mut), `vault_state` (init PDA), `usdc_mint`, `usdc_vault` (init ATA), token + assoc + system programs |
-| 2 | `deposit_usdc` | `amount: u64` | `owner`, `vault_state`, `usdc_vault`, `owner_usdc_ata`, token program |
-| 3 | `start_payroll_run` | `run_id: [u8;16]`, `epoch: u64`, `expected_commitment_count: u32` | `owner`, `vault_state`, `payroll_run` (init PDA) |
-| 4 | `append_commitments_chunk` | `run_id: [u8;16]`, `chunk_index: u32`, `commitments: Vec<[u8;32]>` | `owner`, `payroll_run`, `chunk` (init PDA) |
-| 5 | `finalize_merkle_root` | `run_id: [u8;16]`, `new_root: [u8;32]`, `chunk_count: u32` | `owner`, `vault_state`, `payroll_run`, `chunk[…]`, `commitment[…]` (init PDAs, remaining_accounts) |
-| 6 | `claim_payment` | `proof_bytes: Vec<u8>` (256 B), `pi_hash: [u8;32]`, `nullifier: [u8;32]`, `run_id: [u8;16]` | `submitter` (signer, can be fresh), `payroll_run`, `nullifier_account` (init PDA), system program, clock sysvar |
-| 7 | `create_invoice` | `invoice_id: [u8;16]`, `commitment: [u8;32]`, `due_ts: i64`, `metadata_cid: String` | `creator` (signer), `invoice` (init PDA) |
-| 8 | `pay_invoice` | `invoice_id: [u8;16]` | `payer`, `vault_state`, `invoice`, `vault_ata`, `recipient_ata`, token program |
-| 9 | `close_vault` | — | `owner`, `vault_state` (close), system program |
+
+| #   | Instruction                | Args                                                                                        | Required Accounts                                                                                                      |
+| --- | -------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 1   | `initialize_vault`         | `sns_domain: Option<String>`                                                                | `owner` (signer, mut), `vault_state` (init PDA), `usdc_mint`, `usdc_vault` (init ATA), token + assoc + system programs |
+| 2   | `deposit_usdc`             | `amount: u64`                                                                               | `owner`, `vault_state`, `usdc_vault`, `owner_usdc_ata`, token program                                                  |
+| 3   | `start_payroll_run`        | `run_id: [u8;16]`, `epoch: u64`, `expected_commitment_count: u32`                           | `owner`, `vault_state`, `payroll_run` (init PDA)                                                                       |
+| 4   | `append_commitments_chunk` | `run_id: [u8;16]`, `chunk_index: u32`, `commitments: Vec<[u8;32]>`                          | `owner`, `payroll_run`, `chunk` (init PDA)                                                                             |
+| 5   | `finalize_merkle_root`     | `run_id: [u8;16]`, `new_root: [u8;32]`, `chunk_count: u32`                                  | `owner`, `vault_state`, `payroll_run`, `chunk[…]`, `commitment[…]` (init PDAs, remaining_accounts)                     |
+| 6   | `claim_payment`            | `proof_bytes: Vec<u8>` (256 B), `pi_hash: [u8;32]`, `nullifier: [u8;32]`, `run_id: [u8;16]` | `submitter` (signer, can be fresh), `payroll_run`, `nullifier_account` (init PDA), system program, clock sysvar        |
+| 7   | `create_invoice`           | `invoice_id: [u8;16]`, `commitment: [u8;32]`, `due_ts: i64`, `metadata_cid: String`         | `creator` (signer), `invoice` (init PDA)                                                                               |
+| 8   | `pay_invoice`              | `invoice_id: [u8;16]`                                                                       | `payer`, `vault_state`, `invoice`, `vault_ata`, `recipient_ata`, token program                                         |
+| 9   | `close_vault`              | —                                                                                           | `owner`, `vault_state` (close), system program                                                                         |
+
 
 **Table B1.** Anchor instruction set.
 
@@ -680,31 +727,33 @@ Civitas turns a long-running thought experiment — "what would private on-chain
 
 ## Appendix C — HTTP API Reference
 
-| Endpoint | Method | Purpose |
-|---|---|---|
-| `/api/payroll/generate` | POST | Run nilCC TEE compute over an encrypted manifest, return root + voucher records + attestation. |
-| `/api/payroll/commit` | POST | Persist run metadata; return calldata for `start_payroll_run` + `append_commitments_chunk` + `finalize_merkle_root`. |
-| `/api/payroll/merkle-tree` | GET | Return the depth-20 authentication path for a given commitment. |
-| `/api/payroll/dispatch-claim` | POST | Recompute `pi_hash` from authoritative state; build and submit MagicBlock private transfer. |
-| `/api/payroll/private-pay` | POST | Direct private-transfer endpoint (employer → arbitrary recipient). |
-| `/api/payroll/fund-magicblock` | POST | One-time `delegateSpl` setup of the employer's delegated ephemeral ATA. |
-| `/api/payroll/attestation` | GET | Retrieve the nilCC SEV-SNP attestation report for a payroll run. |
-| `/api/payroll/runs` | GET | List committed payroll runs for the connected employer. |
-| `/api/payroll/settle` | POST | Record the confirmed Solana + MagicBlock signatures; transition voucher to `settled`. |
-| `/api/employees/credential` | POST | Generate or import an employee credential (browser-side `η` derivation). |
-| `/api/employees/onboard` | POST | TEE blind onboarding via nilCC. |
-| `/api/employees/redeem` | POST | Mark a voucher as in the redemption flow. |
-| `/api/employees/vouchers` | GET | Fetch the encrypted voucher records for a given `employee_tag`. |
-| `/api/employer/employees` | * | CRUD over the `employee_registry` collection. |
-| `/api/employer/payrolls` | * | CRUD over payroll runs (server view). |
-| `/api/auditors/verify` | GET | Verify a run's commitment chain against on-chain state without salary access. |
-| `/api/auth/login` | POST | Privy / wallet login. |
-| `/api/auth/zk-login` | POST | ZK credential login (employee proves knowledge of `η`). |
-| `/api/vault/init` / `/deposit` / `/fund` / `/close` | POST | Vault lifecycle helpers (calldata builders). |
-| `/api/invoice/create` / `/pay` | POST | Contractor invoice lifecycle. |
-| `/api/credential/[token]` | GET | One-time-link credential delivery (TEE onboarding). |
-| `/api/nillion/setup` | POST | Initialise nilDB collections + NUCs. |
-| `/api/wallet/sign` | POST | Privy server-side signing helper. |
+
+| Endpoint                                            | Method | Purpose                                                                                                              |
+| --------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------- |
+| `/api/payroll/generate`                             | POST   | Run nilCC TEE compute over an encrypted manifest, return root + voucher records + attestation.                       |
+| `/api/payroll/commit`                               | POST   | Persist run metadata; return calldata for `start_payroll_run` + `append_commitments_chunk` + `finalize_merkle_root`. |
+| `/api/payroll/merkle-tree`                          | GET    | Return the depth-20 authentication path for a given commitment.                                                      |
+| `/api/payroll/dispatch-claim`                       | POST   | Recompute `pi_hash` from authoritative state; build and submit MagicBlock private transfer.                          |
+| `/api/payroll/private-pay`                          | POST   | Direct private-transfer endpoint (employer → arbitrary recipient).                                                   |
+| `/api/payroll/fund-magicblock`                      | POST   | One-time `delegateSpl` setup of the employer's delegated ephemeral ATA.                                              |
+| `/api/payroll/attestation`                          | GET    | Retrieve the nilCC SEV-SNP attestation report for a payroll run.                                                     |
+| `/api/payroll/runs`                                 | GET    | List committed payroll runs for the connected employer.                                                              |
+| `/api/payroll/settle`                               | POST   | Record the confirmed Solana + MagicBlock signatures; transition voucher to `settled`.                                |
+| `/api/employees/credential`                         | POST   | Generate or import an employee credential (browser-side `η` derivation).                                             |
+| `/api/employees/onboard`                            | POST   | TEE blind onboarding via nilCC.                                                                                      |
+| `/api/employees/redeem`                             | POST   | Mark a voucher as in the redemption flow.                                                                            |
+| `/api/employees/vouchers`                           | GET    | Fetch the encrypted voucher records for a given `employee_tag`.                                                      |
+| `/api/employer/employees`                           | *      | CRUD over the `employee_registry` collection.                                                                        |
+| `/api/employer/payrolls`                            | *      | CRUD over payroll runs (server view).                                                                                |
+| `/api/auditors/verify`                              | GET    | Verify a run's commitment chain against on-chain state without salary access.                                        |
+| `/api/auth/login`                                   | POST   | Privy / wallet login.                                                                                                |
+| `/api/auth/zk-login`                                | POST   | ZK credential login (employee proves knowledge of `η`).                                                              |
+| `/api/vault/init` / `/deposit` / `/fund` / `/close` | POST   | Vault lifecycle helpers (calldata builders).                                                                         |
+| `/api/invoice/create` / `/pay`                      | POST   | Contractor invoice lifecycle.                                                                                        |
+| `/api/credential/[token]`                           | GET    | One-time-link credential delivery (TEE onboarding).                                                                  |
+| `/api/nillion/setup`                                | POST   | Initialise nilDB collections + NUCs.                                                                                 |
+| `/api/wallet/sign`                                  | POST   | Privy server-side signing helper.                                                                                    |
+
 
 **Table C1.** HTTP API surface.
 
@@ -712,28 +761,30 @@ Civitas turns a long-running thought experiment — "what would private on-chain
 
 ## Appendix D — Glossary
 
-| Term | Definition |
-|---|---|
-| **AMD SEV-SNP** | AMD Secure Encrypted Virtualization with Secure Nested Paging. Hardware memory-encryption technology providing confidential VMs with cryptographic attestation. |
-| **Anchor** | Solana's reference framework for writing on-chain programs in Rust with macro-based account validation. |
-| **`alt_bn128`** | Solana's syscall family for BN254 curve arithmetic — addition, scalar multiplication, and pairing. EIP-196 / EIP-197 compatible. |
-| **BN254** | Pairing-friendly elliptic curve (a.k.a. alt_bn128, alt-bn128) used by Ethereum and supported natively by Solana. |
-| **Commitment** | `Poseidon₄(employee_tag, amount, epoch, voucher_nonce)` — the leaf in the payroll Merkle tree. |
-| **CVM** | Confidential Virtual Machine — a VM running inside an SEV-SNP encrypted memory region. |
-| **Domain tag** | Per-deployment string (`civitas-devnet-v1` / `civitas-mainnet-v1`) folded into `pi_hash` to defeat cross-network replay. |
-| **Ephemeral Rollup (ER)** | MagicBlock's account-delegation rollup; transactions execute on a dedicated validator and settle back to base layer. |
-| **Groth16** | Pairing-based zk-SNARK with 256-byte proofs and constant verification cost. |
-| **`%allot`** | nilDB column tag indicating threshold secret-sharing across the cluster nodes. |
-| **NUC** | Nillion Universal Credential — signed access token authenticating reads/writes to nilDB collections. |
-| **Nullifier** | `Poseidon₃(η, e, ν)` — the spend marker that gets `init`-PDA'd on-chain to prevent double-spend. |
-| **PER** | Private Ephemeral Rollup — the TEE-validated, privacy-enhanced variant of MagicBlock's ER product. |
-| **Poseidon** | SNARK-friendly hash function operating natively over the BN254 scalar field. |
-| **`pi_hash`** | The single public input to the Civitas circuit; SpongePoseidon over the 10 binding fields. |
-| **SNS** | Solana Name Service (Bonfida) — the `.sol` domain registry. |
-| **SpongePoseidon** | Sponge construction over Poseidon₂ used to absorb the 10 binding fields into a single output. |
-| **Token-2022 ConfidentialTransfer** | SPL Token-2022 extension providing ElGamal-encrypted balance accounting. |
-| **VCEK** | AMD Versioned Chip Endorsement Key — the leaf certificate in the SEV-SNP attestation chain. |
-| **Voucher** | The encrypted payroll record `(employee_tag, amount, voucher_nonce, commitment, epoch)` stored in nilDB. |
+
+| Term                                | Definition                                                                                                                                                      |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **AMD SEV-SNP**                     | AMD Secure Encrypted Virtualization with Secure Nested Paging. Hardware memory-encryption technology providing confidential VMs with cryptographic attestation. |
+| **Anchor**                          | Solana's reference framework for writing on-chain programs in Rust with macro-based account validation.                                                         |
+| `**alt_bn128`**                     | Solana's syscall family for BN254 curve arithmetic — addition, scalar multiplication, and pairing. EIP-196 / EIP-197 compatible.                                |
+| **BN254**                           | Pairing-friendly elliptic curve (a.k.a. alt_bn128, alt-bn128) used by Ethereum and supported natively by Solana.                                                |
+| **Commitment**                      | `Poseidon₄(employee_tag, amount, epoch, voucher_nonce)` — the leaf in the payroll Merkle tree.                                                                  |
+| **CVM**                             | Confidential Virtual Machine — a VM running inside an SEV-SNP encrypted memory region.                                                                          |
+| **Domain tag**                      | Per-deployment string (`civitas-devnet-v1` / `civitas-mainnet-v1`) folded into `pi_hash` to defeat cross-network replay.                                        |
+| **Ephemeral Rollup (ER)**           | MagicBlock's account-delegation rollup; transactions execute on a dedicated validator and settle back to base layer.                                            |
+| **Groth16**                         | Pairing-based zk-SNARK with 256-byte proofs and constant verification cost.                                                                                     |
+| `**%allot`**                        | nilDB column tag indicating threshold secret-sharing across the cluster nodes.                                                                                  |
+| **NUC**                             | Nillion Universal Credential — signed access token authenticating reads/writes to nilDB collections.                                                            |
+| **Nullifier**                       | `Poseidon₃(η, e, ν)` — the spend marker that gets `init`-PDA'd on-chain to prevent double-spend.                                                                |
+| **PER**                             | Private Ephemeral Rollup — the TEE-validated, privacy-enhanced variant of MagicBlock's ER product.                                                              |
+| **Poseidon**                        | SNARK-friendly hash function operating natively over the BN254 scalar field.                                                                                    |
+| `**pi_hash`**                       | The single public input to the Civitas circuit; SpongePoseidon over the 10 binding fields.                                                                      |
+| **SNS**                             | Solana Name Service (Bonfida) — the `.sol` domain registry.                                                                                                     |
+| **SpongePoseidon**                  | Sponge construction over Poseidon₂ used to absorb the 10 binding fields into a single output.                                                                   |
+| **Token-2022 ConfidentialTransfer** | SPL Token-2022 extension providing ElGamal-encrypted balance accounting.                                                                                        |
+| **VCEK**                            | AMD Versioned Chip Endorsement Key — the leaf certificate in the SEV-SNP attestation chain.                                                                     |
+| **Voucher**                         | The encrypted payroll record `(employee_tag, amount, voucher_nonce, commitment, epoch)` stored in nilDB.                                                        |
+
 
 **Table D1.** Glossary of Civitas-specific terminology.
 
