@@ -36,8 +36,12 @@ import {
   withdrawSpl,
   deriveTransferQueue,
   initTransferQueueIx,
+  ensureTransferQueueCrankIx,
   DELEGATION_PROGRAM_ID,
+  MAGIC_CONTEXT_ID,
+  MAGIC_PROGRAM_ID,
 } from "@magicblock-labs/ephemeral-rollups-sdk";
+import { magicFeeVaultPdaFromValidator } from "@magicblock-labs/ephemeral-rollups-sdk";
 import {
   MAGICBLOCK_TEE_URL,
   SOLANA_RPC,
@@ -501,16 +505,30 @@ const QUEUE_REQUESTED_ITEMS = 8;
  * One-time setup for the transfer queue used by private ephemeral→base
  * transfers (`depositAndQueueTransferIx`, discriminator 16).
  *
- * That ix has an explicit `require!(queue_info.owned_by(&crate::ID))` —
- * the queue MUST stay owned by the SPL Token Program (NOT delegated to
- * DELEGATION_PROGRAM_ID). Setup is therefore JUST init.
+ * Two-step init:
  *
- * Crank registration: the SDK has `ensureTransferQueueCrankIx` (discriminator
- * 17) which is supposed to wire the queue up to MagicBlock's task scheduler.
- * On the current devnet program version it returns "Unsupported program id"
- * — the entrypoint isn't exposed there. The TEE validator processes queues
- * autonomously on this devnet build (when its crank service is up); we
- * rely on that and don't call ensureCrank ourselves.
+ *   1. `initTransferQueueIx` (disc 12) on the **base layer** — creates the
+ *      queue PDA owned by the EphemeralSplToken program. The queue MUST
+ *      stay SPL-owned (NOT delegated): `depositAndQueueTransferIx` has an
+ *      explicit `require!(queue_info.owned_by(&crate::ID))`.
+ *
+ *   2. `ensureTransferQueueCrankIx` (disc 17) on the **ER** — registers
+ *      the queue with MagicBlock's task scheduler. Without this step,
+ *      deposits succeed but the validator's crank loop has no task
+ *      referencing the queue, so entries persist indefinitely and
+ *      recipients never get paid.
+ *
+ *      This ix references `magic_program` and `magic_context`, which only
+ *      exist on the ER side. Sending it to base produces "Unsupported
+ *      program id" — that's the error our prior implementation hit when
+ *      it incorrectly routed this ix to base. Routing to ER (via the
+ *      employer's TEE auth token) makes it succeed.
+ *
+ *      Treated as best-effort: if the program returns "already
+ *      registered" or any other error, we log and continue. Worst case
+ *      the queue isn't registered and dispatches will sit; the
+ *      `/api/payroll/register-crank` endpoint can run this idempotently
+ *      to retroactively register an existing queue.
  *
  * If the queue is already delegated from a prior wrong-flow attempt, we
  * surface an actionable rotate-mint error — there's no SDK undelegate.
@@ -536,16 +554,59 @@ async function ensureTransferQueueReady(
     );
   }
 
-  if (info != null) return; // SPL-owned — ready
+  // Step 1: init the queue PDA on base if it doesn't exist.
+  if (info == null) {
+    console.log(
+      `[ensureTransferQueueReady] init queue ${queue.toBase58().slice(0, 8)}… ` +
+      `(requestedItems=${QUEUE_REQUESTED_ITEMS}, leaving SPL-owned)`,
+    );
+    await signAndSubmitOnBase([
+      initTransferQueueIx(payer, queue, mintPk, validator, QUEUE_REQUESTED_ITEMS),
+    ]);
+    await new Promise((r) => setTimeout(r, 1_500));
+  }
 
-  console.log(
-    `[ensureTransferQueueReady] init queue ${queue.toBase58().slice(0, 8)}… ` +
-    `(requestedItems=${QUEUE_REQUESTED_ITEMS}, leaving SPL-owned)`,
-  );
-  await signAndSubmitOnBase([
-    initTransferQueueIx(payer, queue, mintPk, validator, QUEUE_REQUESTED_ITEMS),
-  ]);
-  await new Promise((r) => setTimeout(r, 1_500));
+  // Step 2: register the queue with the magic-program task scheduler on ER.
+  // Idempotent — call it even if step 1 was skipped (the queue may have been
+  // created by an older code path that never registered the crank task).
+  await registerQueueCrank(queue, validator, payer);
+}
+
+/**
+ * Submit `ensureTransferQueueCrankIx` against an existing queue PDA so that
+ * MagicBlock's task scheduler picks up its entries. Must run on the ER —
+ * the ix mentions `magic_program`/`magic_context` which are ER-side.
+ *
+ * Best-effort: errors are logged but not thrown. The most common one we
+ * expect ("already registered") is harmless.
+ */
+export async function registerQueueCrank(
+  queue: PublicKey,
+  validator: PublicKey,
+  payer: PublicKey,
+): Promise<{ ok: boolean; signature?: string; error?: string }> {
+  try {
+    const token = await getEmployerAuthToken();
+    const magicFeeVault = magicFeeVaultPdaFromValidator(validator);
+    const ix = ensureTransferQueueCrankIx(
+      payer,
+      queue,
+      magicFeeVault,
+      MAGIC_CONTEXT_ID,
+      MAGIC_PROGRAM_ID,
+    );
+    const sig = await signAndSubmitOnEr([ix], token);
+    console.log(
+      `[registerQueueCrank] queue=${queue.toBase58().slice(0, 8)}… registered (sig=${sig.slice(0, 16)}…)`,
+    );
+    return { ok: true, signature: sig };
+  } catch (e) {
+    const msg = (e as Error).message || String(e);
+    console.warn(
+      `[registerQueueCrank] queue=${queue.toBase58().slice(0, 8)}… failed (likely already registered): ${msg}`,
+    );
+    return { ok: false, error: msg };
+  }
 }
 
 /**
