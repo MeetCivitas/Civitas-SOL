@@ -206,10 +206,18 @@ export default function EmployeesPage() {
   // for the duration of the wallet session. Used to surface an Explorer
   // link so the user can watch settlement land in real time.
   const [recipientAtaForExplorer, setRecipientAtaForExplorer] = useState<string | null>(null);
+  // Live ATA balance, polled while there's a settled voucher in flight so the
+  // UI can show "Received X USDC" the moment the TEE crank fires the SPL
+  // transfer — instead of leaving the user staring at Solana Explorer's
+  // stale "9 days ago" address-history view.
+  const [ataBalanceMicro, setAtaBalanceMicro] = useState<bigint | null>(null);
+  const [ataBalanceCheckedAt, setAtaBalanceCheckedAt] = useState<number | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     if (!address) {
       setRecipientAtaForExplorer(null);
+      setAtaBalanceMicro(null);
       return;
     }
     (async () => {
@@ -233,6 +241,42 @@ export default function EmployeesPage() {
       cancelled = true;
     };
   }, [address]);
+
+  // ── Live ATA balance polling ────────────────────────────────────────────
+  // Poll every 6s while at least one voucher is in the "claimed but not yet
+  // landed" state. The ATA balance is the *only* source of truth for whether
+  // the TEE validator's crank has fired the actual SPL transfer.
+  const hasInflightSettlement = useMemo(() => {
+    if (!credential) return false;
+    return vouchers.some(
+      (v) =>
+        v.employeeTag === credential.employeeTag &&
+        (v.status === "claimed" || v.status === "settled"),
+    );
+  }, [vouchers, credential]);
+
+  const refreshAtaBalance = useCallback(async () => {
+    if (!recipientAtaForExplorer) return;
+    try {
+      const { Connection, PublicKey } = await import("@solana/web3.js");
+      const { RPC_ENDPOINT } = await import("@/lib/solana-program");
+      const conn = new Connection(RPC_ENDPOINT, "confirmed");
+      const info = await conn.getTokenAccountBalance(new PublicKey(recipientAtaForExplorer));
+      const micro = BigInt(info.value.amount);
+      setAtaBalanceMicro(micro);
+      setAtaBalanceCheckedAt(Date.now());
+    } catch (err) {
+      // ATA may not exist yet on first ever claim — leave balance null.
+      console.warn("[ATA] balance fetch failed:", (err as Error)?.message?.slice(0, 80));
+    }
+  }, [recipientAtaForExplorer]);
+
+  useEffect(() => {
+    if (!recipientAtaForExplorer || !hasInflightSettlement) return;
+    void refreshAtaBalance();
+    const id = window.setInterval(() => void refreshAtaBalance(), 6000);
+    return () => window.clearInterval(id);
+  }, [recipientAtaForExplorer, hasInflightSettlement, refreshAtaBalance]);
 
   const handleCreateCredential = async () => {
     const next = await createNewCredential();
@@ -1024,9 +1068,36 @@ export default function EmployeesPage() {
                                 <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.4} />
                                 Settled · {usdcAmount} USDC
                               </div>
+
+                              {/* Live ATA balance — the one source of truth */}
+                              <div className="flex items-center justify-between rounded-2xl border border-white/[0.10] bg-black/40 px-4 py-3">
+                                <div className="min-w-0">
+                                  <p className="text-[9px] font-semibold uppercase tracking-[0.28em] text-white/35 mb-1">
+                                    Your USDC ATA balance
+                                  </p>
+                                  <p className="num text-base font-medium text-white tabular-nums">
+                                    {ataBalanceMicro === null
+                                      ? "—"
+                                      : `${formatUsdc(Number(ataBalanceMicro) / 1_000_000)} USDC`}
+                                  </p>
+                                  <p className="mt-0.5 text-[10px] font-mono uppercase tracking-[0.18em] text-white/35">
+                                    {ataBalanceCheckedAt
+                                      ? `as of ${Math.max(0, Math.round((Date.now() - ataBalanceCheckedAt) / 1000))}s ago · auto-refresh 6s`
+                                      : "polling…"}
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => void refreshAtaBalance()}
+                                  className="shrink-0 rounded-full border border-white/15 bg-white/[0.04] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/85 hover:bg-white/[0.08] hover:border-white/25 transition-colors"
+                                >
+                                  Refresh
+                                </button>
+                              </div>
+
                               <div className="rounded-2xl border border-white/[0.10] bg-black/40 px-4 py-3 text-[11px] leading-5 text-white/55 space-y-2">
                                 <p>
-                                  TEE validator queue cranks fire within ~30s. USDC settles directly into your associated token account. No additional wallet action needed.
+                                  ZK gate is verified on-chain (nullifier burned). Settlement runs through MagicBlock's TEE validator queue with a randomized 0.5–30 s delay; USDC lands directly in your associated token account when the crank fires. The dispatch tx below is the queue intent — the actual SPL transfer is a separate tx and may not appear in the ATA's history view immediately. Watch the live balance above.
                                 </p>
                                 {(voucher as any).claimTxHash && (
                                   <div className="font-mono text-[10px] break-all">

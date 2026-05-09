@@ -2,7 +2,13 @@
  * lib/server/magicblock-private-payments.ts
  *
  * MagicBlock Private Payments — official integration via
- * @magicblock-labs/ephemeral-rollups-sdk@0.12.x.
+ * @magicblock-labs/ephemeral-rollups-sdk@0.13.x.
+ *
+ * Bumped 2026-05-09 from 0.12.0 → 0.13.0 to align with the post-2026-05-01
+ * permission-program redeploy on devnet. 0.12-built ixs were silently
+ * rejected by the new permission-CPI, causing the TEE crank to drop every
+ * queued entry (queue saturated, validator never drained). Public API
+ * surface diff was tiny — see PR notes; no call-site changes required.
  *
  * Architecture (corrected April 2026):
  *   • Auth          : GET  ${TEE}/auth/challenge?pubkey=…  →  POST ${TEE}/auth/login

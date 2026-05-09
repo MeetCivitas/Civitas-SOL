@@ -99,6 +99,66 @@ export function getEmployerKeypair(): Keypair {
   return loadEmployerKeypair();
 }
 
+// ── Queue health probe ────────────────────────────────────────────────────
+
+/**
+ * Best-effort decode of the per-(mint, validator) transfer queue PDA.
+ *
+ * The SDK doesn't expose a layout decoder for the queue, so we use the same
+ * heuristic as /api/payroll/queue-state:
+ *   • capacity = floor((data.length - 64) / 150)
+ *     — header is ~64 B; each transfer slot is ~150 B
+ *   • occupied = slots whose first 32 B contain any non-zero byte
+ *   • latestWriteMs = max u64 LE in [2024-01-01, +5y] found anywhere in the
+ *     buffer (proxy for "validator's last write timestamp")
+ *
+ * Returns null-ish when the queue doesn't exist yet (capacity = 0,
+ * latestWriteAgeSec = null). employerPrivateTransfer treats that as a
+ * fresh-init signal, not a refusal.
+ */
+function probeQueueHealth(data: Buffer | null): {
+  capacity: number;
+  occupied: number;
+  bitmap: string;
+  latestWriteMs: number | null;
+  latestWriteAgeSec: number | null;
+} {
+  const APPROX_HEADER_BYTES = 64;
+  const APPROX_BYTES_PER_SLOT = 150;
+
+  if (!data || data.length <= APPROX_HEADER_BYTES) {
+    return { capacity: 0, occupied: 0, bitmap: "", latestWriteMs: null, latestWriteAgeSec: null };
+  }
+
+  const slotRegion = data.subarray(APPROX_HEADER_BYTES);
+  const capacity = Math.max(1, Math.floor(slotRegion.length / APPROX_BYTES_PER_SLOT));
+  let occupied = 0;
+  let bitmap = "";
+  for (let i = 0; i < capacity; i++) {
+    const start = i * APPROX_BYTES_PER_SLOT;
+    const end = Math.min(start + 32, slotRegion.length);
+    const slotHead = slotRegion.subarray(start, end);
+    const isOccupied = slotHead.some((b) => b !== 0);
+    if (isOccupied) occupied++;
+    bitmap += isOccupied ? "█" : "·";
+  }
+
+  const FLOOR = new Date("2024-01-01").getTime();
+  const CEIL = Date.now() + 5 * 365 * 86400 * 1000;
+  let latestWriteMs: number | null = null;
+  for (let i = 0; i + 8 <= data.length; i += 8) {
+    let v = 0;
+    for (let j = 7; j >= 0; j--) v = v * 256 + data[i + j];
+    if (v >= FLOOR && v <= CEIL && (latestWriteMs === null || v > latestWriteMs)) {
+      latestWriteMs = v;
+    }
+  }
+  const latestWriteAgeSec =
+    latestWriteMs !== null ? Math.round((Date.now() - latestWriteMs) / 1000) : null;
+
+  return { capacity, occupied, bitmap, latestWriteMs, latestWriteAgeSec };
+}
+
 // ── Bearer token cache ────────────────────────────────────────────────────
 
 interface CachedToken {
@@ -277,27 +337,69 @@ export async function employerPrivateTransfer(
   // ownership-vs-instruction-path matrix.
   await ensureTransferQueueReady(mintPk, validator, fromPk);
 
-  // Probe the actual queue size and clamp `split` to its capacity. Each
-  // queue slot is ~150 bytes; the on-chain shuttle ix rejects with
-  // InvalidInstructionData if split > available slots. We compute a
-  // conservative slot count from data.length and floor the requested
-  // split at that.
+  // Probe the actual queue size + occupancy + freshness *before* the tx.
+  //
+  // Why pre-flight (vs. log-scan post-confirm): depositAndQueueTransferIx
+  // is one tx but two effects — it deposits USDC into the employer's ER
+  // vault AND inserts a transfer-intent into the queue PDA. If the queue
+  // is full the program logs "Queue is full" and SILENTLY succeeds: the
+  // deposit lands but no queue entry is created. Our post-confirm scan
+  // (further down) catches this and throws, but the deposit already
+  // happened — funds get stuck in the vault and require employerWithdraw
+  // to recover. The fix is to refuse before the tx fires.
+  //
+  // Two refusal signals:
+  //   • saturated: occupied >= capacity → no slot to write to anyway
+  //   • stalled:   queue has occupied slots but no recent timestamp in
+  //                its data, meaning the TEE crank hasn't drained it.
+  //                Threshold is conservative (10 min) so the gate doesn't
+  //                trip on healthy queues that just got a flurry of
+  //                writes followed by a quiet patch.
   const conn = getBaseConnection();
   const [queuePda] = deriveTransferQueue(mintPk, validator);
   const queueInfo = await conn.getAccountInfo(queuePda, "confirmed");
   const queueBytes = queueInfo?.data.length ?? 0;
-  const APPROX_BYTES_PER_SLOT = 150;
-  const APPROX_HEADER_BYTES = 64;
-  const queueCapacity = Math.max(
-    1,
-    Math.floor((queueBytes - APPROX_HEADER_BYTES) / APPROX_BYTES_PER_SLOT),
-  );
+  const probe = probeQueueHealth(queueInfo?.data ?? null);
+
+  if (probe.occupied >= probe.capacity && probe.capacity > 0) {
+    throw new Error(
+      `MagicBlock queue ${queuePda.toBase58()} is saturated ` +
+        `(${probe.occupied}/${probe.capacity} slots, ${probe.bitmap}). ` +
+        `Refusing to deposit because depositAndQueueTransferIx would land the ` +
+        `deposit but silently drop the queue insert. ` +
+        (probe.latestWriteAgeSec !== null
+          ? `Last detectable write: ${Math.round(probe.latestWriteAgeSec / 60)}m ago. `
+          : "") +
+        `If the validator has cranked recently, retry; otherwise rotate the ` +
+        `MagicBlock USDC mint (frontend/scripts/rotate-magicblock-mint.mjs) ` +
+        `to spawn a fresh queue PDA.`,
+    );
+  }
+
+  const MAX_STALL_SEC = 600;
+  if (
+    probe.occupied > 0 &&
+    probe.latestWriteAgeSec !== null &&
+    probe.latestWriteAgeSec > MAX_STALL_SEC
+  ) {
+    throw new Error(
+      `MagicBlock queue ${queuePda.toBase58()} appears stalled — ` +
+        `${probe.occupied}/${probe.capacity} occupied, last write ` +
+        `${Math.round(probe.latestWriteAgeSec / 60)}m ago. The TEE validator ` +
+        `(${validator.toBase58()}) hasn't drained pending entries within ` +
+        `${MAX_STALL_SEC / 60}m. Refusing to deposit until the crank resumes ` +
+        `or the mint is rotated. (See /api/payroll/queue-state for live state.)`,
+    );
+  }
+
   const requestedSplit = options.split ?? 4;
-  const split = Math.min(requestedSplit, queueCapacity);
+  const freeSlots = Math.max(1, probe.capacity - probe.occupied);
+  const split = Math.min(requestedSplit, freeSlots);
   if (split !== requestedSplit) {
     console.log(
       `[employerPrivateTransfer] clamped split ${requestedSplit} → ${split} ` +
-      `(queue ${queueBytes}B ⇒ ~${queueCapacity} slots)`,
+      `(queue ${queueBytes}B, ${probe.occupied}/${probe.capacity} occupied, ` +
+      `${freeSlots} free)`,
     );
   }
 
@@ -328,6 +430,52 @@ export async function employerPrivateTransfer(
   });
 
   const signature = await signAndSubmitOnBase(ixs);
+
+  // Post-confirmation soft-failure check.
+  //
+  // `depositAndQueueTransfer` is a single atomic ix that (1) deposits USDC
+  // into the employer's ER vault and (2) inserts a transfer-intent into
+  // the per-(mint, validator) queue PDA. If step 2 finds no free slots,
+  // the program logs "Queue is full" and RETURNS SUCCESS without inserting.
+  // The deposit still happened, but the TEE validator has nothing to
+  // crank — so the recipient's ATA will never receive the USDC.
+  //
+  // Treat this as a hard failure here so /api/payroll/dispatch-claim
+  // bubbles a real error instead of letting the frontend mark the
+  // voucher "Settled" for a transfer that will never arrive.
+  try {
+    const txInfo = await conn.getTransaction(signature, {
+      commitment: "confirmed",
+      maxSupportedTransactionVersion: 0,
+    });
+    const logs = txInfo?.meta?.logMessages ?? [];
+    const queueFull = logs.some((l) => /Queue is full/i.test(l));
+    if (queueFull) {
+      throw new Error(
+        `MagicBlock queue is full (sig ${signature}). ` +
+          `The employer's transfer queue has no free slots — the TEE validator hasn't ` +
+          `cranked existing entries. Your USDC was deposited into the employer's ER ` +
+          `vault but NO SPL transfer was queued, so it will not arrive at your ATA. ` +
+          `Have the employer wait for the validator to drain the queue, or contact ` +
+          `MagicBlock if the crank service has stalled.`,
+      );
+    }
+    // Optional secondary signal: some program versions log
+    // "Slot 0/N full, falling through" — same outcome.
+    const fallthrough = logs.some((l) => /falling through|no free slots|skipped queue/i.test(l));
+    if (fallthrough) {
+      throw new Error(
+        `MagicBlock queue insert was skipped (sig ${signature}). Logs: ` +
+          logs.filter((l) => /queue|slot|fall|skip/i.test(l)).join(" | ").slice(0, 200),
+      );
+    }
+  } catch (err: any) {
+    // Re-throw our own constructed errors; swallow only RPC fetch failures
+    // (we'd rather assume success than spuriously fail on transient RPC).
+    if (err?.message?.includes("queue") || err?.message?.includes("Queue")) throw err;
+    console.warn(`[employerPrivateTransfer] post-confirm log probe failed (non-fatal): ${err?.message}`);
+  }
+
   return { signature, queuedTransfers: split };
 }
 
