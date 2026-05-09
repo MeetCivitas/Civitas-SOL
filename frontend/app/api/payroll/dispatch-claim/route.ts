@@ -38,10 +38,9 @@ import {
 import {
   employerPrivateTransfer,
   getEmployerPubkey,
+  getEmployerKeypair,
 } from "@/lib/server/magicblock-auth";
 import { assertMagicBlockHealthy } from "@/lib/server/magicblock-private-payments";
-import fs from "node:fs";
-import { Keypair } from "@solana/web3.js";
 
 export const runtime = "nodejs";
 
@@ -58,7 +57,6 @@ const USDC_MINT = new PublicKey(
 const RPC = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com";
 const DOMAIN_TAG =
   process.env.NEXT_PUBLIC_CIVITAS_DOMAIN_TAG || "civitas-devnet-v1";
-const KEYPAIR_PATH = process.env.CIVITAS_DEPLOYER_KEYPAIR_PATH || "";
 
 function err(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
@@ -142,12 +140,7 @@ async function ensureRecipientAtaExists(
   const info = await conn.getAccountInfo(ata, "confirmed");
   if (info) return { created: false };
 
-  if (!KEYPAIR_PATH) {
-    throw new Error("server cannot create recipient ATA: deployer keypair unset");
-  }
-  const raw = fs.readFileSync(KEYPAIR_PATH, "utf8");
-  const arr = JSON.parse(raw);
-  const payer = Keypair.fromSecretKey(Uint8Array.from(arr));
+  const payer = getEmployerKeypair();
 
   const ix = createAssociatedTokenAccountInstruction(
     payer.publicKey,

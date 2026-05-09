@@ -51,25 +51,24 @@ export async function GET(req: NextRequest) {
 
     console.log(`[Vouchers] Scanning ${companyIdsToTry.length} companies for employeeTag ${employeeTag.slice(0, 10)}...`);
 
-    let allVouchers: any[] = [];
-
-    // 2. Query each company's vouchers collection for this employee
-    // Also collect run metadata to enrich vouchers with merkleRoot + employerAddress
+    const { listPayrollRuns } = await import("@/lib/server/nillion-server");
     const runCache: Record<string, { merkleRoot?: string; employerAddress?: string }> = {};
 
-    for (const cid of companyIdsToTry) {
-      try {
-        const response = await listVouchersByEmployee(cid, employeeTag);
-        const records = extractRecords(response);
-        if (records.length > 0) {
+    // Fan out across companies in parallel. NilDB calls are network-bound,
+    // so doing them serially across N companies = N× wall-clock for no gain.
+    const perCompanyResults = await Promise.all(
+      companyIdsToTry.map(async (cid) => {
+        try {
+          const response = await listVouchersByEmployee(cid, employeeTag);
+          const records = extractRecords(response);
+          if (records.length === 0) return [] as any[];
+
           console.log(`[Vouchers] Found ${records.length} vouchers in company ${cid}`);
 
-          // Fetch run records for this company to enrich voucher data
+          // Enrich with run metadata; best-effort, runs alongside other companies.
           try {
-            const { listPayrollRuns } = await import("@/lib/server/nillion-server");
             const runResp = await listPayrollRuns(cid);
-            const runs = extractRecords(runResp);
-            for (const run of runs) {
+            for (const run of extractRecords(runResp)) {
               if (run.run_id) {
                 runCache[run.run_id] = {
                   merkleRoot: run.merkle_root || "",
@@ -79,12 +78,15 @@ export async function GET(req: NextRequest) {
             }
           } catch { /* non-fatal */ }
 
-          allVouchers.push(...records);
+          return records;
+        } catch {
+          // Collection may not exist yet for this company; skip silently.
+          return [] as any[];
         }
-      } catch {
-        // Some collections might not exist yet, that's fine
-      }
-    }
+      })
+    );
+
+    const allVouchers: any[] = perCompanyResults.flat();
 
     const vouchers = allVouchers.map((r: any) => {
       const run = runCache[r.run_id] ?? {};

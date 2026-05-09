@@ -50,21 +50,53 @@ import {
 } from "./magicblock-private-payments";
 
 const KEYPAIR_PATH = process.env.CIVITAS_DEPLOYER_KEYPAIR_PATH || "";
+const KEYPAIR_JSON = process.env.CIVITAS_DEPLOYER_KEYPAIR_JSON || "";
 
 let cachedKeypair: Keypair | null = null;
 function loadEmployerKeypair(): Keypair {
   if (cachedKeypair) return cachedKeypair;
-  if (!KEYPAIR_PATH) {
-    throw new Error("CIVITAS_DEPLOYER_KEYPAIR_PATH not configured");
+
+  // Prefer inline JSON env var (works in any sandbox/serverless env).
+  let arr: number[] | undefined;
+  if (KEYPAIR_JSON) {
+    try {
+      arr = JSON.parse(KEYPAIR_JSON);
+    } catch (e: any) {
+      throw new Error(
+        `CIVITAS_DEPLOYER_KEYPAIR_JSON is set but not valid JSON: ${e.message}`,
+      );
+    }
+  } else if (KEYPAIR_PATH) {
+    try {
+      const raw = fs.readFileSync(KEYPAIR_PATH, "utf8");
+      arr = JSON.parse(raw);
+    } catch (e: any) {
+      const code = e?.code ? ` (${e.code})` : "";
+      throw new Error(
+        `Failed to read deployer keypair at ${KEYPAIR_PATH}${code}: ${e.message}. ` +
+          `If the file exists but the dev server can't see it (common on macOS when launched from an IDE-sandboxed terminal), ` +
+          `paste the keypair array into CIVITAS_DEPLOYER_KEYPAIR_JSON in .env.local instead.`,
+      );
+    }
+  } else {
+    throw new Error(
+      "Set CIVITAS_DEPLOYER_KEYPAIR_PATH (file path) or CIVITAS_DEPLOYER_KEYPAIR_JSON (inline array) in .env.local",
+    );
   }
-  const raw = fs.readFileSync(KEYPAIR_PATH, "utf8");
-  const arr = JSON.parse(raw);
+
+  if (!Array.isArray(arr)) {
+    throw new Error("Deployer keypair did not parse to a number array");
+  }
   cachedKeypair = Keypair.fromSecretKey(Uint8Array.from(arr));
   return cachedKeypair;
 }
 
 export function getEmployerPubkey(): string {
   return loadEmployerKeypair().publicKey.toBase58();
+}
+
+export function getEmployerKeypair(): Keypair {
+  return loadEmployerKeypair();
 }
 
 // ── Bearer token cache ────────────────────────────────────────────────────

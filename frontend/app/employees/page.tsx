@@ -420,7 +420,7 @@ export default function EmployeesPage() {
 
       if (alreadyClaimed) {
         setProvingStep("payment");
-        setProvingLabel("Voucher already claimed on-chain. Re-dispatching settlement…");
+        setProvingLabel("ZK proof already verified on-chain · retrying private settlement…");
       } else {
         const tx = new Transaction();
         tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }));
@@ -473,9 +473,13 @@ export default function EmployeesPage() {
       });
       const dispatchJson = await dispatchRes.json().catch(() => ({}));
       if (!dispatchRes.ok) {
-        throw new Error(
-          `Private dispatch failed: ${dispatchJson?.error || dispatchRes.statusText}`,
-        );
+        const detail = dispatchJson?.error || dispatchRes.statusText;
+        if (alreadyClaimed && dispatchRes.status === 503) {
+          throw new Error(
+            `ZK gate verified ✓ but the private settlement vendor (MagicBlock) is unavailable: ${detail}. Your nullifier is already consumed, so this voucher remains valid — click Claim again once the vendor is healthy.`,
+          );
+        }
+        throw new Error(`Private dispatch failed (${dispatchRes.status}): ${detail}`);
       }
 
       // ── 6. Record settlement in NilDB ─────────────────────────────────
@@ -567,10 +571,26 @@ export default function EmployeesPage() {
 
   return (
     <main className="relative min-h-screen overflow-x-clip bg-black text-white antialiased font-sans">
-      {/* ── Background: pure monochrome atmosphere ─────────────────────── */}
-      <div className="fixed inset-0 -z-10 pointer-events-none">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.06),transparent_55%),radial-gradient(ellipse_at_bottom_left,rgba(255,255,255,0.04),transparent_60%),linear-gradient(180deg,rgba(0,0,0,0.85),rgba(0,0,0,1))]" />
-        <div className="grain-overlay absolute inset-0 opacity-50" />
+      {/* ── Background: animated video desaturated to monochrome ──────── */}
+      <div className="fixed inset-0 -z-10 pointer-events-none overflow-hidden">
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          aria-hidden
+          preload="auto"
+          className="absolute inset-0 h-full w-full object-cover opacity-60"
+          style={{ filter: "grayscale(1) contrast(1.15) brightness(1.05)" }}
+        >
+          <source src="/videos/Animated_Privacy_Video_Element.mp4" type="video/mp4" />
+        </video>
+        {/* Soft top/bottom fade so headline/footer stay readable, center stays open */}
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.55)_0%,rgba(0,0,0,0.15)_30%,rgba(0,0,0,0.15)_70%,rgba(0,0,0,0.7)_100%)]" />
+        {/* Subtle side dimming, much gentler than before */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,transparent_60%,rgba(0,0,0,0.45)_100%)]" />
+        {/* Animated grain on top for texture */}
+        <div className="grain-overlay absolute inset-0 opacity-30" />
       </div>
 
       {/* ── Portal header ──────────────────────────────────────────────── */}
@@ -946,7 +966,7 @@ export default function EmployeesPage() {
                                     </a>
                                   </div>
                                 )}
-                                {recipientAtaForExplorer && (
+                                {(voucher as any).privateTransferSig && recipientAtaForExplorer && (
                                   <div className="pt-2">
                                     <a
                                       href={buildExplorerUrl("address", recipientAtaForExplorer)}
@@ -954,7 +974,7 @@ export default function EmployeesPage() {
                                       rel="noreferrer"
                                       className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.22em] text-white/65 hover:text-white"
                                     >
-                                      Watch on Solana Explorer
+                                      Watch USDC arrive on your ATA
                                       <ArrowUpRight className="h-3 w-3" />
                                     </a>
                                   </div>
