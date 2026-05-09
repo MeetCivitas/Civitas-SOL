@@ -170,6 +170,8 @@ export default function EmployeesPage() {
               nullifier: v.nullifier,
               runId: v.runId,
               status: v.status || "pending",
+              runStatus: v.runStatus,
+              amountIsLikelyStale: v.amountIsLikelyStale,
               claimTxHash: v.claimTxHash || "",
               merkleRoot: v.merkleRoot || "",
               employerAddress: v.employerAddress || "",
@@ -285,6 +287,49 @@ export default function EmployeesPage() {
       const tree = buildMerkleTree(commitments);
       const { path } = tree.getProof(leafIndex);
       const merklePath = path.map((p) => p.toString());
+
+      // ── 1b. Pre-flight: recompute the commitment from voucher fields ──
+      // If the stored amount/epoch/voucherNonce/employeeTag don't reproduce
+      // the stored commitment, the circuit will fail with the cryptic
+      // "unreachable" later. Catch it here and tell the user exactly why.
+      // (Skips the wallet pop, the 2-3 s snarkjs proof, and the on-chain tx.)
+      try {
+        const { poseidon4: poseidon4Local } = await import("poseidon-lite");
+        const tagBig = BigInt(String(target.employeeTag || "0"));
+        const amtBig = BigInt(String(target.amount || "0"));
+        const epochBig = BigInt(String(target.epoch || "0"));
+        const nonceBig = BigInt(String(target.voucherNonce || "0"));
+        const recomputed = poseidon4Local([tagBig, amtBig, epochBig, nonceBig]).toString();
+        if (recomputed !== commitmentStr) {
+          // Tell the user which field is most likely wrong. The credential
+          // tag is the loudest single suspect, so check that explicitly.
+          const credTagBig = BigInt(String(credential.employeeTag || "0"));
+          const tagMismatch = tagBig !== credTagBig;
+          const detail =
+            `Stored commitment ${commitmentStr.slice(0, 12)}… does not match poseidon4(tag, amount, epoch, nonce). ` +
+            `Inputs used: tag=${tagBig.toString().slice(0, 14)}…, amount="${target.amount}", epoch="${target.epoch}", nonce="${String(target.voucherNonce).slice(0, 16)}…".`;
+          if (tagMismatch) {
+            throw new Error(
+              "Loaded credential's employee_tag does not match the voucher's. " +
+              "You're likely on the wrong credential file. " + detail,
+            );
+          }
+          throw new Error(
+            "Voucher data is internally inconsistent. " +
+            "This typically happens when a payroll was generated before the salary unit fix; " +
+            "the on-chain commitment is bound to a different amount than what's stored in the encrypted voucher. " +
+            "Ask the employer to run a fresh payroll. " + detail,
+          );
+        }
+        console.log(
+          `[Claim] pre-flight ok: poseidon4(tag, amount=${target.amount}, epoch=${target.epoch}, nonce…) reproduces stored commitment.`,
+        );
+      } catch (preErr: any) {
+        // Re-throw with the message we built; if poseidon-lite import failed,
+        // fall through and let snarkjs catch any constraint failure later.
+        if (preErr?.message?.includes("commitment") || preErr?.message?.includes("credential")) throw preErr;
+        console.warn("[Claim] pre-flight recompute skipped:", preErr?.message);
+      }
 
       // ── 2. Generate Groth16 proof (256 B) ─────────────────────────────
       setProvingStep("proof");
@@ -906,8 +951,51 @@ export default function EmployeesPage() {
                             )}
                           </AnimatePresence>
 
-                          {/* Claim CTA */}
-                          {(isPending || voucher.status === "prepared") && (
+                          {/* Banner: stale (pre-normalization) data */}
+                          {(voucher as any).amountIsLikelyStale && !isSettled && (
+                            <div className="mt-5 rounded-xl border border-white/15 bg-white/[0.04] p-4">
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/65 mb-1.5">
+                                Stale voucher · cannot be claimed
+                              </p>
+                              <p className="text-xs leading-5 text-white/55">
+                                This voucher was generated before the salary-unit normalization fix.
+                                The on-chain commitment is bound to a wrong amount, so a fresh proof
+                                won't verify. Ask your employer to run a new payroll.
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Banner: run not on-chain yet */}
+                          {(voucher as any).runStatus === "missing" && !(voucher as any).amountIsLikelyStale && !isSettled && (
+                            <div className="mt-5 rounded-xl border border-white/15 bg-white/[0.04] p-4">
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/65 mb-1.5">
+                                Awaiting employer commit
+                              </p>
+                              <p className="text-xs leading-5 text-white/55">
+                                The payroll run exists in the encrypted store but hasn't been finalized
+                                on-chain yet. Ask the employer to complete the commit step in the wizard.
+                                Run id: <span className="font-mono text-white/70">{String((voucher as any).runId || "").slice(0, 8)}…</span>
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Banner: run on-chain but at wrong status (Pending=0 or Settled=2) */}
+                          {(voucher as any).runStatus === "pending" && !isSettled && (
+                            <div className="mt-5 rounded-xl border border-white/15 bg-white/[0.04] p-4">
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/65 mb-1.5">
+                                Commit not finalized
+                              </p>
+                              <p className="text-xs leading-5 text-white/55">
+                                On-chain run exists but never reached <span className="font-mono">finalize_merkle_root</span>.
+                                Ask the employer to retry the commit (idempotent).
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Claim CTA — only when voucher is healthy and run is committed */}
+                          {(isPending || voucher.status === "prepared") &&
+                            !(voucher as any).amountIsLikelyStale &&
+                            ((voucher as any).runStatus === "committed" || (voucher as any).runStatus === undefined) && (
                             <button
                               type="button"
                               onClick={() => void handleClaim(voucher)}

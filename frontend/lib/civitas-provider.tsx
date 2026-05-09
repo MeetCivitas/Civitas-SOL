@@ -63,6 +63,10 @@ export interface Voucher {
   status: "pending" | "prepared" | "claimed" | string;
   nullifier?: string;
   claimTxHash?: string;
+  /** On-chain payroll_run PDA state: missing → employer hasn't committed yet. */
+  runStatus?: "committed" | "missing" | "pending" | "settled" | "unknown";
+  /** Pre-normalization data (raw display USDC stored where micro was expected). */
+  amountIsLikelyStale?: boolean;
   [key: string]: unknown;
 }
 

@@ -6,6 +6,7 @@ import {
   getPlaintextClient,
   withRetry,
   nameToUUID,
+  unwrapNilDBField,
 } from "@/lib/server/nillion-server";
 
 export const runtime = "nodejs";
@@ -88,17 +89,101 @@ export async function GET(req: NextRequest) {
 
     const allVouchers: any[] = perCompanyResults.flat();
 
+    // ── On-chain run status check ───────────────────────────────────────
+    // The generate route writes voucher rows to NilDB BEFORE the wizard's
+    // commit step lands the payroll_run PDA on-chain. If the wizard's commit
+    // failed/timed out (or the user closed it), the voucher exists in NilDB
+    // but the run never finalized, and Claim will explode with "not on-chain
+    // yet". Verify each unique run once here so the UI can show a clear
+    // "awaiting commit" state instead of letting the user click into a wall.
+    type RunStatus = "committed" | "missing" | "pending" | "settled" | "unknown";
+    const runStatusCache = new Map<string, RunStatus>();
+    const uniqueRuns = Array.from(
+      new Set(
+        allVouchers
+          .map((r) => ({ runId: r.run_id, employer: r.employer_address }))
+          .filter((x) => x.runId && x.employer)
+          .map((x) => `${x.runId}|${x.employer}`),
+      ),
+    );
+
+    if (uniqueRuns.length > 0) {
+      const { Connection, PublicKey } = await import("@solana/web3.js");
+      const RPC = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com";
+      const PROGRAM_ID_STR = process.env.NEXT_PUBLIC_CIVITAS_PROGRAM_ID;
+      if (PROGRAM_ID_STR) {
+        const PROGRAM_ID = new PublicKey(PROGRAM_ID_STR);
+        const conn = new Connection(RPC, "confirmed");
+        const STATUS_OFFSET = 8 + 16 + 32 + 8 + 32 + 32 + 4 + 4 + 4;
+        await Promise.all(
+          uniqueRuns.map(async (key) => {
+            const [runId, employer] = key.split("|");
+            try {
+              const ridHex = runId.replace(/-/g, "");
+              const ridBytes = Buffer.from(ridHex, "hex");
+              const owner = new PublicKey(employer);
+              const [pda] = PublicKey.findProgramAddressSync(
+                [Buffer.from("run"), owner.toBuffer(), ridBytes],
+                PROGRAM_ID,
+              );
+              const info = await conn.getAccountInfo(pda, "confirmed");
+              if (!info) {
+                runStatusCache.set(key, "missing");
+                return;
+              }
+              const byte = info.data.length > STATUS_OFFSET ? info.data[STATUS_OFFSET] : -1;
+              const map: Record<number, RunStatus> = { 0: "pending", 1: "committed", 2: "settled" };
+              runStatusCache.set(key, map[byte] || "unknown");
+            } catch (err: any) {
+              console.warn(`[Vouchers] runStatus check failed for ${runId.slice(0, 8)}…:`, err.message?.slice(0, 80));
+              runStatusCache.set(key, "unknown");
+            }
+          }),
+        );
+      }
+    }
+
     const vouchers = allVouchers.map((r: any) => {
       const run = runCache[r.run_id] ?? {};
+      // Defensively unwrap amount: NilDB plaintext reads may return scalars OR
+      // %allot/%share wrappers. An object would Number-coerce to NaN → "0.00".
+      const rawAmount = r.amount;
+      const amountStr = unwrapNilDBField(rawAmount) || "0";
+
+      // Diagnostic: tiny amounts almost certainly mean the row was committed
+      // before the salary normalization fix (display USDC stored as raw "5"
+      // instead of "5000000" micro). These vouchers are unrecoverable — the
+      // commitment hash is bound to the wrong amount on-chain.
+      const numAmount = Number(amountStr);
+      const looksDisplayUsdc = Number.isFinite(numAmount) && numAmount > 0 && numAmount < 1_000;
+
+      if (process.env.NODE_ENV !== "production") {
+        if (typeof rawAmount === "object" && rawAmount !== null) {
+          console.log(
+            `[Vouchers] unwrapped amount for ${String(r.employee_tag).slice(0, 10)}…: ${JSON.stringify(rawAmount)} → ${amountStr}`,
+          );
+        }
+        if (looksDisplayUsdc) {
+          console.warn(
+            `[Vouchers] suspiciously small amount on voucher ${String(r.commitment).slice(0, 12)}… (run ${String(r.run_id).slice(0, 8)}…): "${amountStr}". Likely pre-normalization data — voucher unrecoverable.`,
+          );
+        }
+      }
+
+      const runKey = `${r.run_id}|${r.employer_address || run.employerAddress || ""}`;
+      const runStatus = runStatusCache.get(runKey) || "unknown";
+
       return {
         commitment: r.commitment || "",
         employeeTag: r.employee_tag || "",
-        amount: r.amount || "0",
+        amount: amountStr,
         epoch: r.epoch || "",
         voucherNonce: r.nonce || "",
         nullifier: r.nullifier || "",
         runId: r.run_id || "",
         status: r.status || "pending",
+        runStatus,
+        amountIsLikelyStale: looksDisplayUsdc,
         claimedAt: r.claimed_at || "",
         createdAt: r.created_at || "",
         claimTxHash: r.tx_hash || "",
@@ -106,6 +191,17 @@ export async function GET(req: NextRequest) {
         employerAddress: r.employer_address || run.employerAddress || "",
       };
     });
+
+    if (process.env.NODE_ENV !== "production") {
+      const summary = vouchers.reduce(
+        (acc: Record<string, number>, v: any) => {
+          acc[v.runStatus] = (acc[v.runStatus] || 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>,
+      );
+      console.log(`[Vouchers] returning ${vouchers.length} voucher(s); runStatus breakdown:`, summary);
+    }
 
     return NextResponse.json({ success: true, vouchers });
   } catch (error: any) {

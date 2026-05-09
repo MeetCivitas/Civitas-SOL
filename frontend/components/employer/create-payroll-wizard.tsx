@@ -224,12 +224,33 @@ export function CreatePayrollWizard() {
     setStep(5)
     console.log("[PayrollWizard] Generating payroll for employees:", selectedEmployees)
     try {
+      // Send per-employee net pay so the API commits the value the user actually
+      // sees in the wizard (base + bonus, after tax) instead of the raw stored
+      // salary_amount. Without this, the wizard's bonus/tax inputs are cosmetic.
+      const employeesPayload = selectedEmployees
+        .map((empId: string) => {
+          const emp = employees.find(
+            (e: any) => e.employee_id === empId || e.employeeTag === empId || e.employee_tag === empId,
+          )
+          if (!emp) return null
+          const tag = (emp as any).employee_tag || (emp as any).employeeTag || ""
+          if (!tag) return null
+          const netPay = computeNetPay(empId)
+          return { employee_tag: tag, salary: Number(netPay) || 0 }
+        })
+        .filter((x: any): x is { employee_tag: string; salary: number } => x !== null)
+
       const payload = {
         employerAddress: ownerAddress,
         runName: `${company?.name || "Civitas"} payroll ${new Date().toLocaleDateString()}`,
         period: new Date().toISOString().slice(0, 10),
         taxPercentage,
+        employees: employeesPayload,
       }
+      console.log(
+        "[PayrollWizard] Sending per-employee net pay to API:",
+        employeesPayload.map((e: any) => `${e.employee_tag.slice(0, 8)}…→${e.salary}`).join(", "),
+      )
       setProcessingLabel("Step 2/3: Sending to nilCC TEE enclave (or local BN254 fallback)...")
       const res = await fetch("/api/payroll/generate", {
         method: "POST",

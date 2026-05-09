@@ -84,9 +84,9 @@ async function computeLocalPayroll(manifest: {
 
   for (const emp of manifest.employees) {
     try {
-      // Parse salary as USDC micro-units (6 decimals)
-      const salaryFloat = Number(emp.salary) || 0;
-      const salaryMicro = BigInt(Math.round(salaryFloat * 1_000_000));
+      // Salary arrives already-normalized to integer micro-USDC (see normalizeSalaryToMicro
+      // in the route handler). Parsing is therefore a plain BigInt — no float math.
+      const salaryMicro = BigInt(String(emp.salary || "0"));
 
       // employee_tag IS already a BN254 field element stored as a decimal string.
       if (!emp.employee_tag) {
@@ -239,6 +239,50 @@ async function invokeNilCC(manifest: {
   return invokeLegacyEphemeralCVM(manifest);
 }
 
+// ── Salary normalization ─────────────────────────────────────────────────
+//
+// Both compute paths (the warm nilCC workload at workload/run_compute.js:150
+// and the local Poseidon fallback above) BigInt() the salary directly. They
+// therefore both expect salary to be a *string of integer micro-USDC*. The
+// inputs we get, however, are heterogeneous:
+//
+//   • Wizard override: net pay as a JS number (e.g. 5.6 → display USDC float)
+//   • Legacy NilDB read: salary_amount string (e.g. "11" → display USDC int)
+//   • Older clients may already send micro-units in either form. We pass
+//     those through so we don't double-scale.
+//
+// Heuristic: a non-fractional integer >= MICRO_THRESHOLD is assumed to
+// already be in micro-units (display values < $1M are rare); everything
+// else is display USDC and gets * 1_000_000. The threshold sits where
+// $1M display and $1.00 in micro both equal 1_000_000 — anything beneath
+// that is unambiguously display.
+const MICRO_THRESHOLD = 1_000_000n; // = $1.00 in micro-units, = $1M in display-USDC
+const SANITY_MAX_MICRO = 1_000_000_000_000n; // $1M committed payroll cap
+
+function normalizeSalaryToMicro(input: string | number | undefined | null): string {
+  if (input === undefined || input === null) return "0";
+
+  // Canonicalize to a trimmed string so number and string inputs share a path.
+  const str = (typeof input === "number" ? String(input) : String(input).trim());
+  if (!str) return "0";
+
+  // Already-integer micro: digits-only AND large enough to plausibly be micro.
+  if (/^\d+$/.test(str)) {
+    try {
+      const big = BigInt(str);
+      if (big >= MICRO_THRESHOLD) return big.toString();
+    } catch {
+      /* fall through to float path */
+    }
+  }
+
+  // Display USDC (fractional, or < MICRO_THRESHOLD whole) → micro.
+  // Round to nearest micro to absorb IEEE-754 float jitter (e.g. 0.1 * 1M).
+  const num = Number(str);
+  if (!Number.isFinite(num) || num < 0) return "0";
+  return BigInt(Math.round(num * 1_000_000)).toString();
+}
+
 // ── Address → companyId (consistent with employer/employees route) ─────────
 
 function addressToCompanyId(address: string): string {
@@ -254,14 +298,22 @@ function addressToCompanyId(address: string): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { employerAddress, runName, period, taxPercentage } = body as {
+    const { employerAddress, runName, period, taxPercentage, employees: overrideEmployees } = body as {
       employerAddress: string;
       runName: string;
       period: string;
       taxPercentage?: number;
+      // Wizard sends per-employee net pay so bonus/tax inputs actually take effect.
+      employees?: Array<{ employee_tag: string; salary: string | number }>;
     };
 
-    console.log("[payroll/generate] POST received:", { employerAddress, runName, period, taxPercentage });
+    console.log("[payroll/generate] POST received:", {
+      employerAddress,
+      runName,
+      period,
+      taxPercentage,
+      overrideCount: Array.isArray(overrideEmployees) ? overrideEmployees.length : 0,
+    });
 
     if (!employerAddress || !runName) {
       return NextResponse.json({ error: "Missing employerAddress or runName" }, { status: 400 });
@@ -271,30 +323,91 @@ export async function POST(req: NextRequest) {
     const runId = uuidv4();
     const epoch = Math.floor(Date.now() / 1000);
 
-    // ── Fetch employees from NilDB ────────────────────────────────────────
-    console.log(`[payroll/generate] Step 1 — Fetching employees for company ${companyId}`);
-    const { getNillionServerClient } = await import("@/lib/server/nillion-server");
-    const nillionClient = await getNillionServerClient();
+    // ── Resolve the employee list ─────────────────────────────────────────
+    // Prefer the wizard-supplied override (per-employee salary already
+    // includes bonus + tax). Fall back to fetching all from NilDB only if
+    // the request didn't include any overrides (legacy callers).
+    let manifestEmployees: Array<{ employee_tag: string; salary: string | number }>;
 
-    const employees = await nillionClient.getEmployeesForPayroll(companyId);
-    console.log(`[payroll/generate] Step 1 complete — found ${employees?.length ?? 0} employee(s)`);
+    if (Array.isArray(overrideEmployees) && overrideEmployees.length > 0) {
+      manifestEmployees = overrideEmployees.filter(
+        (e) => e && typeof e.employee_tag === "string" && e.employee_tag.length > 0,
+      );
+      console.log(
+        `[payroll/generate] Step 1 — Using ${manifestEmployees.length} per-employee net-pay override(s) from wizard`,
+      );
+    } else {
+      console.log(`[payroll/generate] Step 1 — Fetching employees for company ${companyId}`);
+      const { getNillionServerClient } = await import("@/lib/server/nillion-server");
+      const nillionClient = await getNillionServerClient();
+      const employees = await nillionClient.getEmployeesForPayroll(companyId);
+      console.log(`[payroll/generate] Step 1 complete — found ${employees?.length ?? 0} employee(s)`);
+      if (!employees || employees.length === 0) {
+        return NextResponse.json(
+          { error: "No employees registered for this employer. Add employees first." },
+          { status: 404 },
+        );
+      }
+      manifestEmployees = employees.map((emp) => ({
+        employee_tag: emp.employee_tag,
+        salary: emp.salary_amount,
+      }));
+    }
 
-    if (!employees || employees.length === 0) {
+    if (manifestEmployees.length === 0) {
       return NextResponse.json(
-        { error: "No employees registered for this employer. Add employees first." },
-        { status: 404 }
+        { error: "No employees selected for this payroll run." },
+        { status: 400 },
       );
     }
+
+    // ── Normalize salaries to integer micro-USDC strings ─────────────────
+    // The downstream BigInt() calls in both compute paths will throw on
+    // floats and silently misinterpret display-USDC inputs.
+    const normalizedEmployees = manifestEmployees.map((e) => {
+      const raw = e.salary;
+      const micro = normalizeSalaryToMicro(raw);
+      console.log(
+        `[payroll/generate] salary normalize: ${e.employee_tag.slice(0, 8)}… raw=${JSON.stringify(raw)} (${typeof raw}) → micro="${micro}" ($${(Number(micro) / 1_000_000).toFixed(2)})`,
+      );
+      return { employee_tag: String(e.employee_tag), salary: micro };
+    });
+
+    // Sanity guardrail: refuse to commit if any single salary or the total
+    // looks like an obvious unit-blowup. Bail with a clear error before
+    // burning ZK proving time and on-chain rent on a bogus run.
+    const totalMicro = normalizedEmployees.reduce((acc, e) => acc + BigInt(e.salary || "0"), 0n);
+    const oversized = normalizedEmployees.find((e) => BigInt(e.salary || "0") > SANITY_MAX_MICRO);
+    if (oversized) {
+      const usd = (Number(oversized.salary) / 1_000_000).toFixed(2);
+      return NextResponse.json(
+        {
+          error: "Salary exceeds sanity cap",
+          details: `Employee ${oversized.employee_tag.slice(0, 10)}… normalized to $${usd} USDC (> $1M). Inspect the wizard inputs and the stored salary_amount.`,
+        },
+        { status: 400 },
+      );
+    }
+    if (totalMicro > SANITY_MAX_MICRO * BigInt(normalizedEmployees.length || 1)) {
+      const usd = (Number(totalMicro) / 1_000_000).toFixed(2);
+      return NextResponse.json(
+        {
+          error: "Total payroll exceeds sanity cap",
+          details: `Aggregate normalized to $${usd} USDC. Likely a unit error in salary_amount; not committing.`,
+        },
+        { status: 400 },
+      );
+    }
+    console.log(
+      `[payroll/generate] Normalized total: ${totalMicro.toString()} micro = $${(Number(totalMicro) / 1_000_000).toFixed(2)} across ${normalizedEmployees.length} employee(s)`,
+    );
 
     // ── Prepare manifest ─────────────────────────────────────────────────
     const manifest = {
       run_id: runId,
       epoch: epoch.toString(),
       company_id: companyId,
-      employees: employees.map((emp) => ({
-        employee_tag: emp.employee_tag,
-        salary: emp.salary_amount,
-      })),
+      employees: normalizedEmployees,
     };
 
     // ── Try nilCC TEE (Strict) ───────────────────────────────────────────
