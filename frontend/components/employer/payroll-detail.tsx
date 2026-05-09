@@ -229,7 +229,7 @@ export function PayrollDetail({ runId }: { runId: string }) {
               {[
                 { label: "Employees", value: <span className="num text-white">{run.employeeCount}</span> },
                 { label: "Total",     value: <span className="num text-white/85">*** USDC</span> },
-                { label: "Epoch",     value: <span className="font-mono text-[11px] text-white/55">{run.epoch || "—"}</span> },
+                { label: "Epoch",     value: <span className="font-mono text-[11px] text-white/55">{run.epoch || "N/A"}</span> },
                 { label: "Network",   value: <span className="text-sm font-semibold text-white">{SOLANA_CLUSTER_LABEL}</span> },
               ].map(row => (
                 <div key={row.label} className="flex justify-between items-center">
@@ -406,7 +406,7 @@ export function PayrollDetail({ runId }: { runId: string }) {
                   <div className="pb-3 pt-0.5">
                     <p className="text-sm font-medium text-white/85">{event.text}</p>
                     <p className="text-[11px] text-white/35 mt-0.5 font-mono">
-                      {event.ts ? new Date(event.ts).toLocaleString() : "—"}
+                      {event.ts ? new Date(event.ts).toLocaleString() : "Pending"}
                     </p>
                   </div>
                 </li>

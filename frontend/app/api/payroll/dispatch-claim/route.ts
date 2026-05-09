@@ -236,7 +236,7 @@ export async function POST(req: NextRequest) {
   const nullInfo = await conn.getAccountInfo(nullifierPda, "confirmed");
   if (!nullInfo || !nullInfo.owner.equals(PROGRAM_ID)) {
     return err(
-      `nullifier PDA ${nullifierPda.toBase58()} not initialised — claim was not actually verified on chain`,
+      `nullifier PDA ${nullifierPda.toBase58()} not initialised. Claim was not actually verified on chain.`,
       400,
     );
   }
@@ -274,7 +274,7 @@ export async function POST(req: NextRequest) {
 
   if (!bytesEqual(recomputed, piHashBytes)) {
     return err(
-      `pi_hash binding failed — proof does not commit to (recipient=${body.recipientTokenAccount}, amount=${body.amountBaseUnits}, epoch=${body.epoch}). Recomputed=${bytesToHex(recomputed)} chain=${bytesToHex(piHashBytes)}`,
+      `pi_hash binding failed. Proof does not commit to (recipient=${body.recipientTokenAccount}, amount=${body.amountBaseUnits}, epoch=${body.epoch}). Recomputed=${bytesToHex(recomputed)} chain=${bytesToHex(piHashBytes)}`,
       400,
     );
   }

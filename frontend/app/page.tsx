@@ -114,24 +114,34 @@ export default function HomePage() {
   const [email, setEmail] = useState("")
   const [subscribed, setSubscribed] = useState(false)
   const [isSubscribing, setIsSubscribing] = useState(false)
+  const [subscribeError, setSubscribeError] = useState("")
 
   const [showWaitlist, setShowWaitlist] = useState(false)
   const [waitlistForm, setWaitlistForm] = useState({ email: "", company: "", twitter: "" })
   const [waitlistStatus, setWaitlistStatus] = useState<"idle" | "submitting" | "success" | "error">("idle")
+  const [waitlistError, setWaitlistError] = useState("")
 
   const handleSubscribe = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email) return
     setIsSubscribing(true)
+    setSubscribeError("")
     try {
       const res = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, company: "Newsletter Subscriber", twitter: "" }),
       })
-      if (res.ok) { setSubscribed(true); setEmail("") }
+      const json = await res.json().catch(() => ({}))
+      if (res.ok && json?.success) {
+        setSubscribed(true)
+        setEmail("")
+      } else {
+        setSubscribeError(json?.error || "Subscription failed. Please try again.")
+      }
     } catch (err) {
       console.error("Failed to subscribe:", err)
+      setSubscribeError("Network error. Please try again.")
     } finally {
       setIsSubscribing(false)
     }
@@ -140,22 +150,27 @@ export default function HomePage() {
   const handleJoinWaitlist = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
     setWaitlistStatus("submitting")
+    setWaitlistError("")
     try {
       const res = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(waitlistForm),
       })
-      if (!res.ok) throw new Error("Failed to submit")
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error || "Failed to submit")
+      }
       setWaitlistStatus("success")
       setTimeout(() => {
         setShowWaitlist(false)
         setWaitlistStatus("idle")
         setWaitlistForm({ email: "", company: "", twitter: "" })
       }, 2500)
-    } catch {
+    } catch (err: any) {
+      setWaitlistError(err?.message || "Submission failed. Please try again.")
       setWaitlistStatus("error")
-      setTimeout(() => setWaitlistStatus("idle"), 2500)
+      setTimeout(() => setWaitlistStatus("idle"), 4000)
     }
   }, [waitlistForm])
 
@@ -251,8 +266,6 @@ export default function HomePage() {
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--clr-pulse)]" />
                 </span>
                 Built on Solana
-                <span className="h-3 w-px bg-white/15 mx-1" />
-                MagicBlock Frontier Hackathon
               </motion.div>
 
               <motion.h1
@@ -269,8 +282,8 @@ export default function HomePage() {
                 className="text-[17px] text-white/55 max-w-xl mb-10 leading-[1.6] font-light"
               >
                 Civitas delivers production-grade payroll privacy on Solana through a 4-layer
-                stack — Nillion nilDB + nilCC, circom Groth16 ZK proofs verified by Solana&rsquo;s
-                native alt-bn128 syscalls, and MagicBlock Private Payments — settling natively on
+                stack: Nillion nilDB + nilCC, circom Groth16 ZK proofs verified by Solana&rsquo;s
+                native alt-bn128 syscalls, and MagicBlock Private Payments. Settling natively on
                 Solana L1.
               </motion.p>
 
@@ -327,7 +340,7 @@ export default function HomePage() {
               </h2>
               <p className="text-white/55 text-[15px] max-w-2xl mx-auto leading-relaxed">
                 Watch <span className="text-white">Rythme</span> execute a fully shielded zero-knowledge
-                payroll on Solana devnet. Not a whitepaper — production infrastructure today.
+                payroll on Solana devnet. Not a whitepaper. Production infrastructure today.
               </p>
             </div>
 
@@ -533,19 +546,19 @@ export default function HomePage() {
                   icon: <Database className="h-5 w-5" />,
                   label: "Data Privacy",
                   title: "Nillion nilDB + nilCC",
-                  desc: "Salary data stored as %allot secret shares across Nillion nodes. Payroll computation runs inside a Trusted Execution Environment — amounts never leave the enclave.",
+                  desc: "Salary data stored as %allot secret shares across Nillion nodes. Payroll computation runs inside a Trusted Execution Environment. Amounts never leave the enclave.",
                 },
                 {
                   icon: <Cpu className="h-5 w-5" />,
                   label: "ZK Proving",
                   title: "Groth16 (circom + snarkjs)",
-                  desc: "256-byte Groth16 proofs generated client-side via snarkjs from the voucher.circom circuit. Verified by Solana's native alt-bn128 syscalls — fits inside the Solana CU budget. Nullifier PDA blocks double-spend.",
+                  desc: "256-byte Groth16 proofs generated client-side via snarkjs from the voucher.circom circuit. Verified by Solana's native alt-bn128 syscalls, fitting inside the Solana CU budget. Nullifier PDA blocks double-spend.",
                 },
                 {
                   icon: <Zap className="h-5 w-5" />,
                   label: "Payment Privacy",
                   title: "MagicBlock Private Pay",
-                  desc: "Claim settlement is routed employer-ER → employee-ER through MagicBlock Permissioned Ephemeral Rollups, with split transfers and randomized 500–30,000 ms delays. The base layer sees a transfer happened — never the amount or pairing.",
+                  desc: "Claim settlement is routed employer-ER → employee-ER through MagicBlock Permissioned Ephemeral Rollups, with split transfers and randomized 500 to 30,000 ms delays. The base layer sees a transfer happened. Never the amount or pairing.",
                 },
               ].map((card) => (
                 <div
@@ -607,29 +620,34 @@ export default function HomePage() {
             <p className="text-sm text-white/40 font-light mb-5">Protocol releases, security advisories, and feature announcements.</p>
             {subscribed ? (
               <div className="flex items-center gap-3 px-5 py-3.5 rounded-xl bg-white/[0.04] border border-white/15 text-white text-sm font-medium">
-                <CheckCircle2 className="h-4 w-4" /> Subscribed — see you there.
+                <CheckCircle2 className="h-4 w-4" /> Subscribed. See you there.
               </div>
             ) : (
-              <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-3">
-                <label htmlFor="footer-email" className="sr-only">Email address</label>
-                <input
-                  id="footer-email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="Your email address"
-                  required
-                  className="flex-1 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.10] text-white placeholder:text-white/30 text-sm focus-visible:outline-none focus-visible:border-white/35 focus-visible:bg-white/[0.06] transition-colors"
-                />
-                <button
-                  type="submit"
-                  disabled={isSubscribing}
-                  className="px-5 py-3 rounded-xl bg-white text-black text-[12px] font-semibold tracking-[0.18em] uppercase hover:bg-white/90 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-                >
-                  {isSubscribing ? "Subscribing…" : "Subscribe"}
-                </button>
-              </form>
+              <>
+                <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-3">
+                  <label htmlFor="footer-email" className="sr-only">Email address</label>
+                  <input
+                    id="footer-email"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={e => { setEmail(e.target.value); if (subscribeError) setSubscribeError("") }}
+                    placeholder="Your email address"
+                    required
+                    className="flex-1 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.10] text-white placeholder:text-white/30 text-sm focus-visible:outline-none focus-visible:border-white/35 focus-visible:bg-white/[0.06] transition-colors"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isSubscribing}
+                    className="px-5 py-3 rounded-xl bg-white text-black text-[12px] font-semibold tracking-[0.18em] uppercase hover:bg-white/90 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                  >
+                    {isSubscribing ? "Subscribing…" : "Subscribe"}
+                  </button>
+                </form>
+                {subscribeError && (
+                  <p className="mt-3 text-xs text-red-400/90" role="alert">{subscribeError}</p>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -710,21 +728,23 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Massive wordmark — properly bounded so 'CIVITAS' never clips */}
+        {/* Massive wordmark - logo SVG scaled to footer width (true Qurova-Demo letterforms) */}
         <div className="relative w-full overflow-hidden select-none">
-          <div className="px-[6vw] pb-6 pt-10">
-            <p
-              className="block text-center font-black tracking-[-0.06em] leading-none text-transparent bg-clip-text bg-gradient-to-b from-white/85 via-white/40 to-white/5"
-              style={{
-                fontSize: "clamp(64px, 18vw, 280px)",
-                letterSpacing: "-0.06em",
-              }}
+          <div className="px-[3vw] pb-2 pt-8">
+            <img
+              src="/logo-light.svg"
+              alt=""
               aria-hidden
-            >
-              CIVITAS
-            </p>
+              className="block w-full h-auto"
+              style={{
+                WebkitMaskImage:
+                  "linear-gradient(to bottom, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.45) 55%, rgba(255,255,255,0.05) 100%)",
+                maskImage:
+                  "linear-gradient(to bottom, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.45) 55%, rgba(255,255,255,0.05) 100%)",
+              }}
+            />
           </div>
-          <div className="absolute inset-0 bg-gradient-to-b from-black via-transparent to-black pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black pointer-events-none" />
         </div>
       </footer>
 
@@ -861,7 +881,7 @@ export default function HomePage() {
                     </button>
                     {waitlistStatus === "error" && (
                       <p className="text-red-400/90 text-xs text-center mt-2" role="alert">
-                        Submission failed. Please try again.
+                        {waitlistError || "Submission failed. Please try again."}
                       </p>
                     )}
                   </form>

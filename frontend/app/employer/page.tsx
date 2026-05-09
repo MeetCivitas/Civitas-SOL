@@ -849,7 +849,7 @@ export default function EmployerDashboard() {
                   <div className="relative z-10 flex flex-col gap-6">
                       <div>
                         <label htmlFor="treasury-deposit" className="mb-3 block text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">
-                          Amount to mint (devnet — leave blank for 10,000)
+                          Amount to mint (devnet, leave blank for 10,000)
                         </label>
                         <div className="relative">
                           <input
@@ -952,7 +952,7 @@ export default function EmployerDashboard() {
                             const sig = String(j.depositSig);
                             const url = `https://explorer.solana.com/tx/${sig}?cluster=devnet`;
                             setTxStatus(
-                              `MagicBlock funded ✓ — deployer ${String(j.employer).slice(0, 6)}…${String(j.employer).slice(-4)} now has ER balance. Deposit tx: ${sig} (${url})`,
+                              `MagicBlock funded ✓ Deployer ${String(j.employer).slice(0, 6)}…${String(j.employer).slice(-4)} now has ER balance. Deposit tx: ${sig} (${url})`,
                             );
                           } catch (e) {
                             const msg = e instanceof Error ? e.message : String(e);

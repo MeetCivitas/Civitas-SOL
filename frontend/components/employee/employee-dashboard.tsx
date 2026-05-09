@@ -197,7 +197,7 @@ export function EmployeeDashboard() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-white text-sm">
-                          Payroll — {run ? new Date(run.createdAt).toLocaleDateString() : "Unknown"}
+                          Payroll · {run ? new Date(run.createdAt).toLocaleDateString() : "Unknown"}
                         </p>
                         <p className="text-xs text-white/40 mt-0.5">
                           {note.status === "Opened" && note.decryptedAmount

@@ -33,7 +33,7 @@ const FAQS = [
   {
     question: "How do I claim my funds?",
     answer:
-      "After opening a payroll note and revealing your payment, you claim your funds on Solana by generating a 256-byte Groth16 ZK proof in your browser (snarkjs + the voucher.circom circuit). The proof is verified on-chain via Solana's native alt-bn128 syscalls, and the payout is then routed employer-ER → employee-ER through MagicBlock private payments — no bridging needed.",
+      "After opening a payroll note and revealing your payment, you claim your funds on Solana by generating a 256-byte Groth16 ZK proof in your browser (snarkjs + the voucher.circom circuit). The proof is verified on-chain via Solana's native alt-bn128 syscalls, and the payout is then routed employer-ER → employee-ER through MagicBlock private payments. No bridging needed.",
     icon: Wallet,
   },
   {

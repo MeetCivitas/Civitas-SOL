@@ -136,7 +136,7 @@ export function EmployerDashboard() {
       )
       await connection.confirmTransaction(signature, "confirmed")
 
-      setFundMsg(`Vault funded — 100,000 USDC. Tx ${signature.slice(0, 12)}…`)
+      setFundMsg(`Vault funded. 100,000 USDC. Tx ${signature.slice(0, 12)}…`)
       const { getVaultState } = await import("@/lib/solana-program")
       const { PublicKey } = await import("@solana/web3.js")
       const vs = await getVaultState(new PublicKey(ownerAddress))

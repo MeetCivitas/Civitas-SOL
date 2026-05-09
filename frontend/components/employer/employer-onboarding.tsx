@@ -226,8 +226,8 @@ export function EmployerOnboarding({ ownerAddress, onComplete }: Props) {
                                         { label: "Name", value: form.employerName },
                                         { label: "Position", value: form.position },
                                         { label: "Company", value: form.companyName },
-                                        { label: "Industry", value: form.industry || "—" },
-                                        { label: "Team Size", value: EMPLOYEE_RANGES.find(r => r.value === form.employeeCountRange)?.label || "—" },
+                                        { label: "Industry", value: form.industry || "Not specified" },
+                                        { label: "Team Size", value: EMPLOYEE_RANGES.find(r => r.value === form.employeeCountRange)?.label || "Not specified" },
                                     ].map((row) => (
                                         <div key={row.label} className="flex items-center justify-between px-5 py-3">
                                             <span className="text-sm text-white/40">{row.label}</span>

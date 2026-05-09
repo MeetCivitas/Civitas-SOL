@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json(
                 {
                     success: false,
-                    error: "Nillion not configured — set NEXT_PUBLIC_NILLION_ORG_SECRET_KEY in .env.local",
+                    error: "Nillion not configured. Set NEXT_PUBLIC_NILLION_ORG_SECRET_KEY in .env.local.",
                     fallback: true,
                 },
                 { status: 200 }

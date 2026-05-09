@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
             success: true,
             profile: profilePayload,
-            _note: "NilDB not configured — profile stored client-side only",
+            _note: "NilDB not configured. Profile stored client-side only.",
         });
     }
 

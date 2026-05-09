@@ -290,7 +290,7 @@ export default function EmployeesPage() {
       const runInfo = await conn.getAccountInfo(precheckRunPda);
       if (!runInfo) {
         throw new Error(
-          `Payroll run ${runId.slice(0, 8)}… is not on-chain yet — the employer's commit didn't reach finalization. Ask them to recommit this run.`,
+          `Payroll run ${runId.slice(0, 8)}… is not on-chain yet. The employer's commit didn't reach finalization. Ask them to recommit this run.`,
         );
       }
       // PayrollRunAccount status byte sits at: 8(disc)+16+32+8+32+32+4+4+4 = 140
@@ -383,7 +383,7 @@ export default function EmployeesPage() {
 
       if (alreadyClaimed) {
         setProvingStep("payment");
-        setProvingLabel("Voucher already claimed on-chain — re-dispatching settlement…");
+        setProvingLabel("Voucher already claimed on-chain. Re-dispatching settlement…");
       } else {
         const tx = new Transaction();
         tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }));
@@ -467,12 +467,12 @@ export default function EmployeesPage() {
 
       const fullDispatchSig = String(dispatchJson?.privateTransferSig || "");
       setStatus(
-        `ZK gate ✓  Private transfer queued ✓  Dispatch tx: ${fullDispatchSig} — USDC settles to your USDC ATA within ~30s as the TEE validator cranks the queue.`,
+        `ZK gate ✓  Private transfer queued ✓  Dispatch tx: ${fullDispatchSig}. USDC settles to your USDC ATA within ~30s as the TEE validator cranks the queue.`,
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       const friendly = msg.includes("unreachable")
-        ? "Circuit constraint failed — your credential does not match this voucher. Verify you loaded the correct credential file."
+        ? "Circuit constraint failed. Your credential does not match this voucher. Verify you loaded the correct credential file."
         : msg;
       console.error("[Claim] FULL ERROR:", err);
       setStatus(`Claim error: ${friendly}`);
@@ -640,7 +640,7 @@ export default function EmployeesPage() {
                 <span className="font-semibold text-blue-300">ZK Proof:</span>{" "}
                 256-byte Groth16 proofs are generated in your browser via snarkjs from the
                 <code className="mx-1 px-1 py-0.5 rounded bg-white/[0.06] text-white/70">voucher.circom</code>
-                circuit. On-chain verification runs the full alt-bn128 pairing check natively on Solana —
+                circuit. On-chain verification runs the full alt-bn128 pairing check natively on Solana,
                 fitting inside the CU budget. Anti-double-spend via the nullifier PDA is enforced
                 unconditionally on every claim, then settlement is routed through MagicBlock private payments.
               </p>
@@ -693,12 +693,12 @@ export default function EmployeesPage() {
                         <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
                           <div className="min-w-0">
                             <p className="text-[10px] uppercase tracking-[0.18em] text-white/30">Epoch</p>
-                            <p className="mt-0.5 font-mono text-xs text-white/60">{voucher.epoch || "—"}</p>
+                            <p className="mt-0.5 font-mono text-xs text-white/60">{voucher.epoch || "N/A"}</p>
                           </div>
                           <div className="min-w-0">
                             <p className="text-[10px] uppercase tracking-[0.18em] text-white/30">Nonce</p>
                             <p className="mt-0.5 font-mono text-xs text-white/60" title={String(voucher.voucherNonce || "")}>
-                              {voucher.voucherNonce ? `${String(voucher.voucherNonce).slice(0, 14)}…` : "—"}
+                              {voucher.voucherNonce ? `${String(voucher.voucherNonce).slice(0, 14)}…` : "N/A"}
                             </p>
                           </div>
                           {voucher.claimTxHash && (
@@ -740,7 +740,7 @@ export default function EmployeesPage() {
                           <div className="mt-4 space-y-3">
                             <div className="flex items-center gap-2 rounded-[14px] border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-400">
                               <CheckCircle2 className="h-4 w-4 shrink-0" />
-                              Private transfer queued — {usdcAmount} USDC settling to your USDC ATA
+                              Private transfer queued. {usdcAmount} USDC settling to your USDC ATA
                             </div>
                             <div className="rounded-[14px] border border-white/8 bg-white/[0.03] px-4 py-3 text-xs text-white/50 space-y-2">
                               <p>

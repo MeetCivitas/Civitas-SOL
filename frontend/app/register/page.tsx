@@ -208,7 +208,7 @@ function EmployerWizard() {
               </div>
               <h2 className="text-xl font-light text-white">Initialize Treasury Vault</h2>
               <p className="text-xs text-white/40 mt-2 font-light leading-relaxed px-4">
-                Creates your on-chain treasury — a single transaction (~0.003 SOL for rent). Your wallet will pop up to confirm.
+                Creates your on-chain treasury in a single transaction (~0.003 SOL for rent). Your wallet will pop up to confirm.
               </p>
             </div>
 

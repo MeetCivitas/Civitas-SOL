@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     if (!isNillionConfigured()) {
       return NextResponse.json({
         success: true,
-        message: "NilDB not configured — status update skipped",
+        message: "NilDB not configured. Status update skipped.",
       });
     }
 

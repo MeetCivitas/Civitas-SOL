@@ -220,7 +220,7 @@ export function CreatePayrollWizard() {
     setGenerateError("")
     setCommitError("")
     setIsProcessing(true)
-    setProcessingLabel("Step 1/3 — Fetching employees from Nillion SecretVaults...")
+    setProcessingLabel("Step 1/3: Fetching employees from Nillion SecretVaults...")
     setStep(5)
     console.log("[PayrollWizard] Generating payroll for employees:", selectedEmployees)
     try {
@@ -230,7 +230,7 @@ export function CreatePayrollWizard() {
         period: new Date().toISOString().slice(0, 10),
         taxPercentage,
       }
-      setProcessingLabel("Step 2/3 — Sending to nilCC TEE enclave (or local BN254 fallback)...")
+      setProcessingLabel("Step 2/3: Sending to nilCC TEE enclave (or local BN254 fallback)...")
       const res = await fetch("/api/payroll/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -280,7 +280,7 @@ export function CreatePayrollWizard() {
         teeActive: data.teeActive,
       }
 
-      setProcessingLabel("Step 3/3 — Storing encrypted vouchers in Nillion SecretVaults...")
+      setProcessingLabel("Step 3/3: Storing encrypted vouchers in Nillion SecretVaults...")
       setGeneratedRun(newRun)
       setProofBundle({ proof: data.proof || {}, publicSignals: data.public_signals || data.publicSignals || [] })
       console.log("[PayrollWizard] Generation success:", newRun)
@@ -302,7 +302,7 @@ export function CreatePayrollWizard() {
 
     setCommitError("")
     setIsProcessing(true)
-    setProcessingLabel("Step 1/3 — Building Solana commit transaction...")
+    setProcessingLabel("Step 1/3: Building Solana commit transaction...")
     setCommitTx(null)
     // Move to step 6 (commit step) immediately to show loading state
     setStep(6)
@@ -359,7 +359,7 @@ export function CreatePayrollWizard() {
         // requires REST endpoints not yet deployed on devnet, so we don't
         // attempt a separate PER handshake — the router is the working path.)
         setPerStatus("processing")
-        setProcessingLabel(`Step 2/3 — Routing ${data.transactions.length} commit txs through MagicBlock ER…`)
+        setProcessingLabel(`Step 2/3: Routing ${data.transactions.length} commit txs through MagicBlock ER…`)
 
         const MAGIC_ROUTER = process.env.NEXT_PUBLIC_MAGICBLOCK_ROUTER ?? "https://devnet-router.magicblock.app"
         const { ConnectionMagicRouter } = await import("@magicblock-labs/ephemeral-rollups-sdk")
@@ -372,7 +372,7 @@ export function CreatePayrollWizard() {
         console.log(`[PayrollWizard] MagicBlock ER confirmed ${sigs.length} tx(s). Last sig: ${actualTxHash}`)
       }
 
-      if (!ownerAddress) throw new Error("Wallet address missing — reconnect and retry")
+      if (!ownerAddress) throw new Error("Wallet address missing. Reconnect and retry.")
 
       // ── Verify the on-chain commit actually finalized ──────────────────
       // The wizard previously declared "committed" if just the last tx
@@ -407,7 +407,7 @@ export function CreatePayrollWizard() {
         if (onChainStatus !== 1) {
           throw new Error(
             `Commit didn't finalize on-chain (run ${generatedRun.runId.slice(0, 8)}… status=${onChainStatus === -1 ? "missing" : onChainStatus}). ` +
-            `Click Retry Commit — start_payroll_run and append_commitments_chunk are now idempotent so retries are safe.`,
+            `Click Retry Commit. start_payroll_run and append_commitments_chunk are now idempotent so retries are safe.`,
           )
         }
       } catch (verErr: any) {
@@ -896,7 +896,7 @@ export function CreatePayrollWizard() {
                           <p className="text-[10px] text-white/40 truncate">
                             {perStatus === "delegating" ? "Delegating to Permissioned ER…" :
                              perStatus === "processing" ? "Chunks processing in private ER session" :
-                             "Finalizing — committing sealed state to L1"}
+                             "Finalizing: committing sealed state to L1"}
                           </p>
                         </div>
                         <span className="text-[9px] text-white/25 font-mono shrink-0">devnet-router.magicblock.app</span>
@@ -944,7 +944,7 @@ export function CreatePayrollWizard() {
 
                   {/* Privacy layers activated */}
                   <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 space-y-2">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-3">Privacy Stack — Active</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-3">Privacy Stack · Active</p>
                     {(() => {
                       const mbStatus = (generatedRun as any)?.magicblockStatus as
                         | "deferred"
@@ -968,7 +968,7 @@ export function CreatePayrollWizard() {
                         { color: "text-amber-400 border-amber-500/20 bg-amber-500/5", label: "MagicBlock ER", sub: "Commit txs routed through Ephemeral Rollup", ok: true },
                         ppActive
                           ? { color: "text-blue-400 border-blue-500/20 bg-blue-500/5", label: "MagicBlock Private Payments", sub: ppSub, ok: true }
-                          : { color: "text-amber-400 border-amber-500/20 bg-amber-500/5", label: "MagicBlock Private Payments — UNAVAILABLE", sub: `Vendor outage; ZK-voucher unlinkability still applies. Detail: ${(mbError ?? "service degraded").slice(0, 80)}`, ok: false },
+                          : { color: "text-amber-400 border-amber-500/20 bg-amber-500/5", label: "MagicBlock Private Payments: UNAVAILABLE", sub: `Vendor outage; ZK-voucher unlinkability still applies. Detail: ${(mbError ?? "service degraded").slice(0, 80)}`, ok: false },
                         { color: "text-emerald-400 border-emerald-500/20 bg-emerald-500/5", label: "Groth16 ZK Voucher", sub: "Per-claim unlinkability enforced on-chain", ok: true },
                       ]
                       return layers.map(layer => (

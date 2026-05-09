@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     const nullifierAccount = await connection.getAccountInfo(nullifierPda);
     if (!nullifierAccount) {
       return NextResponse.json(
-        { error: "Nullifier account not found — settlement may not be complete" },
+        { error: "Nullifier account not found. Settlement may not be complete." },
         { status: 400 }
       );
     }

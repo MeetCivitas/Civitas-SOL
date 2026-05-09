@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
             tee_attestation: {
                 enclave_type: "SEV-SNP",
                 path: warmAvailable ? "v4-warm" : "legacy-ephemeral",
-                note: "credential_nonces generated inside TEE — not accessible by employer",
+                note: "credential_nonces generated inside TEE. Not accessible by employer.",
             },
         });
     } catch (err: any) {

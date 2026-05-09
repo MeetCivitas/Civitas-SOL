@@ -6,7 +6,7 @@ import "./globals.css"
 
 export const metadata: Metadata = {
   title: "Civitas · Private Payroll on Solana",
-  description: "Zero-knowledge payroll infrastructure on Solana — powered by Nillion, MagicBlock, and circom Groth16 ZK proofs.",
+  description: "Zero-knowledge payroll infrastructure on Solana. Powered by Nillion, MagicBlock, and circom Groth16 ZK proofs.",
   generator: "v0.app",
   icons: {
     icon: [
