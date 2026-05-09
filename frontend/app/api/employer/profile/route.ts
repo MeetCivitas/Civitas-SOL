@@ -7,6 +7,7 @@ import {
     isNillionConfigured,
     ensureCompanyCollections,
     nameToUUID,
+    isAlreadyExistsError,
 } from "@/lib/server/nillion-server";
 
 export const runtime = "nodejs";
@@ -60,14 +61,16 @@ async function ensureProfileCollection(): Promise<string> {
                 schema: PROFILE_SCHEMA as any,
                 type: "standard",
             }),
-            "createProfileCollection"
+            "createProfileCollection",
+            3,
+            { bailIf: isAlreadyExistsError }
         );
         console.log(`[profile] Created collection "${PROFILE_COLLECTION_NAME}" (${id})`);
     } catch (e: any) {
-        const msg = typeof e === "string" ? e : e?.message || JSON.stringify(e);
-        if (msg.includes("already exists") || msg.includes("duplicate")) {
+        if (isAlreadyExistsError(e)) {
             console.log(`[profile] Collection "${PROFILE_COLLECTION_NAME}" already exists (${id})`);
         } else {
+            const msg = typeof e === "string" ? e : e?.message || JSON.stringify(e);
             console.error("[profile] createCollection failed:", msg);
             throw e;
         }

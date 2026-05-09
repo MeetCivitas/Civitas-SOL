@@ -456,30 +456,43 @@ export default function EmployerDashboard() {
         <EmployerOnboarding ownerAddress={address} onComplete={(profile) => void handleCompleteOnboarding(profile)} />
       ) : null}
 
-      <header className="sticky top-0 z-50 border-b border-white/[0.04] bg-[#030303]/60 backdrop-blur-2xl">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
-          <div className="flex items-center gap-5">
-            <Link href="/" className="group flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06] text-sm font-bold text-white transition-all duration-300 group-hover:border-blue-500/30">
-                C
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-lg font-semibold tracking-tight text-white/90">Civitas</span>
-                <span className="hidden rounded-md border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.2em] text-blue-400 sm:inline-block">
-                  Solana Node
-                </span>
-              </div>
-            </Link>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white/40 sm:flex">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+      <header className="sticky top-0 z-50">
+        <div className="absolute inset-0 bg-black/70 backdrop-blur-2xl" aria-hidden />
+        <div
+          className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent"
+          aria-hidden
+        />
+        <div className="relative mx-auto flex h-16 max-w-7xl items-center justify-between px-5 sm:px-8">
+          <Link
+            href="/"
+            aria-label="Civitas home"
+            className="group relative flex items-center gap-3 outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:rounded-md"
+          >
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" aria-hidden>
+              <span className="absolute inset-0 rounded-full bg-white/55 animate-ping" />
+            </span>
+            <img
+              src="/logo-light.svg"
+              alt="Civitas"
+              width={120}
+              height={24}
+              className="h-[22px] w-auto opacity-95 transition-opacity duration-300 group-hover:opacity-100"
+              draggable={false}
+            />
+            <span className="hidden md:inline-block ml-2 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.22em] text-white/55">
+              Employer
+            </span>
+          </Link>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <span
+              className="hidden sm:inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.025] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/55"
+              aria-label="Network status"
+            >
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white/85">
+                <span className="absolute inset-0 rounded-full bg-white/40 animate-ping" />
               </span>
               {SOLANA_CLUSTER_LABEL}
-            </div>
-            <div className="hidden h-4 w-px bg-white/[0.06] sm:block" />
+            </span>
             <WalletButton />
           </div>
         </div>

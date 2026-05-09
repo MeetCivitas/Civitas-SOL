@@ -7,7 +7,6 @@ import { AuthProvider } from "@/lib/auth-context"
 import { MockStoreProvider } from "@/lib/mock-store"
 import { SolanaWalletProvider } from "@/lib/solana-wallet"
 import { WalletSync } from "@/lib/wallet-sync"
-import { FundDeployModal } from "@/components/fund-deploy-modal"
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
@@ -18,7 +17,6 @@ export function Providers({ children }: { children: ReactNode }) {
             <MockStoreProvider>
               <AuthProvider>
                 {children}
-                <FundDeployModal />
               </AuthProvider>
             </MockStoreProvider>
           </WalletSync>

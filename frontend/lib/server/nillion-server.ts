@@ -122,15 +122,23 @@ const VOUCHERS_SCHEMA = {
 
 // ── Retry Wrapper ───────────────────────────────────────────────────────
 
+export interface RetryOptions {
+    /** Return true to skip retries and throw immediately (for deterministic errors). */
+    bailIf?: (err: unknown) => boolean;
+}
+
 export async function withRetry<T>(
     fn: () => Promise<T>,
     label: string,
-    maxRetries = 3
+    maxRetries = 3,
+    options?: RetryOptions
 ): Promise<T> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             return await fn();
         } catch (err) {
+            // Deterministic failure (e.g. "already exists"): retrying is pure waste.
+            if (options?.bailIf?.(err)) throw err;
             if (attempt === maxRetries) throw err;
             const delay = Math.min(1000 * 2 ** (attempt - 1), 5000);
             const jitter = Math.random() * delay * 0.3;
@@ -140,6 +148,12 @@ export async function withRetry<T>(
         }
     }
     throw new Error("unreachable");
+}
+
+/** Recognises "collection/document already exists" / "duplicate" errors from NilDB. */
+export function isAlreadyExistsError(e: unknown): boolean {
+    const msg = typeof e === "string" ? e : (e as any)?.message || JSON.stringify(e);
+    return msg.includes("already exists") || msg.includes("duplicate");
 }
 
 // ── Response Parsing ────────────────────────────────────────────────────
@@ -363,12 +377,13 @@ export async function ensureCompanyCollections(companyId: string): Promise<Compa
                         schema: col.schema as any,
                         type: "standard",
                     }),
-                    `createCollection(${col.name})`
+                    `createCollection(${col.name})`,
+                    3,
+                    { bailIf: isAlreadyExistsError }
                 );
                 console.log(`[nilDB] Created collection "${col.name}" (${id})`);
             } catch (e: any) {
-                const msg = typeof e === "string" ? e : e?.message || JSON.stringify(e);
-                if (msg.includes("already exists") || msg.includes("duplicate")) {
+                if (isAlreadyExistsError(e)) {
                     console.log(`[nilDB] Collection "${col.name}" already exists (${id})`);
                 } else {
                     const errMsg = e instanceof Error ? e.message : JSON.stringify(e);
@@ -833,12 +848,13 @@ async function ensureIdentityCollection(): Promise<string> {
                 schema: IDENTITY_STORE_SCHEMA as any,
                 type: "standard",
             }),
-            `createCollection(${IDENTITY_COLLECTION_NAME})`
+            `createCollection(${IDENTITY_COLLECTION_NAME})`,
+            3,
+            { bailIf: isAlreadyExistsError }
         );
         console.log(`[nilDB] Created identity collection (${id})`);
     } catch (e: any) {
-        const msg = typeof e === "string" ? e : e?.message || JSON.stringify(e);
-        if (msg.includes("already exists") || msg.includes("duplicate")) {
+        if (isAlreadyExistsError(e)) {
             console.log(`[nilDB] Identity collection already exists (${id})`);
         } else {
             const errMsg = e instanceof Error ? e.message : JSON.stringify(e);

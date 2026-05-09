@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowRightCircle,
+  ArrowUpRight,
+  Check,
   CheckCircle2,
-  ChevronRight,
   Copy,
   CreditCard,
   Database,
@@ -12,84 +14,119 @@ import {
   FileUp,
   KeyRound,
   Loader2,
+  Lock,
   Shield,
   ShieldCheck,
   Wallet,
+  X,
   Zap,
 } from "lucide-react";
 import { useCivitas } from "@/lib/civitas-provider";
 import { useSolanaWallet } from "@/lib/solana-wallet";
 import { WalletButton } from "@/components/wallet-button";
-import { PrivacyStackVisualizer } from "@/components/ui/privacy-stack";
-import { buildExplorerUrl, formatUsdc, shortenAddress, USDC_MINT_ADDRESS, MAGICBLOCK_USDC_MINT } from "@/lib/solana";
+import { buildExplorerUrl, formatUsdc, shortenAddress, MAGICBLOCK_USDC_MINT } from "@/lib/solana";
 import { buildMerkleTree } from "@/lib/merkle-tree";
 import { generateVoucherProof } from "@/lib/groth16-proof";
 import { encodeClaimPaymentArgs } from "@/lib/borsh-encode";
 
-function StatTile({
-  label,
-  value,
-  detail,
-  icon,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  icon: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">{label}</p>
-        <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-black/25 text-white/70">
-          {icon}
-        </div>
-      </div>
-      <p className="mt-5 text-3xl font-semibold tracking-tight text-white">{value}</p>
-      <p className="mt-2 text-sm text-white/55">{detail}</p>
-    </div>
-  );
-}
-
 const CLAIM_STEPS = [
-  { id: "merkle",  icon: Database, label: "Fetch Merkle Path",    color: "text-violet-400" },
-  { id: "proof",   icon: Shield,   label: "Generate ZK Proof",    color: "text-blue-400" },
-  { id: "verify",  icon: ShieldCheck, label: "Verify On-Chain",   color: "text-teal-400" },
-  { id: "payment", icon: Zap,      label: "Private Payment",      color: "text-amber-400" },
+  { id: "merkle",  icon: Database,    label: "Merkle Path"  },
+  { id: "proof",   icon: Shield,      label: "Groth16 Proof" },
+  { id: "verify",  icon: ShieldCheck, label: "On-Chain Verify" },
+  { id: "payment", icon: Zap,         label: "Private Settle" },
 ] as const;
 
 type ClaimStepId = typeof CLAIM_STEPS[number]["id"] | "idle" | "error";
 
 function ClaimStepper({ currentStep, pct, label }: { currentStep: ClaimStepId; pct: number; label: string }) {
-  const activeIdx = CLAIM_STEPS.findIndex(s => s.id === currentStep);
+  const activeIdx = currentStep === "idle" || currentStep === "error"
+    ? -1
+    : CLAIM_STEPS.findIndex(s => s.id === currentStep);
+
   return (
-    <div className="mt-4 rounded-[18px] border border-white/10 bg-black/30 p-5 space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-white/30">Privacy Progress</p>
-        {pct > 0 && <span className="text-[10px] font-mono text-white/60">{pct}%</span>}
-      </div>
-      <div className="flex justify-center py-2">
-        <PrivacyStackVisualizer activeLayer={activeIdx === -1 ? undefined : activeIdx} />
-      </div>
-      {label && (
-        <div className="flex items-center justify-center gap-2 pt-3 border-t border-white/5">
-          <Loader2 className="h-3 w-3 text-white/40 animate-spin" />
-          <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">{label}</p>
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: "auto" }}
+      exit={{ opacity: 0, height: 0 }}
+      className="mt-5 overflow-hidden"
+    >
+      <div className="rounded-2xl border border-white/[0.10] bg-black/40 backdrop-blur-2xl p-5">
+        <div className="flex items-center justify-between mb-5">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.32em] text-white/45">
+            ZK Pipeline
+          </p>
+          <span className="num text-[10px] font-mono text-white/55 tabular-nums">{pct.toString().padStart(2, "0")}%</span>
         </div>
-      )}
-    </div>
+
+        <div className="flex items-center">
+          {CLAIM_STEPS.map((step, idx) => {
+            const passed = activeIdx > idx;
+            const active = activeIdx === idx;
+            const Icon = step.icon;
+            return (
+              <div key={step.id} className="flex flex-1 items-center last:flex-none">
+                <div className="flex flex-col items-center gap-2">
+                  <div
+                    className={`relative grid h-8 w-8 place-items-center rounded-full border transition-colors duration-300 ${
+                      passed
+                        ? "border-white bg-white text-black"
+                        : active
+                          ? "border-white bg-black text-white"
+                          : "border-white/15 bg-black text-white/30"
+                    }`}
+                  >
+                    {passed ? <Check className="h-3.5 w-3.5" strokeWidth={2.5} /> : <Icon className="h-3.5 w-3.5" />}
+                    {active && (
+                      <span className="absolute inset-0 rounded-full border border-white/60 animate-ping" aria-hidden />
+                    )}
+                  </div>
+                  <p className={`text-[8px] font-mono uppercase tracking-[0.18em] whitespace-nowrap ${
+                    passed || active ? "text-white/75" : "text-white/30"
+                  }`}>
+                    {step.label}
+                  </p>
+                </div>
+                {idx < CLAIM_STEPS.length - 1 && (
+                  <div className="relative mx-2 h-px flex-1 bg-white/10 -mt-5">
+                    <motion.div
+                      className="absolute inset-y-0 left-0 bg-white"
+                      initial={{ width: "0%" }}
+                      animate={{ width: passed ? "100%" : active ? "50%" : "0%" }}
+                      transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {label && (
+          <div className="mt-5 flex items-center justify-between border-t border-white/[0.06] pt-4">
+            <p className="text-[11px] text-white/65 leading-tight">{label}</p>
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-white/40 shrink-0 ml-3" />
+          </div>
+        )}
+      </div>
+    </motion.div>
   );
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    pending: { label: "Pending", cls: "border-amber-500/25 bg-amber-500/10 text-amber-400" },
-    prepared: { label: "Prepared", cls: "border-teal-500/25 bg-teal-500/10 text-teal-400" },
-    claimed: { label: "Claimed", cls: "border-emerald-500/25 bg-emerald-500/10 text-emerald-400" },
+  const map: Record<string, { label: string; cls: string; dot: string }> = {
+    pending:  { label: "Pending",  cls: "border-white/15 bg-white/[0.03] text-white/65",   dot: "bg-white/55" },
+    prepared: { label: "Prepared", cls: "border-white/30 bg-white/[0.06] text-white/85",   dot: "bg-white/85" },
+    claimed:  { label: "Settled",  cls: "border-white bg-white text-black",                dot: "bg-black" },
+    settled:  { label: "Settled",  cls: "border-white bg-white text-black",                dot: "bg-black" },
   };
-  const { label, cls } = map[status] ?? { label: status, cls: "border-white/10 bg-white/5 text-white/50" };
+  const { label, cls, dot } = map[status] ?? { label: status, cls: "border-white/10 bg-white/5 text-white/50", dot: "bg-white/40" };
   return (
-    <span className={`shrink-0 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${cls}`}>
+    <span className={`shrink-0 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] ${cls}`}>
+      <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${dot}`}>
+        {(status === "pending" || status === "prepared") && (
+          <span className={`absolute inset-0 rounded-full ${dot} opacity-50 animate-ping`} aria-hidden />
+        )}
+      </span>
       {label}
     </span>
   );
@@ -514,363 +551,580 @@ export default function EmployeesPage() {
   }
 
 
+  const stagger = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.06 } } };
+  const fadeUp = { hidden: { opacity: 0, y: 18 }, show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] as any } } };
+
+  const marqueeItems = [
+    "ZK GROTH16",
+    "ALT-BN128 SYSCALLS",
+    "NULLIFIER PDA",
+    "MAGICBLOCK ER",
+    "NILLION SECRETVAULTS",
+    "PRIVATE PAYROLL",
+    "256-BYTE PROOF",
+    "TEE ATTESTATION",
+  ];
+
   return (
-    <main className="min-h-screen bg-[#040404] text-white">
+    <main className="relative min-h-screen overflow-x-clip bg-black text-white antialiased font-sans">
+      {/* ── Background: pure monochrome atmosphere ─────────────────────── */}
       <div className="fixed inset-0 -z-10 pointer-events-none">
-        <video autoPlay loop muted playsInline className="h-full w-full object-cover opacity-20 mix-blend-screen">
-          <source src="/videos/Animated_Privacy_Video_Element.mp4" type="video/mp4" />
-        </video>
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.16),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.15),transparent_30%),linear-gradient(180deg,rgba(4,4,4,0.78),rgba(4,4,4,0.98))]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.06),transparent_55%),radial-gradient(ellipse_at_bottom_left,rgba(255,255,255,0.04),transparent_60%),linear-gradient(180deg,rgba(0,0,0,0.85),rgba(0,0,0,1))]" />
+        <div className="grain-overlay absolute inset-0 opacity-50" />
       </div>
 
-      <div className="mx-auto max-w-7xl px-6 py-8">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-3xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/42">Employee Workspace</p>
-            <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white">Private payout access</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/60">
-              Restore the complete Civitas employee flow: create or import a private credential, review incoming vouchers,
-              and move toward Solana settlement without exposing payroll identity on-chain.
-            </p>
+      {/* ── Portal header ──────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-40">
+        <div className="absolute inset-0 bg-black/70 backdrop-blur-2xl" aria-hidden />
+        <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" aria-hidden />
+        <div className="relative mx-auto flex h-16 max-w-7xl items-center justify-between px-5 sm:px-8">
+          <Link href="/" aria-label="Civitas home" className="group relative flex items-center gap-3 outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:rounded-md">
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" aria-hidden>
+              <span className="absolute inset-0 rounded-full bg-white/55 animate-ping" />
+            </span>
+            <img src="/logo-light.svg" alt="Civitas" width={120} height={24} className="h-[22px] w-auto opacity-95 transition-opacity duration-300 group-hover:opacity-100" draggable={false} />
+            <span className="hidden md:inline-block ml-2 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.22em] text-white/55">
+              Employee
+            </span>
+          </Link>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <span className="hidden sm:inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.025] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/55" aria-label="Network status">
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white/85">
+                <span className="absolute inset-0 rounded-full bg-white/40 animate-ping" />
+              </span>
+              Devnet
+            </span>
+            <WalletButton />
           </div>
-          <WalletButton />
         </div>
+      </header>
 
-        <section className="mt-6 grid gap-4 md:grid-cols-3">
-          <StatTile
-            label="Pending"
-            value={String(pendingCount)}
-            detail="Vouchers ready for private redemption"
-            icon={<CreditCard className="h-5 w-5" aria-hidden="true" />}
-          />
-          <StatTile
-            label="Settled"
-            value={String(claimedCount)}
-            detail="Vouchers fully settled and claimed"
-            icon={<CheckCircle2 className="h-5 w-5" aria-hidden="true" />}
-          />
-          <StatTile
-            label="Pending Value"
-            value={`${formatUsdc(totalPending)} USDC`}
-            detail={credential ? "Scoped to the active employee credential" : "Load a credential to decrypt your view"}
-            icon={<ShieldCheck className="h-5 w-5" aria-hidden="true" />}
-          />
-        </section>
+      {/* ── Hero ───────────────────────────────────────────────────────── */}
+      <section className="relative mx-auto max-w-7xl px-5 sm:px-8 pt-16 pb-12">
+        <motion.div variants={stagger} initial="hidden" animate="show" className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
+          <div>
+            <motion.div variants={fadeUp} className="inline-flex items-center gap-3 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-[10px] font-semibold uppercase tracking-[0.22em] text-white/65 mb-7 backdrop-blur-md">
+              <span className="relative flex h-2 w-2" aria-hidden>
+                <span className="absolute inline-flex h-full w-full rounded-full bg-white/70 opacity-70 animate-ping" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
+              </span>
+              ZK Payout Terminal
+              <span className="h-3 w-px bg-white/15 mx-1" />
+              <span className="font-mono tracking-[0.18em] text-white/40">v4 · live</span>
+            </motion.div>
 
-        <section className="mt-6 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-          <div className="space-y-6">
-            <section className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/42">Credential</p>
-                  <h2 className="mt-2 text-2xl font-semibold tracking-tight">Zero-knowledge identity</h2>
-                </div>
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-black/20">
-                  <KeyRound className="h-5 w-5 text-white/72" aria-hidden="true" />
-                </div>
-              </div>
+            <motion.h1 variants={fadeUp} className="text-mono-fade text-5xl md:text-7xl lg:text-[88px] font-medium tracking-[-0.04em] leading-[0.93]">
+              Private.
+              <br />
+              <span className="italic font-light text-white/85">Payouts.</span>
+            </motion.h1>
 
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => void handleCreateCredential()}
-                  className="rounded-[26px] border border-blue-400/20 bg-blue-500/14 px-5 py-5 text-left transition hover:bg-blue-500/20"
-                >
-                  <p className="text-sm font-semibold">Generate new credential</p>
-                  <p className="mt-2 text-sm leading-6 text-white/55">
-                    Creates a fresh private employee tag locally and stores it in the browser credential vault.
-                  </p>
-                </button>
+            <motion.p variants={fadeUp} className="mt-7 max-w-xl text-[15px] leading-[1.7] text-white/55 font-light">
+              Generate or import your zero-knowledge credential, claim payroll vouchers with a 256-byte
+              Groth16 proof, and settle privately on Solana through MagicBlock ER. Nothing leaves the device.
+            </motion.p>
 
-                <label className="cursor-pointer rounded-[26px] border border-emerald-400/20 bg-emerald-500/12 px-5 py-5 text-left transition hover:bg-emerald-500/18">
-                  <p className="flex items-center gap-2 text-sm font-semibold">
-                    <FileUp className="h-4 w-4" aria-hidden="true" />
-                    Import existing credential
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-white/55">
-                    Load a previously exported credential backup and continue from the same employee identity.
-                  </p>
-                  <input type="file" accept="application/json" className="sr-only" onChange={handleImport} />
-                </label>
-              </div>
+            <motion.div variants={fadeUp} className="mt-8 flex flex-wrap gap-2">
+              {[
+                { k: "Wallet", v: connected ? "Connected" : "Disconnected", live: connected },
+                { k: "Credential", v: credential ? "Active" : "Empty", live: !!credential },
+                { k: "Vouchers", v: `${myVouchers.length} loaded`, live: myVouchers.length > 0 },
+              ].map(chip => (
+                <span key={chip.k} className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.025] px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.22em] text-white/55">
+                  <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${chip.live ? "bg-white" : "bg-white/25"}`}>
+                    {chip.live && <span className="absolute inset-0 rounded-full bg-white/40 animate-ping" aria-hidden />}
+                  </span>
+                  <span className="text-white/35">{chip.k}</span>
+                  <span className="text-white/75">{chip.v}</span>
+                </span>
+              ))}
+            </motion.div>
+          </div>
 
-              <div className="mt-6 rounded-[28px] border border-white/10 bg-black/22 p-5">
-                {credential ? (
-                  <>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/42">Active employee tag</p>
-                    <p className="mt-3 break-all font-mono text-sm text-white">{credential.employeeTag}</p>
-                    <p className="mt-4 text-xs leading-5 text-white/45">
-                      The private nonce stays local. Only the employee tag should leave the device.
-                    </p>
+          {/* Hero stat panel — encrypted total */}
+          <motion.div variants={fadeUp} className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.02] p-7 backdrop-blur-3xl scan-beam">
+            <div className="absolute top-0 left-7 right-7 h-px hairline" aria-hidden />
+            <div className="absolute bottom-0 left-7 right-7 h-px hairline" aria-hidden />
 
-                    <div className="mt-5 flex flex-wrap gap-3">
-                      <button
-                        type="button"
-                        onClick={() => void handleCopyTag()}
-                        className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 px-5 py-3 text-sm text-white transition hover:bg-white/6"
-                      >
-                        <Copy className="h-4 w-4" aria-hidden="true" />
-                        {copied ? "Copied" : "Copy tag"}
-                      </button>
-
-                      {downloadHref ? (
-                        <a
-                          href={downloadHref}
-                          download="civitas-sol-credential.json"
-                          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 px-5 py-3 text-sm text-white transition hover:bg-white/6"
-                        >
-                          <Download className="h-4 w-4" aria-hidden="true" />
-                          Export backup
-                        </a>
-                      ) : null}
-                    </div>
-                  </>
-                ) : (
-                  <div className="rounded-[24px] border border-dashed border-white/10 bg-black/18 px-4 py-6 text-sm text-white/55">
-                    No credential loaded yet. Generate or import one to unlock private payroll vouchers.
-                  </div>
-                )}
-              </div>
-            </section>
-
-            {/* ZK verifier transparency disclosure — Phase C.4 */}
-            <div className="flex items-start gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 backdrop-blur-sm">
-              <Shield className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-white/55 leading-5">
-                <span className="font-semibold text-blue-300">ZK Proof:</span>{" "}
-                256-byte Groth16 proofs are generated in your browser via snarkjs from the
-                <code className="mx-1 px-1 py-0.5 rounded bg-white/[0.06] text-white/70">voucher.circom</code>
-                circuit. On-chain verification runs the full alt-bn128 pairing check natively on Solana,
-                fitting inside the CU budget. Anti-double-spend via the nullifier PDA is enforced
-                unconditionally on every claim, then settlement is routed through MagicBlock private payments.
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/35">
+                Pending · Encrypted
               </p>
+              <Lock className="h-3.5 w-3.5 text-white/35" aria-hidden />
             </div>
 
-            <section className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl">
+            <div className="mt-6 flex items-baseline gap-3">
+              <p className="num text-mono-fade text-6xl md:text-7xl font-medium tracking-[-0.04em] leading-none">
+                {credential ? formatUsdc(totalPending) : "***"}
+              </p>
+              <p className="text-sm font-mono uppercase tracking-[0.22em] text-white/40">USDC</p>
+            </div>
+
+            <p className="mt-3 text-[11px] font-mono uppercase tracking-[0.22em] text-white/35">
+              {credential ? "Awaiting on-chain claim" : "Load a credential to decrypt"}
+            </p>
+
+            <div className="mt-7 grid grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.28em] text-white/35">Pending</p>
+                  <CreditCard className="h-3.5 w-3.5 text-white/35" aria-hidden />
+                </div>
+                <p className="num mt-3 text-3xl font-medium text-white tracking-tight">{pendingCount}</p>
+              </div>
+              <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.28em] text-white/35">Settled</p>
+                  <CheckCircle2 className="h-3.5 w-3.5 text-white/35" aria-hidden />
+                </div>
+                <p className="num mt-3 text-3xl font-medium text-white tracking-tight">{claimedCount}</p>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      </section>
+
+      {/* ── Main grid ──────────────────────────────────────────────────── */}
+      <div className="relative mx-auto max-w-7xl px-5 sm:px-8 pb-24">
+        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          {/* ===================== LEFT COLUMN ===================== */}
+          <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
+
+            {/* ── Credential ─────────────────────────────────────── */}
+            <motion.section variants={fadeUp} className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.02] p-6 sm:p-7 backdrop-blur-2xl">
+              <div className="absolute top-0 left-7 right-7 h-px hairline" aria-hidden />
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/35">Credential</p>
+                  <h2 className="mt-2 text-2xl font-medium tracking-[-0.02em] text-white">Zero-knowledge identity</h2>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.10] bg-white/[0.03] text-white/65">
+                  <KeyRound className="h-4 w-4" aria-hidden />
+                </div>
+              </div>
+
+              {!credential ? (
+                <div className="mt-6 grid gap-3 md:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleCreateCredential()}
+                    className="btn-magnetic group relative rounded-2xl border border-white/15 bg-white text-black px-5 py-5 text-left transition-transform duration-300 hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="text-[9px] font-semibold uppercase tracking-[0.32em] text-black/55">01 · New</p>
+                      <ArrowUpRight className="h-4 w-4 text-black/65 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                    </div>
+                    <p className="mt-5 text-base font-semibold">Generate credential</p>
+                    <p className="mt-1.5 text-xs leading-5 text-black/55">
+                      Fresh employee tag generated locally. Private nonce never leaves the device.
+                    </p>
+                  </button>
+
+                  <label className="btn-magnetic group relative cursor-pointer rounded-2xl border border-white/15 bg-white/[0.02] px-5 py-5 text-left transition-colors duration-300 hover:border-white/35 hover:bg-white/[0.05]">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[9px] font-semibold uppercase tracking-[0.32em] text-white/45">02 · Restore</p>
+                      <FileUp className="h-4 w-4 text-white/55 transition-transform duration-300 group-hover:scale-110" />
+                    </div>
+                    <p className="mt-5 text-base font-semibold text-white">Import credential</p>
+                    <p className="mt-1.5 text-xs leading-5 text-white/55">
+                      Load a previously exported JSON backup. Same employee identity continues.
+                    </p>
+                    <input type="file" accept="application/json" className="sr-only" onChange={handleImport} />
+                  </label>
+                </div>
+              ) : (
+                <div className="mt-6 space-y-4">
+                  <div className="relative overflow-hidden rounded-2xl border border-white/15 bg-black/40 p-5">
+                    <div className="absolute -top-px left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent" aria-hidden />
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="inline-flex items-center gap-2">
+                        <span className="relative flex h-2 w-2" aria-hidden>
+                          <span className="absolute inline-flex h-full w-full rounded-full bg-white/70 opacity-70 animate-ping" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
+                        </span>
+                        <p className="text-[9px] font-semibold uppercase tracking-[0.28em] text-white/65">Active credential</p>
+                      </div>
+                      <span className="text-[9px] font-mono uppercase tracking-[0.22em] text-white/35">local · sealed</span>
+                    </div>
+                    <p className="break-all font-mono text-[13px] leading-relaxed text-white">{credential.employeeTag}</p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleCopyTag()}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-white/85 transition-colors hover:bg-white/[0.08] hover:border-white/25"
+                    >
+                      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                      {copied ? "Copied" : "Copy tag"}
+                    </button>
+                    {downloadHref && (
+                      <a
+                        href={downloadHref}
+                        download="civitas-sol-credential.json"
+                        className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-white/85 transition-colors hover:bg-white/[0.08] hover:border-white/25"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        Export backup
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void handleCreateCredential()}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55 transition-colors hover:bg-white/[0.08] hover:text-white/85"
+                    >
+                      Replace
+                    </button>
+                  </div>
+                </div>
+              )}
+            </motion.section>
+
+            {/* ── ZK transparency callout ────────────────────────── */}
+            <motion.div variants={fadeUp} className="flex items-start gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5 backdrop-blur-md">
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/[0.10] bg-white/[0.03]">
+                <Shield className="h-4 w-4 text-white/75" aria-hidden />
+              </div>
+              <p className="text-[12px] leading-6 text-white/55">
+                <span className="font-semibold text-white">Verifier transparency.</span>{" "}
+                256-byte Groth16 proofs are generated in your browser via snarkjs from the{" "}
+                <code className="mx-1 rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[11px] text-white/80">voucher.circom</code>
+                circuit. On-chain verification runs the full alt-bn128 pairing check natively on Solana,
+                fitting inside the CU budget. Anti-double-spend via the nullifier PDA is enforced
+                unconditionally on every claim, then settlement routes through MagicBlock private payments.
+              </p>
+            </motion.div>
+
+            {/* ── Vouchers ───────────────────────────────────────── */}
+            <motion.section variants={fadeUp} className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.02] p-6 sm:p-7 backdrop-blur-2xl">
+              <div className="absolute top-0 left-7 right-7 h-px hairline" aria-hidden />
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/42">Vouchers</p>
-                  <h2 className="mt-2 text-2xl font-semibold tracking-tight">Payroll payouts</h2>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/35">Vouchers</p>
+                  <h2 className="mt-2 text-2xl font-medium tracking-[-0.02em] text-white">Payroll inbox</h2>
                 </div>
-                <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-xs font-semibold text-white/50">
-                  {myVouchers.length} {myVouchers.length === 1 ? "voucher" : "vouchers"}
+                <span className="num inline-flex items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.04] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/65">
+                  {myVouchers.length}
+                  <span className="text-white/30">·</span>
+                  <span className="text-white/45 normal-case font-mono">total</span>
                 </span>
               </div>
 
-              <div className="mt-5 space-y-3">
+              <div className="mt-6 space-y-3">
                 {myVouchers.length ? (
-                  myVouchers.map((voucher) => {
-                    const vCommitment = String(voucher.commitment);
-                    const isThisProving = provingCommitment === vCommitment;
-                    const isPending = voucher.status === "pending";
-                    const anyProving = provingCommitment !== null;
-                    const usdcAmount = formatUsdc(Number(voucher.amount || 0) / 1_000_000);
+                  <AnimatePresence initial={false}>
+                    {myVouchers.map((voucher, idx) => {
+                      const vCommitment = String(voucher.commitment);
+                      const isThisProving = provingCommitment === vCommitment;
+                      const isPending = voucher.status === "pending";
+                      const anyProving = provingCommitment !== null;
+                      const usdcAmount = formatUsdc(Number(voucher.amount || 0) / 1_000_000);
+                      const isSettled = voucher.status === "claimed" || voucher.status === "settled";
 
-                    return (
-                      <div
-                        key={vCommitment}
-                        className={`rounded-[24px] border p-5 transition-all duration-300 ${isThisProving
-                          ? "border-emerald-500/30 bg-emerald-500/[0.04]"
-                          : voucher.status === "claimed"
-                            ? "border-emerald-500/20 bg-emerald-500/[0.03]"
-                            : voucher.status === "prepared"
-                              ? "border-teal-500/20 bg-teal-500/[0.03]"
-                              : "border-white/[0.08] bg-black/20 hover:border-white/[0.14] hover:bg-white/[0.03]"
+                      return (
+                        <motion.div
+                          key={vCommitment}
+                          layout
+                          initial={{ opacity: 0, y: 16 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -8 }}
+                          transition={{ duration: 0.45, delay: idx * 0.05, ease: [0.16, 1, 0.3, 1] }}
+                          className={`group relative overflow-hidden rounded-2xl border p-5 transition-colors duration-300 ${
+                            isThisProving
+                              ? "border-white/40 bg-white/[0.04]"
+                              : isSettled
+                                ? "border-white/25 bg-white/[0.03]"
+                                : voucher.status === "prepared"
+                                  ? "border-white/20 bg-white/[0.025]"
+                                  : "border-white/[0.08] bg-black/30 hover:border-white/[0.18] hover:bg-white/[0.025]"
                           }`}
-                      >
-                        {/* Header row */}
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-2xl font-semibold tracking-tight text-white">{usdcAmount} <span className="text-sm font-normal text-white/40">USDC</span></p>
-                            <p className="mt-1 font-mono text-[11px] text-white/30 truncate max-w-[240px]" title={vCommitment}>
-                              {vCommitment.slice(0, 20)}…
-                            </p>
-                          </div>
-                          <StatusBadge status={voucher.status} />
-                        </div>
-
-                        {/* Meta row */}
-                        <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
-                          <div className="min-w-0">
-                            <p className="text-[10px] uppercase tracking-[0.18em] text-white/30">Epoch</p>
-                            <p className="mt-0.5 font-mono text-xs text-white/60">{voucher.epoch || "N/A"}</p>
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-[10px] uppercase tracking-[0.18em] text-white/30">Nonce</p>
-                            <p className="mt-0.5 font-mono text-xs text-white/60" title={String(voucher.voucherNonce || "")}>
-                              {voucher.voucherNonce ? `${String(voucher.voucherNonce).slice(0, 14)}…` : "N/A"}
-                            </p>
-                          </div>
-                          {voucher.claimTxHash && (
-                            <div className="min-w-0">
-                              <p className="text-[10px] uppercase tracking-[0.18em] text-white/30">Reference</p>
-                              <p className="mt-0.5 font-mono text-xs text-teal-400 truncate">{voucher.claimTxHash.slice(0, 20)}…</p>
+                        >
+                          {isThisProving && (
+                            <div className="absolute inset-0 -z-10 opacity-40">
+                              <div className="absolute inset-0 grain-overlay" />
                             </div>
                           )}
-                        </div>
 
-                        {/* 5-step claim stepper */}
-                        {isThisProving && (
-                          <ClaimStepper currentStep={provingStep} pct={provingPct} label={provingLabel} />
-                        )}
-
-                        {/* Claim button — single-tx claim_payment */}
-                        {(isPending || voucher.status === "prepared") && (
-                          <button
-                            type="button"
-                            onClick={() => void handleClaim(voucher)}
-                            disabled={anyProving}
-                            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-[14px] border border-emerald-500/25 bg-emerald-500/10 py-3 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/18 disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            {isThisProving ? (
-                              <>
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                {provingLabel || "Claiming…"}
-                              </>
-                            ) : (
-                              <>
-                                <Zap className="h-4 w-4" />
-                                Claim {usdcAmount} USDC
-                              </>
-                            )}
-                          </button>
-                        )}
-
-                        {voucher.status === "claimed" && (
-                          <div className="mt-4 space-y-3">
-                            <div className="flex items-center gap-2 rounded-[14px] border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-400">
-                              <CheckCircle2 className="h-4 w-4 shrink-0" />
-                              Private transfer queued. {usdcAmount} USDC settling to your USDC ATA
-                            </div>
-                            <div className="rounded-[14px] border border-white/8 bg-white/[0.03] px-4 py-3 text-xs text-white/50 space-y-2">
-                              <p>
-                                The TEE validator's queue cranks fire within ~30s of the dispatch,
-                                settling USDC directly into your associated token account. No additional
-                                wallet action needed.
+                          {/* Top row */}
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                              <div className="flex items-baseline gap-2">
+                                <p className="num text-3xl font-medium tracking-[-0.02em] text-white">{usdcAmount}</p>
+                                <p className="text-xs font-mono uppercase tracking-[0.22em] text-white/40">USDC</p>
+                              </div>
+                              <p className="mt-1.5 truncate font-mono text-[10px] text-white/30 max-w-[280px]" title={vCommitment}>
+                                <span className="text-white/20">commit</span> · {vCommitment.slice(0, 28)}…
                               </p>
-                              {(voucher as any).claimTxHash && (
-                                <div className="font-mono text-[10px] break-all">
-                                  <span className="text-white/35">ZK gate tx:</span>{" "}
-                                  <a
-                                    href={buildExplorerUrl("tx", (voucher as any).claimTxHash)}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="text-blue-400 hover:underline"
-                                  >
-                                    {(voucher as any).claimTxHash}
-                                  </a>
-                                </div>
-                              )}
-                              {(voucher as any).privateTransferSig && (
-                                <div className="font-mono text-[10px] break-all">
-                                  <span className="text-white/35">Dispatch tx:</span>{" "}
-                                  <a
-                                    href={buildExplorerUrl("tx", (voucher as any).privateTransferSig)}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="text-blue-400 hover:underline"
-                                  >
-                                    {(voucher as any).privateTransferSig}
-                                  </a>
-                                </div>
-                              )}
-                              {recipientAtaForExplorer && (
-                                <div className="font-mono text-[10px] break-all">
-                                  <span className="text-white/35">Your USDC ATA:</span>{" "}
-                                  <a
-                                    href={buildExplorerUrl("address", recipientAtaForExplorer)}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="text-blue-400 hover:underline"
-                                  >
-                                    Watch settlement on Solana Explorer ↗
-                                  </a>
-                                </div>
-                              )}
                             </div>
+                            <StatusBadge status={voucher.status} />
                           </div>
-                        )}
-                      </div>
-                    );
-                  })
+
+                          {/* Meta row */}
+                          <div className="mt-4 flex flex-wrap gap-x-7 gap-y-2.5 border-t border-white/[0.06] pt-4">
+                            <div>
+                              <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-white/30">Epoch</p>
+                              <p className="mt-0.5 font-mono text-xs text-white/65">{voucher.epoch || "N/A"}</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-white/30">Nonce</p>
+                              <p className="mt-0.5 font-mono text-xs text-white/65" title={String(voucher.voucherNonce || "")}>
+                                {voucher.voucherNonce ? `${String(voucher.voucherNonce).slice(0, 12)}…` : "N/A"}
+                              </p>
+                            </div>
+                            {voucher.claimTxHash && (
+                              <div>
+                                <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-white/30">Reference</p>
+                                <p className="mt-0.5 truncate max-w-[180px] font-mono text-xs text-white/85">{voucher.claimTxHash.slice(0, 16)}…</p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Stepper while claiming */}
+                          <AnimatePresence>
+                            {isThisProving && (
+                              <ClaimStepper currentStep={provingStep} pct={provingPct} label={provingLabel} />
+                            )}
+                          </AnimatePresence>
+
+                          {/* Claim CTA */}
+                          {(isPending || voucher.status === "prepared") && (
+                            <button
+                              type="button"
+                              onClick={() => void handleClaim(voucher)}
+                              disabled={anyProving}
+                              className="btn-magnetic mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full border border-white bg-white px-6 py-3.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-black transition-transform duration-300 hover:scale-[1.005] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black disabled:cursor-not-allowed disabled:bg-white/30 disabled:border-white/30 disabled:text-black/60"
+                            >
+                              {isThisProving ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  {provingLabel ? provingLabel.split(" ").slice(0, 4).join(" ") : "Claiming…"}
+                                </>
+                              ) : (
+                                <>
+                                  <Zap className="h-4 w-4" strokeWidth={2.4} />
+                                  Claim {usdcAmount} USDC
+                                  <ArrowUpRight className="h-4 w-4" />
+                                </>
+                              )}
+                            </button>
+                          )}
+
+                          {/* Settled state */}
+                          {isSettled && (
+                            <div className="mt-5 space-y-3">
+                              <div className="inline-flex items-center gap-2 rounded-full border border-white bg-white px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-black">
+                                <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.4} />
+                                Settled · {usdcAmount} USDC
+                              </div>
+                              <div className="rounded-2xl border border-white/[0.10] bg-black/40 px-4 py-3 text-[11px] leading-5 text-white/55 space-y-2">
+                                <p>
+                                  TEE validator queue cranks fire within ~30s. USDC settles directly into your associated token account. No additional wallet action needed.
+                                </p>
+                                {(voucher as any).claimTxHash && (
+                                  <div className="font-mono text-[10px] break-all">
+                                    <span className="text-white/30">zk gate</span>{" · "}
+                                    <a
+                                      href={buildExplorerUrl("tx", (voucher as any).claimTxHash)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-white/85 hover:text-white underline-offset-2 hover:underline"
+                                    >
+                                      {(voucher as any).claimTxHash.slice(0, 24)}…
+                                    </a>
+                                  </div>
+                                )}
+                                {(voucher as any).privateTransferSig && (
+                                  <div className="font-mono text-[10px] break-all">
+                                    <span className="text-white/30">dispatch</span>{" · "}
+                                    <a
+                                      href={buildExplorerUrl("tx", (voucher as any).privateTransferSig)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-white/85 hover:text-white underline-offset-2 hover:underline"
+                                    >
+                                      {(voucher as any).privateTransferSig.slice(0, 24)}…
+                                    </a>
+                                  </div>
+                                )}
+                                {recipientAtaForExplorer && (
+                                  <div className="pt-2">
+                                    <a
+                                      href={buildExplorerUrl("address", recipientAtaForExplorer)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.22em] text-white/65 hover:text-white"
+                                    >
+                                      Watch on Solana Explorer
+                                      <ArrowUpRight className="h-3 w-3" />
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
                 ) : (
-                  <div className="rounded-[24px] border border-dashed border-white/10 bg-black/20 px-5 py-8 text-center">
-                    <CreditCard className="mx-auto h-8 w-8 text-white/20 mb-3" />
-                    <p className="text-sm text-white/40">No vouchers yet</p>
-                    <p className="mt-1 text-xs text-white/25">Ask your employer to run payroll. Vouchers appear here once issued.</p>
-                  </div>
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.97 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+                    className="relative overflow-hidden rounded-2xl border border-dashed border-white/[0.12] bg-white/[0.01] px-8 py-14 text-center"
+                  >
+                    <div className="absolute inset-0 grain-overlay opacity-30" aria-hidden />
+                    <div className="relative">
+                      <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl border border-white/15 bg-white/[0.04]">
+                        <CreditCard className="h-6 w-6 text-white/45" aria-hidden />
+                      </div>
+                      <p className="text-mono-fade text-2xl font-light tracking-[-0.02em] mb-2">No vouchers yet.</p>
+                      <p className="mx-auto max-w-sm text-[13px] text-white/45 leading-relaxed">
+                        Vouchers appear here the moment your employer commits a new payroll run.
+                      </p>
+                      <div className="mt-7 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.02] px-4 py-2 text-[10px] font-mono uppercase tracking-[0.22em] text-white/45">
+                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white/55">
+                          <span className="absolute inset-0 rounded-full bg-white/30 animate-ping" aria-hidden />
+                        </span>
+                        Listening for payroll
+                      </div>
+                    </div>
+                  </motion.div>
                 )}
               </div>
-            </section>
-          </div>
+            </motion.section>
+          </motion.div>
 
-          <div className="space-y-6">
-            <section className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl">
-              <div className="flex items-center justify-between gap-3">
+          {/* ===================== RIGHT COLUMN ===================== */}
+          <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6 xl:sticky xl:top-24 xl:self-start">
+            {/* Settlement wallet */}
+            <motion.section variants={fadeUp} className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.02] p-6 sm:p-7 backdrop-blur-2xl">
+              <div className="absolute top-0 left-7 right-7 h-px hairline" aria-hidden />
+              <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/42">Settlement Wallet</p>
-                  <h2 className="mt-2 text-xl font-semibold">Recipient route</h2>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/35">Settlement Wallet</p>
+                  <h2 className="mt-2 text-xl font-medium tracking-[-0.01em] text-white">Recipient route</h2>
                 </div>
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-black/20">
-                  <Wallet className="h-5 w-5 text-white/72" aria-hidden="true" />
+                <div className="grid h-10 w-10 place-items-center rounded-xl border border-white/[0.10] bg-white/[0.03] text-white/65">
+                  <Wallet className="h-4 w-4" aria-hidden />
                 </div>
               </div>
 
-              <div className="mt-5 rounded-[26px] border border-white/10 bg-black/22 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/42">Connected wallet</p>
-                <p className="mt-2 font-mono text-sm text-white">{connected && address ? shortenAddress(address, 6) : "Not connected"}</p>
-                <p className="mt-3 text-sm leading-6 text-white/55">
-                  This wallet is the eventual receiving route for private payouts after the program-side settlement is
-                  finalized.
+              <div className="mt-5 rounded-2xl border border-white/[0.10] bg-black/30 p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.28em] text-white/35">Connected wallet</p>
+                  <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${connected ? "bg-white" : "bg-white/25"}`}>
+                    {connected && <span className="absolute inset-0 rounded-full bg-white/40 animate-ping" aria-hidden />}
+                  </span>
+                </div>
+                <p className="num mt-3 font-mono text-sm text-white">
+                  {connected && address ? shortenAddress(address, 6) : "Not connected"}
                 </p>
-                {connected && address ? (
+                <p className="mt-3 text-xs leading-5 text-white/50">
+                  Receiving route for private payouts after the program-side settlement is finalized.
+                </p>
+                {connected && address && (
                   <a
                     href={buildExplorerUrl("address", address)}
                     target="_blank"
                     rel="noreferrer"
-                    className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-full border border-white/10 px-5 py-3 text-sm text-white transition hover:bg-white/6"
+                    className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.03] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-white/85 transition-colors hover:bg-white/[0.08] hover:border-white/25"
                   >
-                    <Wallet className="h-4 w-4" aria-hidden="true" />
-                    View wallet
+                    View on Explorer
+                    <ArrowUpRight className="h-3.5 w-3.5" />
                   </a>
-                ) : null}
+                )}
               </div>
-            </section>
+            </motion.section>
 
-            <section className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl">
-              <div className="flex items-center justify-between gap-3">
+            {/* Privacy guarantees */}
+            <motion.section variants={fadeUp} className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.02] p-6 sm:p-7 backdrop-blur-2xl">
+              <div className="absolute top-0 left-7 right-7 h-px hairline" aria-hidden />
+              <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/42">Privacy Guarantees</p>
-                  <h2 className="mt-2 text-xl font-semibold">What stays hidden</h2>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/35">Guarantees</p>
+                  <h2 className="mt-2 text-xl font-medium tracking-[-0.01em] text-white">What stays hidden</h2>
                 </div>
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-black/20">
-                  <ShieldCheck className="h-5 w-5 text-white/72" aria-hidden="true" />
+                <div className="grid h-10 w-10 place-items-center rounded-xl border border-white/[0.10] bg-white/[0.03] text-white/65">
+                  <ShieldCheck className="h-4 w-4" aria-hidden />
                 </div>
               </div>
 
-              <div className="mt-5 space-y-3 text-sm leading-6 text-white/58">
-                <div className="rounded-[24px] border border-white/10 bg-black/22 px-4 py-4">
-                  Employee identity and voucher ownership remain tied to the local credential, not a public payroll list.
-                </div>
-                <div className="rounded-[24px] border border-white/10 bg-black/22 px-4 py-4">
-                  Claim preparation happens against the encrypted commitment set, with the final settlement path isolated in
-                  the Solana flow.
-                </div>
-                <div className="rounded-[24px] border border-white/10 bg-black/22 px-4 py-4">
-                  Export a credential backup only if you control the destination. It is the recovery path for your private
-                  payroll access.
-                </div>
-              </div>
-            </section>
-          </div>
-        </section>
-
-        {status ? (
-          <div className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.04] px-5 py-4 text-sm text-white/72">
-            {status}
-          </div>
-        ) : null}
+              <ol className="mt-5 space-y-2.5">
+                {[
+                  { n: "01", t: "Identity stays local", d: "Voucher ownership is bound to a credential held on this device. No public payroll list reveals you." },
+                  { n: "02", t: "Encrypted commitment set", d: "Claim preparation runs against the encrypted voucher set; final settlement isolates in the Solana flow." },
+                  { n: "03", t: "Backups are recovery", d: "Export only to destinations you control. The credential JSON is your access path." },
+                ].map((row) => (
+                  <li
+                    key={row.n}
+                    className="group relative rounded-2xl border border-white/[0.08] bg-black/25 p-4 transition-colors duration-300 hover:border-white/[0.18] hover:bg-white/[0.025]"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="num shrink-0 rounded-md border border-white/[0.10] bg-white/[0.03] px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.22em] text-white/55">{row.n}</span>
+                      <div>
+                        <p className="text-[13px] font-medium text-white">{row.t}</p>
+                        <p className="mt-1 text-[12px] leading-5 text-white/50">{row.d}</p>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </motion.section>
+          </motion.div>
+        </div>
       </div>
+
+      {/* ── Kinetic marquee ───────────────────────────────────────────── */}
+      <div className="relative overflow-hidden border-y border-white/[0.06] bg-black/40 py-6">
+        <motion.div
+          className="flex whitespace-nowrap"
+          animate={{ x: ["0%", "-50%"] }}
+          transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
+          aria-hidden
+        >
+          {[...marqueeItems, ...marqueeItems, ...marqueeItems, ...marqueeItems].map((label, i) => (
+            <span key={i} className="mx-7 inline-flex items-center gap-7 text-[11px] font-mono uppercase tracking-[0.32em] text-white/35">
+              {label}
+              <span className="text-white/15">·</span>
+            </span>
+          ))}
+        </motion.div>
+        <div className="pointer-events-none absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-black to-transparent" aria-hidden />
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-black to-transparent" aria-hidden />
+      </div>
+
+      {/* ── Floating status toast ─────────────────────────────────────── */}
+      <AnimatePresence>
+        {status && (
+          <motion.div
+            key="status-toast"
+            initial={{ opacity: 0, y: 24, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 24, scale: 0.96 }}
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            className="fixed bottom-6 right-6 z-50 max-w-md rounded-2xl border border-white/15 bg-black/90 px-5 py-4 backdrop-blur-2xl shadow-[0_20px_60px_-15px_rgba(255,255,255,0.12)]"
+            role="status"
+          >
+            <div className="flex items-start gap-3">
+              <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-white/20 bg-white/[0.06]">
+                {status.toLowerCase().includes("error") || status.toLowerCase().includes("fail")
+                  ? <X className="h-3.5 w-3.5 text-white/85" />
+                  : <CheckCircle2 className="h-3.5 w-3.5 text-white/85" />}
+              </div>
+              <p className="flex-1 text-[12px] leading-5 text-white/80 break-words">{status}</p>
+              <button
+                type="button"
+                onClick={() => setStatus(null)}
+                aria-label="Dismiss"
+                className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-white/10 text-white/45 transition-colors hover:bg-white/[0.06] hover:text-white"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </main>
   );
 }
