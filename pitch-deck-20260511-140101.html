@@ -1,0 +1,952 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Civitas. Private payroll on Solana.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#000;
+    --bg-soft:#0A0A0A;
+    --line:#181818;
+    --line-hi:#2A2A2A;
+    --ink:#FFFFFF;
+    --ink-mid:#8A8A8A;
+    --ink-low:#4A4A4A;
+    --ink-faint:#222;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    height:100%;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter Tight',-apple-system,BlinkMacSystemFont,sans-serif;
+    font-feature-settings:"ss01","cv11","kern";
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  body{overflow:hidden}
+
+  /* subtle dot-grid texture, very low contrast */
+  body::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    background-image:radial-gradient(circle at 1px 1px, rgba(255,255,255,0.025) 1px, transparent 0);
+    background-size:32px 32px;
+    pointer-events:none;
+    z-index:1;
+  }
+
+  .deck{position:relative;width:100vw;height:100vh;z-index:2}
+  .slide{
+    position:absolute;inset:0;
+    display:none;
+    padding:0 8vw;
+    flex-direction:column;
+    justify-content:center;
+    opacity:0;
+    transition:opacity .4s cubic-bezier(.4,0,.2,1);
+  }
+  .slide.active{display:flex;opacity:1}
+  .slide.active .anim{animation:slide-up .55s cubic-bezier(.2,.7,.2,1) both}
+  .slide.active .anim-d1{animation-delay:.08s}
+  .slide.active .anim-d2{animation-delay:.18s}
+  .slide.active .anim-d3{animation-delay:.28s}
+  @keyframes slide-up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+
+  /* corner brand */
+  .brand-mark{position:fixed;top:32px;left:36px;z-index:40;height:16px;opacity:.85}
+  .brand-mark svg{height:100%;width:auto;display:block}
+  .track-tag{
+    position:fixed;top:32px;right:36px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;color:var(--ink-low);
+    letter-spacing:.18em;text-transform:uppercase;
+    z-index:40;
+  }
+
+  /* slide label (top-left of each slide, mono) */
+  .slide-label{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    letter-spacing:.22em;
+    text-transform:uppercase;
+    color:var(--ink-low);
+    margin-bottom:48px;
+    display:flex;align-items:center;gap:14px;
+  }
+  .slide-label .sep{width:1px;height:10px;background:var(--ink-low)}
+  .slide-label .num{color:var(--ink)}
+
+  /* big display type */
+  .display{
+    font-weight:700;
+    font-size:clamp(48px,7.5vw,128px);
+    line-height:.93;
+    letter-spacing:-0.048em;
+    color:var(--ink);
+  }
+  .display.xl{font-size:clamp(64px,9.5vw,168px);font-weight:800}
+  .display.lg{font-size:clamp(56px,8vw,140px)}
+  .display.md{font-size:clamp(42px,5.5vw,84px);letter-spacing:-0.035em;line-height:1.02}
+  .display.sm{font-size:clamp(34px,4vw,58px);letter-spacing:-0.03em;line-height:1.08}
+  .display .dim{color:var(--ink-low)}
+  .display .em{font-weight:800}
+
+  .caption{
+    font-size:clamp(15px,1.3vw,19px);
+    color:var(--ink-mid);
+    margin-top:36px;
+    max-width:680px;
+    line-height:1.5;
+    font-weight:400;
+  }
+  .footnote{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    letter-spacing:.1em;
+    color:var(--ink-low);
+    margin-top:48px;
+    text-transform:uppercase;
+  }
+  .mono{font-family:'JetBrains Mono',monospace;font-feature-settings:"zero","ss01"}
+
+  /* chip strip */
+  .chip-strip{display:flex;flex-wrap:wrap;gap:8px;margin-top:42px}
+  .chip{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--ink);
+    border:1px solid var(--line-hi);
+    padding:8px 14px;
+    border-radius:999px;
+    background:var(--bg-soft);
+  }
+  .chip.solid{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+
+  /* TITLE slide */
+  .title-slide{align-items:flex-start;justify-content:center}
+  .title-wordmark{height:clamp(70px,11vh,120px);width:auto;margin-bottom:38px}
+  .title-line{
+    font-weight:700;
+    font-size:clamp(40px,5.4vw,84px);
+    line-height:1;
+    letter-spacing:-0.04em;
+    color:var(--ink);
+  }
+  .title-line .dim{color:var(--ink-mid);font-weight:500}
+  .title-footer{
+    position:absolute;bottom:64px;left:8vw;right:8vw;
+    display:flex;justify-content:space-between;align-items:flex-end;
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--ink-low);letter-spacing:.12em;text-transform:uppercase;
+  }
+
+  /* metric layout, single hero number */
+  .hero-num{
+    font-family:'JetBrains Mono',monospace;
+    font-weight:700;
+    font-size:clamp(120px,18vw,280px);
+    letter-spacing:-0.07em;
+    line-height:.85;
+    color:var(--ink);
+  }
+  .hero-num .unit{
+    font-family:'Inter Tight',sans-serif;
+    font-size:.45em;
+    font-weight:600;
+    letter-spacing:-0.04em;
+    color:var(--ink-mid);
+    margin-left:.05em;
+  }
+
+  /* statement only slides */
+  .statement{max-width:1200px}
+
+  /* flow rail */
+  .rail{
+    display:flex;align-items:center;gap:8px;
+    margin-top:48px;flex-wrap:wrap;
+  }
+  .rail .step{
+    font-family:'JetBrains Mono',monospace;
+    font-weight:700;
+    font-size:clamp(18px,2vw,28px);
+    letter-spacing:.04em;
+    color:var(--ink);
+    padding:14px 18px;
+  }
+  .rail .step .sn{
+    display:block;font-size:10px;font-weight:500;
+    color:var(--ink-low);letter-spacing:.16em;margin-bottom:6px;
+  }
+  .rail .arrow{color:var(--ink-low);font-size:14px;font-family:'JetBrains Mono',monospace}
+
+  /* 3-line list */
+  .list-3{display:flex;flex-direction:column;gap:14px;margin-top:44px;max-width:980px}
+  .list-3 .item{
+    display:grid;grid-template-columns:auto 1fr;gap:22px;
+    padding:22px 0;border-bottom:1px solid var(--line);
+    align-items:baseline;
+  }
+  .list-3 .item:last-child{border-bottom:none}
+  .list-3 .item .n{
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    letter-spacing:.18em;color:var(--ink-low);text-transform:uppercase;
+  }
+  .list-3 .item .h{
+    font-weight:700;font-size:clamp(22px,2.4vw,34px);
+    letter-spacing:-0.025em;line-height:1.15;
+  }
+  .list-3 .item .h small{
+    display:block;font-size:14px;font-weight:400;color:var(--ink-mid);
+    margin-top:6px;letter-spacing:0;line-height:1.5;
+  }
+
+  /* metric trio (proof slide) */
+  .metric-trio{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:24px;
+    margin-top:64px;max-width:1200px;
+  }
+  .metric-trio .m{padding:0 8px}
+  .metric-trio .mn{
+    font-family:'JetBrains Mono',monospace;font-weight:700;
+    font-size:clamp(56px,7vw,108px);letter-spacing:-0.045em;line-height:.92;
+  }
+  .metric-trio .ml{
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    letter-spacing:.16em;color:var(--ink-low);text-transform:uppercase;
+    margin-top:18px;
+  }
+
+  /* two facts */
+  .two-fact{display:grid;grid-template-columns:1fr 1fr;gap:48px;margin-top:48px;max-width:1300px}
+  .two-fact .col .ct{
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    letter-spacing:.18em;text-transform:uppercase;color:var(--ink-low);
+    margin-bottom:18px;
+  }
+  .two-fact .col .ch{
+    font-weight:700;font-size:clamp(28px,3.2vw,48px);
+    letter-spacing:-0.03em;line-height:1.05;
+  }
+  .two-fact .col .cd{
+    font-family:'JetBrains Mono',monospace;font-size:13px;
+    color:var(--ink-mid);margin-top:14px;letter-spacing:.02em;line-height:1.55;
+  }
+
+  /* compare table, sparse */
+  .compare{
+    width:100%;max-width:1100px;margin-top:48px;
+    border-collapse:collapse;font-size:14px;
+  }
+  .compare th,.compare td{
+    padding:18px 16px;text-align:left;
+    border-bottom:1px solid var(--line);
+  }
+  .compare th{
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+    letter-spacing:.18em;text-transform:uppercase;
+    color:var(--ink-low);font-weight:500;
+  }
+  .compare th.us{color:var(--ink);font-weight:700}
+  .compare td:first-child{color:var(--ink-mid);font-weight:500}
+  .compare td.us{color:var(--ink);font-weight:700;font-family:'JetBrains Mono',monospace}
+  .compare td.x{color:var(--ink-low);font-family:'JetBrains Mono',monospace}
+  .compare td.o{color:var(--ink-mid);font-family:'JetBrains Mono',monospace}
+
+  /* product shot */
+  .product-shot{
+    margin-top:24px;
+    border:1px solid var(--line-hi);
+    border-radius:14px;
+    overflow:hidden;
+    background:var(--bg-soft);
+    max-width:1500px;
+    box-shadow:0 40px 100px -30px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.03);
+    position:relative;
+  }
+
+  /* inside slide: 2-up dashboards */
+  .inside-grid{
+    display:grid;grid-template-columns:1fr 1fr;gap:16px;
+    margin-top:30px;max-width:1500px;
+  }
+  .inside-card{
+    border:1px solid var(--line-hi);border-radius:14px;
+    overflow:hidden;background:var(--bg-soft);
+    box-shadow:0 30px 80px -30px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.03);
+    display:flex;flex-direction:column;
+  }
+  .inside-card img{display:block;width:100%;height:auto;max-height:46vh;object-fit:cover;object-position:top center}
+  .inside-card .ic-cap{
+    padding:14px 18px;border-top:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--ink-mid);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .inside-card .ic-cap b{color:var(--ink);font-weight:600}
+
+  /* operator slide v2: profile + credentials */
+  .op-grid{
+    display:grid;grid-template-columns:auto 1fr;gap:42px;
+    margin-top:38px;max-width:1300px;align-items:start;
+  }
+  .op-left{display:flex;flex-direction:column;gap:18px;align-items:flex-start;width:200px}
+  .op-avatar{
+    width:160px;height:160px;border-radius:50%;
+    overflow:hidden;border:1px solid var(--line-hi);
+    background:var(--bg-soft);
+    box-shadow:0 20px 60px -20px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.04);
+  }
+  .op-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+  .op-name{
+    font-weight:800;font-size:32px;letter-spacing:-0.025em;
+    line-height:1;color:var(--ink);
+  }
+  .op-role{
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    letter-spacing:.18em;text-transform:uppercase;color:var(--ink-low);
+    margin-top:6px;
+  }
+
+  .op-right{display:flex;flex-direction:column;gap:28px}
+  .op-quote{
+    font-weight:700;font-size:clamp(30px,3.6vw,52px);
+    line-height:1.08;letter-spacing:-0.03em;color:var(--ink);
+  }
+  .op-quote .dim{color:var(--ink-mid);font-weight:500}
+
+  .cred-grid{
+    display:grid;grid-template-columns:repeat(2,1fr);gap:10px;
+    margin-top:8px;
+  }
+  .cred-chip{
+    display:flex;align-items:flex-start;gap:12px;
+    padding:14px 16px;border:1px solid var(--line-hi);
+    border-radius:10px;background:var(--bg-soft);
+  }
+  .cred-chip .ct{
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+    letter-spacing:.18em;color:var(--ink-low);text-transform:uppercase;
+    padding-top:3px;min-width:48px;
+  }
+  .cred-chip .cb{
+    font-size:14.5px;color:var(--ink);font-weight:500;line-height:1.35;
+  }
+  .cred-chip .cb b{font-weight:700}
+
+  .op-links{
+    display:flex;gap:24px;margin-top:6px;
+    font-family:'JetBrains Mono',monospace;font-size:12px;
+    color:var(--ink-mid);letter-spacing:.04em;
+    padding-top:18px;border-top:1px solid var(--line);
+  }
+  .op-links .lk{color:var(--ink);font-weight:500}
+
+  /* revenue tiers */
+  .tier-row{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:14px;
+    margin-top:48px;max-width:1300px;
+  }
+  .tier-card{
+    border:1px solid var(--line-hi);border-radius:14px;
+    padding:30px 26px 28px;display:flex;flex-direction:column;gap:14px;
+    background:var(--bg-soft);
+    position:relative;
+  }
+  .tier-card.featured{
+    background:var(--ink);color:var(--bg);border-color:var(--ink);
+  }
+  .tier-card.featured .tier-name{color:#666}
+  .tier-card.featured .tier-price{color:var(--bg)}
+  .tier-card.featured .tier-unit{color:#555}
+  .tier-card.featured .tier-features{border-top-color:rgba(0,0,0,0.10)}
+  .tier-card.featured .tier-features li{color:var(--bg)}
+  .tier-card.featured .tier-features li::before{background:var(--bg)}
+  .tier-card.featured::before{
+    content:"RECOMMENDED";position:absolute;top:-10px;left:22px;
+    background:var(--bg);color:var(--ink);
+    font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;
+    letter-spacing:.22em;padding:5px 10px;border-radius:999px;
+    border:1px solid var(--line-hi);
+  }
+  .tier-name{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;
+    letter-spacing:.22em;text-transform:uppercase;color:var(--ink-low);
+    font-weight:600;
+  }
+  .tier-price{
+    font-family:'JetBrains Mono',monospace;font-weight:700;
+    font-size:clamp(38px,4.4vw,64px);letter-spacing:-0.035em;line-height:1;
+    color:var(--ink);
+  }
+  .tier-unit{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--ink-low);
+    margin-top:-4px;
+  }
+  .tier-features{
+    list-style:none;display:flex;flex-direction:column;gap:10px;
+    margin-top:6px;padding-top:18px;border-top:1px solid var(--line);
+  }
+  .tier-features li{
+    font-size:13.5px;line-height:1.45;
+    display:flex;align-items:flex-start;gap:10px;
+  }
+  .tier-features li::before{
+    content:"";width:5px;height:5px;background:var(--ink);
+    border-radius:50%;flex-shrink:0;margin-top:8px;
+  }
+  .product-shot::after{
+    content:"";position:absolute;inset:0;
+    border-radius:14px;pointer-events:none;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .product-shot img{
+    display:block;width:100%;height:auto;
+    max-height:64vh;object-fit:cover;object-position:top center;
+  }
+  .product-shot .ph{
+    display:flex;align-items:center;justify-content:center;
+    height:54vh;color:var(--ink-low);
+    font-family:'JetBrains Mono',monospace;font-size:12px;
+    letter-spacing:.16em;text-transform:uppercase;text-align:center;
+    flex-direction:column;gap:14px;
+  }
+  .product-shot .ph .ph-lg{font-size:18px;color:var(--ink-mid);letter-spacing:.04em;text-transform:none;font-family:'Inter Tight',sans-serif;font-weight:500}
+  .product-bar{
+    display:flex;align-items:center;gap:12px;
+    margin-top:24px;font-family:'JetBrains Mono',monospace;
+    font-size:12px;color:var(--ink-low);letter-spacing:.12em;text-transform:uppercase;
+  }
+  .product-bar .live-dot{
+    width:8px;height:8px;border-radius:50%;background:var(--ink);
+    animation:pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+  /* backed by */
+  .backed-row{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:64px;max-width:1100px;border-top:1px solid var(--line)}
+  .backer{padding:32px 24px;border-right:1px solid var(--line)}
+  .backer:last-child{border-right:none}
+  .backer .bn{
+    font-weight:800;font-size:clamp(20px,2vw,32px);
+    letter-spacing:-0.025em;color:var(--ink);
+  }
+  .backer .br{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;
+    letter-spacing:.16em;color:var(--ink-low);text-transform:uppercase;
+    margin-top:10px;
+  }
+
+  /* team slide */
+  .team-stack{margin-top:36px;max-width:920px}
+  .team-quote{
+    font-weight:700;
+    font-size:clamp(36px,4.6vw,72px);
+    line-height:1.05;letter-spacing:-0.035em;
+    color:var(--ink);
+  }
+  .team-quote .dim{color:var(--ink-mid);font-weight:500}
+  .team-meta{
+    margin-top:48px;display:grid;
+    grid-template-columns:repeat(3,1fr);gap:0;
+    border-top:1px solid var(--line);
+  }
+  .team-meta .col{padding:24px 24px 0 0;border-right:1px solid var(--line)}
+  .team-meta .col:last-child{border-right:none}
+  .team-meta .ct{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;
+    letter-spacing:.18em;text-transform:uppercase;color:var(--ink-low);
+    margin-bottom:10px;
+  }
+  .team-meta .cv{
+    font-family:'JetBrains Mono',monospace;font-size:13px;
+    color:var(--ink);line-height:1.55;
+  }
+
+  /* ask slide */
+  .ask-row{display:grid;grid-template-columns:repeat(3,1fr);gap:32px;margin-top:64px;max-width:1200px}
+  .ask-cell .ap{
+    font-family:'JetBrains Mono',monospace;font-weight:700;
+    font-size:clamp(40px,4.4vw,68px);letter-spacing:-0.035em;line-height:.95;
+    color:var(--ink);
+  }
+  .ask-cell .ah{
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    letter-spacing:.16em;color:var(--ink-low);text-transform:uppercase;
+    margin-top:18px;
+  }
+
+  /* closing slide */
+  .close-slide{align-items:center;justify-content:center;text-align:center}
+  .close-wordmark{height:clamp(60px,9vh,110px);margin-bottom:48px;width:auto}
+  .close-line{
+    font-weight:700;font-size:clamp(28px,3.4vw,52px);
+    letter-spacing:-0.03em;line-height:1.1;max-width:900px;
+  }
+  .close-line .dim{color:var(--ink-mid);font-weight:500}
+  .close-foot{
+    position:absolute;bottom:64px;left:0;right:0;
+    display:flex;justify-content:center;gap:42px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--ink-low);letter-spacing:.12em;text-transform:uppercase;
+  }
+
+  /* nav */
+  .nav{
+    position:fixed;bottom:28px;left:50%;transform:translateX(-50%);
+    display:flex;align-items:center;gap:8px;z-index:50;
+    background:rgba(10,10,10,.85);backdrop-filter:blur(14px);
+    border:1px solid var(--line-hi);padding:8px 14px;border-radius:999px;
+  }
+  .nav button{
+    background:transparent;border:1px solid var(--line-hi);
+    color:var(--ink-mid);width:30px;height:30px;border-radius:50%;
+    cursor:pointer;font-family:inherit;font-size:13px;
+    display:flex;align-items:center;justify-content:center;
+    transition:all .15s ease;
+  }
+  .nav button:hover{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+  .dots{display:flex;gap:5px;padding:0 6px}
+  .dot{width:5px;height:5px;border-radius:50%;background:var(--line-hi);cursor:pointer;transition:all .2s ease}
+  .dot.active{background:var(--ink);width:18px;border-radius:3px}
+  .counter{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink-low);letter-spacing:.08em;padding:0 6px}
+
+  .notes{
+    position:fixed;bottom:88px;left:50%;transform:translateX(-50%);
+    max-width:780px;background:rgba(10,10,10,.96);
+    backdrop-filter:blur(14px);border:1px solid var(--line-hi);
+    border-radius:10px;padding:18px 22px;color:var(--ink-mid);
+    font-size:13px;line-height:1.6;display:none;z-index:45;
+  }
+  .notes.show{display:block}
+  .notes::before{
+    content:"SPEAKER NOTES";display:block;
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--ink);letter-spacing:.2em;margin-bottom:8px;font-weight:600;
+  }
+
+  .keyhint{
+    position:fixed;bottom:32px;right:36px;
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--ink-low);letter-spacing:.08em;z-index:40;
+  }
+  .keyhint kbd{
+    background:var(--bg-soft);border:1px solid var(--line-hi);
+    border-radius:4px;padding:2px 6px;color:var(--ink-mid);margin:0 2px;
+  }
+
+  @media print{
+    body{overflow:auto}
+    body::before{display:none}
+    .slide{display:flex !important;opacity:1 !important;position:relative;page-break-after:always;height:100vh}
+    .nav,.keyhint,.notes,.brand-mark,.track-tag{display:none !important}
+  }
+
+  @media (max-width:1000px){
+    .metric-trio,.two-fact,.backed-row,.team-meta,.ask-row{grid-template-columns:1fr;gap:24px}
+    .rail{flex-direction:column;align-items:flex-start}
+    .rail .arrow{transform:rotate(90deg)}
+  }
+</style>
+</head>
+<body>
+
+<!-- corner wordmark -->
+<div class="brand-mark" aria-label="Civitas">
+  <svg viewBox="0 0 461 93" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M12.16 46.08C12.16 67.328 25.984 81.28 46.592 81.28C62.336 81.28 72.832 73.216 77.44 59.648H90.24C85.504 79.488 69.632 92.16 46.592 92.16C18.56 92.16 0 73.728 0 46.08C0 18.432 18.56 0 46.592 0C69.632 0 85.504 12.672 90.24 32.512H77.44C72.832 18.944 62.336 10.88 46.592 10.88C25.984 10.88 12.16 24.704 12.16 46.08Z" fill="white"/>
+    <path d="M100.872 90.88V1.28H113.032V90.88H100.872Z" fill="white"/>
+    <path d="M123.622 90.88V1.28H135.782V79.488H139.878C169.318 79.488 184.166 63.616 184.166 34.304V1.28H196.454V33.28C196.454 70.656 175.846 90.88 137.574 90.88H123.622Z" fill="white"/>
+    <path d="M207.122 90.88V1.28H219.282V90.88H207.122Z" fill="white"/>
+    <path d="M307.44 12.416H274.416V90.88H262.384V12.416H229.36V1.28H307.44V12.416Z" fill="white"/>
+    <path d="M377.579 1.28V90.88H365.291V66.176L316.907 66.048V90.88H304.747V58.88C304.747 21.376 325.355 1.28 363.627 1.28H377.579ZM317.035 54.784L365.291 54.912V12.672H361.195C332.907 12.672 317.931 27.52 317.035 54.784Z" fill="white"/>
+    <path d="M387.991 26.496C387.991 8.832 401.943 0 426.135 0C439.191 0 447.383 1.408 456.983 4.992V17.152C450.711 14.976 442.903 11.008 426.647 11.008C408.471 11.008 400.023 16.128 400.023 25.984C400.023 50.304 460.823 29.184 460.823 65.792C460.823 83.456 446.871 92.288 422.679 92.288C409.495 92.288 401.303 90.88 391.831 87.296V75.136C398.103 77.312 405.911 81.28 422.167 81.28C440.343 81.28 448.791 76.16 448.791 66.432C448.791 42.112 387.991 62.976 387.991 26.496Z" fill="white"/>
+  </svg>
+</div>
+<div class="track-tag">Colosseum · Frontier 2026</div>
+
+<div class="deck" id="deck">
+
+  <!-- 1 · TITLE -->
+  <section class="slide title-slide active" data-notes="Open with silence. Let the wordmark land. Then one sentence: 'Civitas is private payroll, native on Solana. Live on devnet today.' Move forward.">
+    <svg class="title-wordmark anim" viewBox="0 0 461 93" xmlns="http://www.w3.org/2000/svg" aria-label="CIVITAS">
+      <path d="M12.16 46.08C12.16 67.328 25.984 81.28 46.592 81.28C62.336 81.28 72.832 73.216 77.44 59.648H90.24C85.504 79.488 69.632 92.16 46.592 92.16C18.56 92.16 0 73.728 0 46.08C0 18.432 18.56 0 46.592 0C69.632 0 85.504 12.672 90.24 32.512H77.44C72.832 18.944 62.336 10.88 46.592 10.88C25.984 10.88 12.16 24.704 12.16 46.08Z" fill="white"/>
+      <path d="M100.872 90.88V1.28H113.032V90.88H100.872Z" fill="white"/>
+      <path d="M123.622 90.88V1.28H135.782V79.488H139.878C169.318 79.488 184.166 63.616 184.166 34.304V1.28H196.454V33.28C196.454 70.656 175.846 90.88 137.574 90.88H123.622Z" fill="white"/>
+      <path d="M207.122 90.88V1.28H219.282V90.88H207.122Z" fill="white"/>
+      <path d="M307.44 12.416H274.416V90.88H262.384V12.416H229.36V1.28H307.44V12.416Z" fill="white"/>
+      <path d="M377.579 1.28V90.88H365.291V66.176L316.907 66.048V90.88H304.747V58.88C304.747 21.376 325.355 1.28 363.627 1.28H377.579ZM317.035 54.784L365.291 54.912V12.672H361.195C332.907 12.672 317.931 27.52 317.035 54.784Z" fill="white"/>
+      <path d="M387.991 26.496C387.991 8.832 401.943 0 426.135 0C439.191 0 447.383 1.408 456.983 4.992V17.152C450.711 14.976 442.903 11.008 426.647 11.008C408.471 11.008 400.023 16.128 400.023 25.984C400.023 50.304 460.823 29.184 460.823 65.792C460.823 83.456 446.871 92.288 422.679 92.288C409.495 92.288 401.303 90.88 391.831 87.296V75.136C398.103 77.312 405.911 81.28 422.167 81.28C440.343 81.28 448.791 76.16 448.791 66.432C448.791 42.112 387.991 62.976 387.991 26.496Z" fill="white"/>
+    </svg>
+    <div class="title-line anim anim-d1">Private payroll. <span class="dim">Native on Solana.</span></div>
+    <div class="title-footer">
+      <div>Pitch · 2026</div>
+      <div class="mono">CQW3·TnN4·X6iG·…·6e24y</div>
+    </div>
+  </section>
+
+  <!-- 2 · PROBLEM (one number) -->
+  <section class="slide" data-notes="Just the number. Let it breathe. Then say: 'six hundred and fifty billion dollars in stablecoin volume on Solana in February. The highest monthly volume on any blockchain ever. And every single transfer is publicly readable.'">
+    <div class="slide-label anim"><span class="num">01</span><span class="sep"></span>Problem</div>
+    <div class="hero-num anim anim-d1">$650<span class="unit">Billion</span></div>
+    <div class="caption anim anim-d2">Solana stablecoin volume. February 2026.<br/>The highest monthly volume on any blockchain, ever.</div>
+    <div class="footnote anim anim-d3">All of it public.</div>
+  </section>
+
+  <!-- 3 · STAKES (one sentence) -->
+  <section class="slide" data-notes="Read it slowly. Let it land. Optional follow up: 'no serious employer runs payroll on a chain where comp data is a Solscan query.'">
+    <div class="slide-label anim"><span class="num">02</span><span class="sep"></span>Stakes</div>
+    <div class="display lg anim anim-d1 statement">Every salary you pay on chain<br/><span class="dim">is permanent public data.</span></div>
+    <div class="footnote anim anim-d3">Block explorers · Forever</div>
+  </section>
+
+  <!-- 4 · WHY NOW (two facts) -->
+  <section class="slide" data-notes="The why now slide. Two facts arrived in the same six months. Volume exploded. The chain's only native privacy primitive went offline. The window opened. We built the answer.">
+    <div class="slide-label anim"><span class="num">03</span><span class="sep"></span>Why now</div>
+    <div class="display md anim anim-d1">The window opened in 2025.</div>
+    <div class="two-fact anim anim-d2">
+      <div class="col">
+        <div class="ct">Demand</div>
+        <div class="ch">$650B/month on Solana.</div>
+        <div class="cd">Meta and Cash App route creator payments through it.<br/>Rise alone moved $777M in 12 months.</div>
+      </div>
+      <div class="col">
+        <div class="ct">Vacuum</div>
+        <div class="ch">Token-2022 CT is offline.</div>
+        <div class="cd">ZK ElGamal Proof Program disabled since June 2025.<br/>Solana's only native privacy primitive, unavailable.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 · SOLUTION (one sentence) -->
+  <section class="slide" data-notes="The reveal. Four layers, one program. Each layer addresses a distinct threat. The system breaks only if every layer is compromised at once. That is the trilemma resolved.">
+    <div class="slide-label anim"><span class="num">04</span><span class="sep"></span>Civitas</div>
+    <div class="display lg anim anim-d1 statement">Four privacy layers.<br/><span class="dim">One Anchor program.</span></div>
+    <div class="chip-strip anim anim-d2">
+      <span class="chip">Nillion nilDB</span>
+      <span class="chip">Nillion nilCC TEE</span>
+      <span class="chip">Groth16 ZK</span>
+      <span class="chip solid">MagicBlock PER</span>
+    </div>
+    <div class="footnote anim anim-d3">Breaks only if every layer is compromised simultaneously.</div>
+  </section>
+
+  <!-- 6 · HOW (five-step rail) -->
+  <section class="slide" data-notes="Walk the rail once. Five steps. Twelve seconds end to end on devnet. Then the three guarantees at the bottom, verbatim.">
+    <div class="slide-label anim"><span class="num">05</span><span class="sep"></span>How it works</div>
+    <div class="display md anim anim-d1">Five steps. Twelve seconds.</div>
+    <div class="rail anim anim-d2">
+      <div class="step"><span class="sn">01</span>ENCRYPT</div>
+      <div class="arrow">→</div>
+      <div class="step"><span class="sn">02</span>COMPUTE</div>
+      <div class="arrow">→</div>
+      <div class="step"><span class="sn">03</span>COMMIT</div>
+      <div class="arrow">→</div>
+      <div class="step"><span class="sn">04</span>PROVE</div>
+      <div class="arrow">→</div>
+      <div class="step"><span class="sn">05</span>SETTLE</div>
+    </div>
+    <div class="caption anim anim-d3">No salary on chain. No master credential leaves the browser.<br/>No single operator sees the table.</div>
+  </section>
+
+  <!-- 7 · PRODUCT (UI screenshot) -->
+  <section class="slide" data-notes="Show the live URL. Walk the privacy stack visible in the right rail. Drop into the actual demo from here. The product looks like a real fintech, because it is.">
+    <div class="slide-label anim"><span class="num">06</span><span class="sep"></span>Product</div>
+    <div class="display sm anim anim-d1">Live now.</div>
+    <div class="product-shot anim anim-d2">
+      <img src="brand-kit/screenshots/landing.png" alt="Civitas landing page at meetcivitas.xyz" onerror="this.style.display='none';this.parentNode.querySelector('.ph').style.display='flex'" />
+      <div class="ph" style="display:none">
+        <div class="ph-lg">Civitas landing page</div>
+        <div>save screenshot to brand-kit/screenshots/landing.png</div>
+      </div>
+    </div>
+    <div class="product-bar anim anim-d3">
+      <span class="live-dot"></span>
+      <span>meetcivitas.xyz</span>
+      <span style="opacity:.4">·</span>
+      <span>devnet · live</span>
+    </div>
+  </section>
+
+  <!-- 7 · INSIDE (2-up product screens) -->
+  <section class="slide" data-notes="Walk it: left side is the employer roster, where company admins register employees and the salaries get %allot encrypted before they touch the chain. Right side is the employee terminal, where the ZK voucher is claimed and MagicBlock settles the payout. Two screens, one protocol.">
+    <div class="slide-label anim"><span class="num">07</span><span class="sep"></span>Inside Civitas</div>
+    <div class="display sm anim anim-d1">Two surfaces. <span class="dim">One protocol.</span></div>
+    <div class="inside-grid anim anim-d2">
+      <div class="inside-card">
+        <img src="brand-kit/screenshots/employer-roster.png" alt="Civitas employer roster" />
+        <div class="ic-cap"><span><b>Employer</b> · identity registry</span><span>%ALLOT</span></div>
+      </div>
+      <div class="inside-card">
+        <img src="brand-kit/screenshots/private-payouts.png" alt="Civitas employee payout terminal" />
+        <div class="ic-cap"><span><b>Employee</b> · ZK payout terminal</span><span>V4 · LIVE</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 · PROOF (three metrics) -->
+  <section class="slide" data-notes="Live demo before this slide if at all possible. These three numbers carry the proof: real proof size on chain, real settlement latency, real TEE call response.">
+    <div class="slide-label anim"><span class="num">08</span><span class="sep"></span>Proof</div>
+    <div class="display md anim anim-d1">Live on devnet. <span class="dim">Today.</span></div>
+    <div class="metric-trio anim anim-d2">
+      <div class="m">
+        <div class="mn">256B</div>
+        <div class="ml">Groth16 proof on chain</div>
+      </div>
+      <div class="m">
+        <div class="mn">&lt;50ms</div>
+        <div class="ml">MagicBlock PER settle</div>
+      </div>
+      <div class="m">
+        <div class="mn">~0.3s</div>
+        <div class="ml">nilCC TEE warm call</div>
+      </div>
+    </div>
+    <div class="footnote anim anim-d3 mono">PROGRAM · CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y</div>
+  </section>
+
+  <!-- 8 · CUSTOMER (three lines) -->
+  <section class="slide" data-notes="The 'who actually uses this' answer. Three buyers, ranked by reachability. Direct to DAOs and crypto startups. B2B2C through payroll processors.">
+    <div class="slide-label anim"><span class="num">09</span><span class="sep"></span>Who uses this</div>
+    <div class="display md anim anim-d1">Three buyers. <span class="dim">Today.</span></div>
+    <div class="list-3 anim anim-d2">
+      <div class="item">
+        <div class="n">01</div>
+        <div class="h">DAOs paying contributors.<small>1,000+ on Solana. Public transfers by default.</small></div>
+      </div>
+      <div class="item">
+        <div class="n">02</div>
+        <div class="h">Crypto native startups.<small>~5,000 remote teams paid in stablecoins. Cap-table privacy is table stakes.</small></div>
+      </div>
+      <div class="item">
+        <div class="n">03</div>
+        <div class="h">Payroll processors. <span class="mono" style="font-size:.5em;font-weight:500;color:var(--ink-low);letter-spacing:.1em">B2B2C</span><small>Rise, Request, Toku. They need a private rail to sell into Fortune 500.</small></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 · REVENUE -->
+  <section class="slide" data-notes="How we make money. Subscription per employee per month, three tiers. Starter is free, gets DAOs and small crypto teams in the door. Team is the bread and butter at twelve dollars per employee per month, that hits a fifty person crypto startup at six hundred per month, seven thousand two hundred per year, ninety percent gross margin. Enterprise is for payroll processors like Rise and Request, custom licensing, six figures ARR per integration. Long term the protocol earns a 2 bps fee on every dollar settled through Civitas. At a million dollars in monthly settlement volume that is two thousand dollars per month in protocol revenue per integration partner.">
+    <div class="slide-label anim"><span class="num">10</span><span class="sep"></span>Revenue</div>
+    <div class="display sm anim anim-d1">How we make money.</div>
+    <div class="tier-row anim anim-d2">
+      <div class="tier-card">
+        <div class="tier-name">Starter</div>
+        <div class="tier-price">$0</div>
+        <div class="tier-unit">Free forever</div>
+        <ul class="tier-features">
+          <li>Up to 3 employees</li>
+          <li>Self host nilDB + nilCC</li>
+          <li>Open source, community support</li>
+        </ul>
+      </div>
+      <div class="tier-card featured">
+        <div class="tier-name">Team</div>
+        <div class="tier-price">$12</div>
+        <div class="tier-unit">per employee · per month</div>
+        <ul class="tier-features">
+          <li>Unlimited employees</li>
+          <li>Hosted nilDB cluster + TEE</li>
+          <li>Audit logs + viewing keys</li>
+          <li>Priority support</li>
+        </ul>
+      </div>
+      <div class="tier-card">
+        <div class="tier-name">Enterprise</div>
+        <div class="tier-price">Custom</div>
+        <div class="tier-unit">B2B2C · processors</div>
+        <ul class="tier-features">
+          <li>Dedicated TEE workload</li>
+          <li>Custom attestation policy</li>
+          <li>SLA + audit support</li>
+          <li>White label for Rise · Request</li>
+        </ul>
+      </div>
+    </div>
+    <div class="footnote anim anim-d3">Protocol fee · 2 bps on every dollar settled through Civitas.</div>
+  </section>
+
+  <!-- 11 · WHY SOLANA (one technical moat) -->
+  <section class="slide" data-notes="Pre empt the why crypto question. The pairing syscall is the lock in. Rip it out and the verifier is uneconomic on every other L1. Solana-exclusive technical moat.">
+    <div class="slide-label anim"><span class="num">11</span><span class="sep"></span>Why Solana</div>
+    <div class="display lg anim anim-d1 statement mono" style="font-weight:700;letter-spacing:-0.03em">alt_bn128_<wbr/>pairing</div>
+    <div class="caption anim anim-d2">Native Groth16 verification at 200K CU on Solana.<br/>EVM L1s charge orders of magnitude more. The verifier does not fit elsewhere.</div>
+    <div class="footnote anim anim-d3">Rip out Solana · the protocol breaks at three places.</div>
+  </section>
+
+  <!-- 10 · COMPETITION (sparse table) -->
+  <section class="slide" data-notes="Token-2022 CT is the comparison every judge will mention. It has been offline for eleven months. Aztec and Umbra are EVM. Off chain is custodial. Civitas is the only viable position on Solana.">
+    <div class="slide-label anim"><span class="num">12</span><span class="sep"></span>Competition</div>
+    <div class="display md anim anim-d1">No one else stitches all four.</div>
+    <table class="compare anim anim-d2">
+      <thead><tr>
+        <th></th>
+        <th class="us">CIVITAS</th>
+        <th>Token-2022 CT</th>
+        <th>Aztec / Umbra</th>
+        <th>Off chain</th>
+      </tr></thead>
+      <tbody>
+        <tr><td>Native on Solana</td><td class="us">YES</td><td class="x">disabled</td><td class="x">EVM</td><td class="o">n/a</td></tr>
+        <tr><td>On chain ZK redemption</td><td class="us">Groth16</td><td class="o">ElGamal</td><td class="o">partial</td><td class="x">no</td></tr>
+        <tr><td>TEE attested compute</td><td class="us">SEV-SNP</td><td class="x">no</td><td class="x">no</td><td class="o">trust me</td></tr>
+        <tr><td>Private settlement</td><td class="us">&lt;50ms</td><td class="x">offline</td><td class="o">slow</td><td class="o">custodial</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 11 · BACKED BY -->
+  <section class="slide" data-notes="Credibility, three names. Let the names land. No body text needed. The brand carries it.">
+    <div class="slide-label anim"><span class="num">13</span><span class="sep"></span>Backed by</div>
+    <div class="display md anim anim-d1">Built on real infrastructure.</div>
+    <div class="backed-row anim anim-d2">
+      <div class="backer"><div class="bn">Nillion</div><div class="br">Nucleus participant</div></div>
+      <div class="backer"><div class="bn">MagicBlock</div><div class="br">Private Ephemeral Rollups</div></div>
+      <div class="backer"><div class="bn">Solana</div><div class="br">Anchor 0.30 · Devnet</div></div>
+    </div>
+  </section>
+
+  <!-- 13 · OPERATOR -->
+  <section class="slide" data-notes="The team slide does one job: convince the judge that this specific person can ship this specific product. Lead with the quote. Then walk a couple credentials, especially Token 2049 SG Celo track win and the Web3Spell Labs founding. Close with the portfolio URL.">
+    <div class="slide-label anim"><span class="num">14</span><span class="sep"></span>Operator</div>
+    <div class="op-grid">
+      <div class="op-left anim anim-d1">
+        <div class="op-avatar">
+          <img src="brand-kit/profile.jpg" alt="rythme" />
+        </div>
+        <div>
+          <div class="op-name">rythme</div>
+          <div class="op-role">Solo founder · Full stack</div>
+        </div>
+      </div>
+      <div class="op-right">
+        <div class="op-quote anim anim-d1">"I built every layer<br/><span class="dim">of Civitas myself."</span></div>
+        <div class="cred-grid anim anim-d2">
+          <div class="cred-chip"><div class="ct">FOUNDED</div><div class="cb"><b>Web3Spell Labs</b></div></div>
+          <div class="cred-chip"><div class="ct">WINNER</div><div class="cb">Token 2049 SG · <b>Celo track</b></div></div>
+          <div class="cred-chip"><div class="ct">GRANT</div><div class="cb"><b>Superteam</b> grant recipient</div></div>
+          <div class="cred-chip"><div class="ct">CORE</div><div class="cb"><b>Nexus</b> · <b>Arbitrum Ignite</b></div></div>
+          <div class="cred-chip"><div class="ct">MENTOR</div><div class="cb"><b>PBW</b> (Permissionless Blockchain Week)</div></div>
+          <div class="cred-chip"><div class="ct">STACK</div><div class="cb">Rust · Anchor · circom · SEV-SNP · Next.js</div></div>
+        </div>
+        <div class="op-links anim anim-d3">
+          <div><span style="color:var(--ink-low)">PORTFOLIO &nbsp;</span><span class="lk">rythmastic.vercel.app</span></div>
+          <div><span style="color:var(--ink-low)">GITHUB &nbsp;</span><span class="lk">github.com/rythmern02</span></div>
+          <div><span style="color:var(--ink-low)">X &nbsp;</span><span class="lk">@meet_civitas</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13 · ASK -->
+  <section class="slide" data-notes="Specific ask. Five thousand dollars, the grant track, three pilot intros. Say it, then stop.">
+    <div class="slide-label anim"><span class="num">15</span><span class="sep"></span>Ask</div>
+    <div class="display md anim anim-d1">What we want from Colosseum.</div>
+    <div class="ask-row anim anim-d2">
+      <div class="ask-cell">
+        <div class="ap">$5,000</div>
+        <div class="ah">MagicBlock Frontier track</div>
+      </div>
+      <div class="ask-cell">
+        <div class="ap">Accelerator</div>
+        <div class="ah">Colosseum cohort + mentorship</div>
+      </div>
+      <div class="ask-cell">
+        <div class="ap">3 intros</div>
+        <div class="ah">Rise · Request · DAO treasuries</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 14 · CLOSE -->
+  <section class="slide close-slide" data-notes="End on the wordmark. Repeat the one liner. Silence. Let them ask.">
+    <svg class="close-wordmark anim" viewBox="0 0 461 93" xmlns="http://www.w3.org/2000/svg" aria-label="CIVITAS">
+      <path d="M12.16 46.08C12.16 67.328 25.984 81.28 46.592 81.28C62.336 81.28 72.832 73.216 77.44 59.648H90.24C85.504 79.488 69.632 92.16 46.592 92.16C18.56 92.16 0 73.728 0 46.08C0 18.432 18.56 0 46.592 0C69.632 0 85.504 12.672 90.24 32.512H77.44C72.832 18.944 62.336 10.88 46.592 10.88C25.984 10.88 12.16 24.704 12.16 46.08Z" fill="white"/>
+      <path d="M100.872 90.88V1.28H113.032V90.88H100.872Z" fill="white"/>
+      <path d="M123.622 90.88V1.28H135.782V79.488H139.878C169.318 79.488 184.166 63.616 184.166 34.304V1.28H196.454V33.28C196.454 70.656 175.846 90.88 137.574 90.88H123.622Z" fill="white"/>
+      <path d="M207.122 90.88V1.28H219.282V90.88H207.122Z" fill="white"/>
+      <path d="M307.44 12.416H274.416V90.88H262.384V12.416H229.36V1.28H307.44V12.416Z" fill="white"/>
+      <path d="M377.579 1.28V90.88H365.291V66.176L316.907 66.048V90.88H304.747V58.88C304.747 21.376 325.355 1.28 363.627 1.28H377.579ZM317.035 54.784L365.291 54.912V12.672H361.195C332.907 12.672 317.931 27.52 317.035 54.784Z" fill="white"/>
+      <path d="M387.991 26.496C387.991 8.832 401.943 0 426.135 0C439.191 0 447.383 1.408 456.983 4.992V17.152C450.711 14.976 442.903 11.008 426.647 11.008C408.471 11.008 400.023 16.128 400.023 25.984C400.023 50.304 460.823 29.184 460.823 65.792C460.823 83.456 446.871 92.288 422.679 92.288C409.495 92.288 401.303 90.88 391.831 87.296V75.136C398.103 77.312 405.911 81.28 422.167 81.28C440.343 81.28 448.791 76.16 448.791 66.432C448.791 42.112 387.991 62.976 387.991 26.496Z" fill="white"/>
+    </svg>
+    <div class="close-line anim anim-d1">Pay your team in stablecoins.<br/><span class="dim">No one sees the amounts.</span></div>
+    <div class="close-foot">
+      <div>meetcivitas.xyz</div>
+      <div>github.com/rythmern02/Civitas-Sol</div>
+      <div>@meet_civitas</div>
+    </div>
+  </section>
+
+</div>
+
+<div class="notes" id="notes"></div>
+
+<div class="nav">
+  <button id="prev" aria-label="Previous">‹</button>
+  <div class="counter"><span id="cur">1</span><span style="opacity:.4"> / </span><span id="tot">14</span></div>
+  <div class="dots" id="dots"></div>
+  <button id="next" aria-label="Next">›</button>
+</div>
+
+<div class="keyhint">
+  <kbd>←</kbd><kbd>→</kbd> nav &nbsp; <kbd>N</kbd> notes &nbsp; <kbd>F</kbd> fullscreen &nbsp; <kbd>P</kbd> print
+</div>
+
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  const notes=document.getElementById('notes');
+  const cur=document.getElementById('cur');
+  const tot=document.getElementById('tot');
+  const dotsBox=document.getElementById('dots');
+  let i=0;
+  let notesOn=false;
+
+  tot.textContent=slides.length;
+  slides.forEach((_,idx)=>{
+    const d=document.createElement('div');
+    d.className='dot'+(idx===0?' active':'');
+    d.onclick=()=>go(idx);
+    dotsBox.appendChild(d);
+  });
+  const dots=[...document.querySelectorAll('.dot')];
+
+  function go(n){
+    n=Math.max(0,Math.min(slides.length-1,n));
+    slides[i].classList.remove('active');
+    dots[i].classList.remove('active');
+    i=n;
+    slides[i].classList.add('active');
+    dots[i].classList.add('active');
+    cur.textContent=i+1;
+    if(notesOn) renderNotes();
+  }
+  function renderNotes(){
+    const t=slides[i].dataset.notes||'';
+    if(!t){notes.classList.remove('show');return}
+    notes.textContent=t;
+    notes.classList.add('show');
+  }
+  document.getElementById('prev').onclick=()=>go(i-1);
+  document.getElementById('next').onclick=()=>go(i+1);
+  document.addEventListener('keydown',e=>{
+    if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown')go(i+1);
+    if(e.key==='ArrowLeft'||e.key==='PageUp')go(i-1);
+    if(e.key==='Home')go(0);
+    if(e.key==='End')go(slides.length-1);
+    if(e.key==='n'||e.key==='N'){notesOn=!notesOn;notesOn?renderNotes():notes.classList.remove('show')}
+    if(e.key==='f'||e.key==='F'){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()}
+    if(e.key==='p'||e.key==='P'){window.print()}
+  });
+</script>
+</body>
+</html>

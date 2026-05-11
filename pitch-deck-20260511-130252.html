@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Civitas — Private Payroll Settlement on Solana</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#0A0A0A;
+    --bg-soft:#111111;
+    --bg-card:#141414;
+    --line:#1F1F1F;
+    --line-hi:#2A2A2A;
+    --ink:#FAFAFA;
+    --ink-mid:#A1A1A1;
+    --ink-low:#666666;
+    --accent:#C3FF3E;
+    --accent-dim:#7A9B26;
+    --warn:#FF6B6B;
+    --ok:#3EFFB1;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--ink);font-family:'Inter Tight',-apple-system,BlinkMacSystemFont,sans-serif;font-feature-settings:"ss01","cv11";-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  body{overflow:hidden}
+
+  .deck{position:relative;width:100vw;height:100vh}
+  .slide{position:absolute;inset:0;display:none;padding:6vh 7vw;flex-direction:column;justify-content:center;opacity:0;transition:opacity .35s ease}
+  .slide.active{display:flex;opacity:1}
+
+  /* navigation */
+  .nav{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;z-index:50;background:rgba(20,20,20,.7);backdrop-filter:blur(12px);border:1px solid var(--line);padding:8px 12px;border-radius:999px}
+  .nav button{background:transparent;border:1px solid var(--line);color:var(--ink-mid);width:32px;height:32px;border-radius:50%;cursor:pointer;font-family:inherit;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .15s ease}
+  .nav button:hover{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+  .dots{display:flex;gap:5px;padding:0 8px}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--line-hi);cursor:pointer;transition:all .15s ease}
+  .dot.active{background:var(--accent);width:18px;border-radius:3px}
+  .counter{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-low);letter-spacing:.05em;padding:0 8px}
+
+  /* fixed branding */
+  .brand-mark{position:fixed;top:24px;left:32px;font-weight:800;letter-spacing:-0.03em;font-size:14px;color:var(--ink);z-index:40}
+  .brand-mark::after{content:"";display:inline-block;width:6px;height:6px;background:var(--accent);border-radius:50%;margin-left:6px;vertical-align:middle;transform:translateY(-2px)}
+  .track-tag{position:fixed;top:24px;right:32px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-low);letter-spacing:.08em;text-transform:uppercase;z-index:40}
+
+  /* typography scale */
+  .eyebrow{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-low);margin-bottom:28px;display:flex;align-items:center;gap:10px}
+  .eyebrow::before{content:"";width:24px;height:1px;background:var(--accent)}
+
+  h1.title{font-weight:800;font-size:clamp(48px,7.5vw,108px);line-height:.95;letter-spacing:-0.04em}
+  h1.headline{font-weight:700;font-size:clamp(38px,4.8vw,68px);line-height:1.04;letter-spacing:-0.035em;max-width:1100px}
+  h2{font-weight:700;font-size:clamp(28px,3.2vw,42px);line-height:1.1;letter-spacing:-0.03em}
+  .sub{font-weight:400;font-size:clamp(18px,1.6vw,24px);line-height:1.45;color:var(--ink-mid);max-width:880px;margin-top:24px}
+  .mono{font-family:'JetBrains Mono',monospace}
+
+  .accent{color:var(--accent)}
+  .warn{color:var(--warn)}
+  .strike{text-decoration:line-through;color:var(--ink-low)}
+
+  /* card / grid */
+  .row{display:flex;gap:20px;margin-top:48px;flex-wrap:wrap}
+  .row-3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:48px}
+  .row-2{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-top:48px}
+  .row-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:48px}
+
+  .card{background:var(--bg-card);border:1px solid var(--line);border-radius:12px;padding:28px 26px;transition:border-color .2s ease}
+  .card:hover{border-color:var(--line-hi)}
+  .card .num{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:clamp(28px,3.2vw,44px);color:var(--accent);letter-spacing:-0.02em;line-height:1}
+  .card .num.ink{color:var(--ink)}
+  .card .label{font-size:13px;color:var(--ink-low);margin-top:14px;line-height:1.4;letter-spacing:.01em}
+  .card .heading{font-weight:700;font-size:18px;margin-bottom:8px;letter-spacing:-0.01em}
+  .card .body{font-size:14px;color:var(--ink-mid);line-height:1.55}
+
+  /* problem rows */
+  .pain-row{display:grid;grid-template-columns:32px 1fr;gap:22px;padding:22px 0;border-bottom:1px solid var(--line)}
+  .pain-row:last-child{border-bottom:none}
+  .pain-num{font-family:'JetBrains Mono',monospace;color:var(--accent);font-size:13px;padding-top:4px}
+  .pain-text{font-size:20px;font-weight:500;line-height:1.4;letter-spacing:-0.015em}
+  .pain-text small{display:block;font-size:14px;font-weight:400;color:var(--ink-mid);margin-top:6px;letter-spacing:0}
+
+  /* why-now two cols */
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:40px}
+  .two-col .panel{background:var(--bg-card);border:1px solid var(--line);border-radius:12px;padding:32px}
+  .panel-tag{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--accent);margin-bottom:20px}
+  .panel-tag.warn{color:var(--warn)}
+  .panel li{list-style:none;font-size:17px;line-height:1.55;padding:10px 0;color:var(--ink);border-bottom:1px solid var(--line)}
+  .panel li:last-child{border-bottom:none}
+  .panel li b{color:var(--accent);font-weight:700}
+
+  /* layer stack */
+  .layers{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:40px}
+  .layer{background:var(--bg-card);border:1px solid var(--line);border-radius:12px;padding:24px 22px;position:relative;overflow:hidden}
+  .layer::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent);opacity:.6}
+  .layer .lnum{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent);letter-spacing:.15em;margin-bottom:18px}
+  .layer .lname{font-weight:700;font-size:18px;letter-spacing:-0.01em;margin-bottom:8px}
+  .layer .ldesc{font-size:13px;color:var(--ink-mid);line-height:1.5}
+
+  /* flow steps */
+  .flow{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:44px;align-items:stretch}
+  .step{background:var(--bg-card);border:1px solid var(--line);border-radius:10px;padding:22px 18px;position:relative}
+  .step .sn{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent);margin-bottom:14px;letter-spacing:.1em}
+  .step .st{font-weight:600;font-size:15px;line-height:1.3;letter-spacing:-0.01em;margin-bottom:6px}
+  .step .sd{font-size:12px;color:var(--ink-low);line-height:1.4}
+  .arrow{display:flex;align-items:center;justify-content:center;color:var(--ink-low);font-size:14px}
+
+  /* big metrics row */
+  .metric-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:48px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .metric{padding:36px 28px;border-right:1px solid var(--line);background:var(--bg-card)}
+  .metric:last-child{border-right:none}
+  .metric .mn{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:clamp(36px,4.4vw,56px);color:var(--accent);letter-spacing:-0.03em;line-height:1}
+  .metric .ml{font-size:13px;color:var(--ink-mid);margin-top:14px;line-height:1.4}
+
+  /* table */
+  .compare-table{width:100%;margin-top:40px;border-collapse:collapse;font-size:14px}
+  .compare-table th,.compare-table td{padding:16px 18px;text-align:left;border-bottom:1px solid var(--line)}
+  .compare-table th{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-low);font-weight:500;background:var(--bg-soft)}
+  .compare-table th.us{color:var(--accent)}
+  .compare-table td:first-child{color:var(--ink-mid);font-weight:500}
+  .compare-table td.us{color:var(--accent);font-weight:600;background:rgba(195,255,62,.04)}
+  .yes{color:var(--accent);font-weight:600}
+  .no{color:var(--warn)}
+  .partial{color:var(--ink-mid)}
+
+  /* buyers */
+  .buyer{background:var(--bg-card);border:1px solid var(--line);border-radius:12px;padding:30px;display:flex;flex-direction:column;gap:14px}
+  .buyer .tag{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent);letter-spacing:.15em}
+  .buyer .who{font-weight:700;font-size:22px;letter-spacing:-0.02em}
+  .buyer .pain{font-size:14px;color:var(--ink-mid);line-height:1.55}
+  .buyer .market{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--ink);padding-top:14px;border-top:1px solid var(--line);margin-top:auto}
+
+  /* ask cards */
+  .ask{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:48px}
+  .ask-card{background:var(--bg-card);border:1px solid var(--line);border-radius:12px;padding:30px 26px;position:relative}
+  .ask-card .price{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:36px;color:var(--accent);letter-spacing:-0.03em;line-height:1;margin-bottom:14px}
+  .ask-card .what{font-weight:700;font-size:17px;margin-bottom:10px;letter-spacing:-0.01em}
+  .ask-card .desc{font-size:13px;color:var(--ink-mid);line-height:1.55}
+
+  /* backed-by logo strip */
+  .backed{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px}
+  .backer{background:var(--bg-card);border:1px solid var(--line);border-radius:12px;padding:30px;text-align:left}
+  .backer .blogo{font-weight:800;font-size:22px;letter-spacing:-0.02em;margin-bottom:6px}
+  .backer .brole{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent);letter-spacing:.15em;margin-bottom:18px;text-transform:uppercase}
+  .backer .bbody{font-size:13px;color:var(--ink-mid);line-height:1.6}
+
+  /* contact slide */
+  .contact-grid{display:grid;grid-template-columns:1fr 1fr;gap:60px;margin-top:48px;align-items:start}
+  .contact-grid .col h4{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent);letter-spacing:.15em;text-transform:uppercase;margin-bottom:18px}
+  .contact-grid .col .line{padding:12px 0;border-bottom:1px solid var(--line);font-size:15px;color:var(--ink)}
+  .contact-grid .col .line .k{color:var(--ink-low);font-family:'JetBrains Mono',monospace;font-size:12px;margin-right:10px}
+
+  /* speaker notes */
+  .notes{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);max-width:780px;background:rgba(20,20,20,.95);backdrop-filter:blur(14px);border:1px solid var(--line-hi);border-radius:10px;padding:18px 22px;color:var(--ink-mid);font-size:13px;line-height:1.6;display:none;z-index:45}
+  .notes.show{display:block}
+  .notes::before{content:"SPEAKER NOTES";display:block;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent);letter-spacing:.18em;margin-bottom:8px}
+
+  /* title slide special */
+  .title-slide{justify-content:flex-start;padding-top:18vh}
+  .title-slide .tagline{margin-top:48px;font-size:20px;color:var(--ink-mid);max-width:720px;line-height:1.45}
+  .title-slide .footer{position:absolute;bottom:80px;left:7vw;right:7vw;display:flex;justify-content:space-between;align-items:flex-end;color:var(--ink-low);font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.05em}
+
+  /* divider line */
+  .divider{width:60px;height:2px;background:var(--accent);margin:24px 0}
+
+  /* keyboard hint */
+  .keyhint{position:fixed;bottom:24px;right:32px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-low);letter-spacing:.08em;z-index:40}
+  .keyhint kbd{background:var(--bg-card);border:1px solid var(--line);border-radius:4px;padding:2px 6px;color:var(--ink-mid);margin:0 2px}
+
+  /* print */
+  @media print{
+    body{overflow:auto}
+    .slide{display:flex !important;opacity:1 !important;position:relative;page-break-after:always;height:100vh}
+    .nav,.keyhint,.notes,.brand-mark,.track-tag{display:none !important}
+  }
+
+  /* responsive */
+  @media (max-width:1000px){
+    .row-3,.row-2,.row-4,.two-col,.layers,.flow,.metric-bar,.ask,.backed,.contact-grid{grid-template-columns:1fr;gap:12px}
+    .arrow{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="brand-mark">CIVITAS</div>
+<div class="track-tag">Colosseum 2026 · MagicBlock Frontier</div>
+
+<div class="deck" id="deck">
+
+  <!-- 1: TITLE -->
+  <section class="slide title-slide active" data-notes="Open with a beat of silence — let the headline land. Don't read it aloud. After two seconds, say: 'Civitas is private payroll settlement, native on Solana. End-to-end working today. Let me show you why this is the gap.'">
+    <div class="eyebrow">Colosseum 2026 · Frontier Tracks</div>
+    <h1 class="title">Pay your team<br/>in stablecoins.<br/><span class="accent">No one sees<br/>the amounts.</span></h1>
+    <div class="tagline">Civitas — the first end-to-end private payroll settlement protocol on Solana. Live on devnet today.</div>
+    <div class="footer">
+      <div>CIVITAS · 2026</div>
+      <div>Program · <span class="mono">CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y</span></div>
+    </div>
+  </section>
+
+  <!-- 2: PROBLEM -->
+  <section class="slide" data-notes="Move slowly through these three numbers. The size of the problem grows in proportion to the success of the rails. Solana won the stablecoin volume war — but salary leakage is now the unspoken cost. Every dollar in that $650B is publicly readable, forever.">
+    <div class="eyebrow">The Problem · 01</div>
+    <h1 class="headline">Crypto payroll is exploding.<br/>It's also <span class="accent">entirely public.</span></h1>
+    <p class="sub">Every salary, every bonus, every contractor payment — readable forever, by anyone, on every block explorer.</p>
+    <div class="row-3">
+      <div class="card"><div class="num">$650B</div><div class="label">Solana stablecoin volume in February 2026 — the highest monthly volume on any blockchain, ever.</div></div>
+      <div class="card"><div class="num">$33T</div><div class="label">Annual stablecoin transaction layer. One in four companies worldwide now uses stablecoin payments.</div></div>
+      <div class="card"><div class="num">100%</div><div class="label">Of those transactions are public. Every recipient, every amount, every cadence — fully traceable.</div></div>
+    </div>
+  </section>
+
+  <!-- 3: AGITATE -->
+  <section class="slide" data-notes="This is the agitation step. Make judges feel why a public ledger of compensation is not just bad UX — it's a structural disqualification for any serious employer. Don't move on until they nod. Optional line: 'No Fortune 500 will run payroll on a chain where Comp Committee data is a Solscan query.'">
+    <div class="eyebrow">The Cost · 02</div>
+    <h1 class="headline">When salary data leaks,<br/>you lose more than <span class="accent">money.</span></h1>
+    <div style="margin-top:50px;max-width:1000px">
+      <div class="pain-row">
+        <div class="pain-num">01</div>
+        <div class="pain-text">Talent walks.<small>Recruiters cold-call your best engineers the day after offer letters go on-chain.</small></div>
+      </div>
+      <div class="pain-row">
+        <div class="pain-num">02</div>
+        <div class="pain-text">Negotiation collapses.<small>New hires see every existing offer. Tenured hires see every junior raise. Compensation strategy becomes impossible.</small></div>
+      </div>
+      <div class="pain-row">
+        <div class="pain-num">03</div>
+        <div class="pain-text">Trust erodes.<small>"Why does the engineer who joined six months ago make more than me?" — every internal Slack, forever.</small></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4: WHY NOW -->
+  <section class="slide" data-notes="The 'why now' question is the single most undervalued slide in any deck. Two facts arrived in the same six months: the demand exploded, AND the chain's native privacy primitive went offline. The gap is wide open. We engineered the answer.">
+    <div class="eyebrow">Why Now · 03</div>
+    <h1 class="headline">Two facts arrived in the<br/>same six months.</h1>
+    <div class="two-col">
+      <div class="panel">
+        <div class="panel-tag">The Demand →</div>
+        <ul>
+          <li><b>$650B/month</b> — Solana stablecoin volume, Feb 2026</li>
+          <li><b>Meta + Cash App</b> route creator payments through Solana via Stripe</li>
+          <li><b>$777M</b> — Rise lifetime payroll volume (trailing 12mo)</li>
+          <li><b>$315B+</b> — total stablecoin supply, growing 4x year-over-year</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <div class="panel-tag warn">The Vacuum →</div>
+        <ul>
+          <li><b>Token-2022 confidential transfers</b> — still disabled on devnet + mainnet</li>
+          <li><b>ZK ElGamal Proof Program</b> — offline since June 2025 audit</li>
+          <li><b>The only built-in privacy primitive on Solana</b> is unavailable</li>
+          <li><b>Patch shipped</b> with Agave v2.1.21 — runtime gate still down pending audit</li>
+        </ul>
+      </div>
+    </div>
+    <p style="margin-top:36px;font-size:18px;color:var(--ink);max-width:900px;line-height:1.45"><span class="accent" style="font-weight:600">The market needs private payroll. The chain has no answer. We built one.</span></p>
+  </section>
+
+  <!-- 5: SOLUTION -->
+  <section class="slide" data-notes="Headline architecture slide. The four-layer story is what makes Civitas different from every other 'private payment' project on Solana — most stop at one layer. Each layer addresses a distinct threat. The system only breaks if every layer is simultaneously compromised. That is the trilemma resolved.">
+    <div class="eyebrow">The Solution · 04</div>
+    <h1 class="headline">Civitas. Four cooperating<br/>privacy layers, one program.</h1>
+    <p class="sub">Each layer addresses a distinct privacy threat. The system breaks only if <span class="accent">every layer</span> is simultaneously compromised.</p>
+    <div class="layers">
+      <div class="layer">
+        <div class="lnum">LAYER 01</div>
+        <div class="lname">Nillion nilDB</div>
+        <div class="ldesc">3-of-3 secret-shared cluster. Salary columns stored as <span class="mono">%allot</span>. No single operator sees the table.</div>
+      </div>
+      <div class="layer">
+        <div class="lnum">LAYER 02</div>
+        <div class="lname">Nillion nilCC TEE</div>
+        <div class="ldesc">AMD SEV-SNP enclave. Pinned launch measurement. Payroll Poseidon commitments computed inside the TEE.</div>
+      </div>
+      <div class="layer">
+        <div class="lnum">LAYER 03</div>
+        <div class="lname">Groth16 ZK gate</div>
+        <div class="ldesc">256-byte proofs verified on-chain through <span class="mono">alt_bn128_pairing</span> syscalls. ~200K CU per redemption.</div>
+      </div>
+      <div class="layer">
+        <div class="lnum">LAYER 04</div>
+        <div class="lname">MagicBlock PER</div>
+        <div class="ldesc">TEE-validated Private Ephemeral Rollup. USDC settles in sub-50ms. On-chain gate never linkable to payout.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6: HOW IT WORKS -->
+  <section class="slide" data-notes="Walk this flow once, slowly. 'No salary ever appears in plaintext on-chain. No master credential ever leaves the browser. No single operator ever sees the full payroll table.' Read those three sentences verbatim — they are the proof of the architecture.">
+    <div class="eyebrow">How It Works · 05</div>
+    <h1 class="headline">End-to-end flow,<br/>five steps, twelve seconds.</h1>
+    <div class="flow">
+      <div class="step"><div class="sn">→ 01</div><div class="st">Employer drops payroll spec</div><div class="sd">Encrypted into nilDB cluster as <span class="mono">%allot</span> columns.</div></div>
+      <div class="step"><div class="sn">→ 02</div><div class="st">nilCC TEE computes</div><div class="sd">Poseidon commitments + Merkle root inside SEV-SNP enclave.</div></div>
+      <div class="step"><div class="sn">→ 03</div><div class="st">Anchor program publishes root</div><div class="sd">Only the Merkle root and commitments hit the chain. No amounts.</div></div>
+      <div class="step"><div class="sn">→ 04</div><div class="st">Employee proves redemption</div><div class="sd">256-byte Groth16 proof, verified natively via <span class="mono">alt_bn128_pairing</span>.</div></div>
+      <div class="step"><div class="sn">→ 05</div><div class="st">MagicBlock PER settles</div><div class="sd">Sub-50ms private USDC transfer. Gate unlinkable to payout.</div></div>
+    </div>
+    <p style="margin-top:40px;font-size:17px;color:var(--ink-mid);max-width:1000px;line-height:1.55">
+      <span class="accent">No salary on-chain.</span> &nbsp;·&nbsp;
+      <span class="accent">No master credential leaves the browser.</span> &nbsp;·&nbsp;
+      <span class="accent">No single operator sees the full table.</span>
+    </p>
+  </section>
+
+  <!-- 7: PROOF / DEMO -->
+  <section class="slide" data-notes="THE proof slide. Demo BEFORE you say anything else. Run the full flow live: TEE attestation → ZK proof generation → MagicBlock settle. Show the Solscan link. Show the AMD-signed attestation. If the demo lands, you've already won the room.">
+    <div class="eyebrow">The Proof · 06</div>
+    <h1 class="headline">It's live on devnet.<br/><span class="accent">Today.</span></h1>
+    <p class="sub">Working end-to-end flow. Real Groth16 verifier. Real TEE attestation. Real MagicBlock private settlement.</p>
+    <div class="metric-bar">
+      <div class="metric"><div class="mn">256 B</div><div class="ml">Groth16 proof size — verified on-chain via native syscalls at ~200K CU.</div></div>
+      <div class="metric"><div class="mn">&lt;50 ms</div><div class="ml">MagicBlock PER private settlement latency. Sub-cent fees.</div></div>
+      <div class="metric"><div class="mn">~0.3 s</div><div class="ml">nilCC TEE warm-call response (V4 long-running enclave).</div></div>
+    </div>
+    <div style="margin-top:36px;display:flex;gap:30px;flex-wrap:wrap;align-items:center;color:var(--ink-mid);font-size:14px">
+      <div><span class="mono" style="color:var(--ink-low)">PROGRAM ID&nbsp;·&nbsp;</span><span class="mono" style="color:var(--ink)">CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y</span></div>
+    </div>
+    <div style="margin-top:20px;display:flex;gap:30px;flex-wrap:wrap;align-items:center;color:var(--ink-mid);font-size:14px">
+      <div><span class="mono" style="color:var(--ink-low)">VK FINGERPRINT&nbsp;·&nbsp;</span><span class="mono">580 bytes · exported from voucher_final.zkey</span></div>
+    </div>
+  </section>
+
+  <!-- 8: WHO USES THIS -->
+  <section class="slide" data-notes="This slide exists to disarm THE judge question: 'Who actually uses this?' Don't pretend it's everyone. Three buyers, ranked by reachability. If you have any LOI, warm intro, or pilot conversation — name names. If not, say so honestly and frame what you have.">
+    <div class="eyebrow">The Customer · 07</div>
+    <h1 class="headline">Three buyers who need this <span class="accent">now.</span></h1>
+    <div class="row-3" style="margin-top:44px">
+      <div class="buyer">
+        <div class="tag">BUYER 01</div>
+        <div class="who">DAO Treasury Ops</div>
+        <div class="pain">1000+ DAOs run monthly contributor payroll on Solana. Today: spreadsheet → Squads multisig → public transfer. Contributor doxx by default.</div>
+        <div class="market">Civitas drops in at the last step.</div>
+      </div>
+      <div class="buyer">
+        <div class="tag">BUYER 02</div>
+        <div class="who">Crypto-native Startups</div>
+        <div class="pain">~5,000 remote, stablecoin-paid teams (Rise/Deel/Toku customers). Cap-table privacy is table stakes — and their current on-chain product can't deliver it.</div>
+        <div class="market">We sell to them direct. ICP: 10–60 person teams.</div>
+      </div>
+      <div class="buyer">
+        <div class="tag">BUYER 03 · B2B2C</div>
+        <div class="who">Payroll Processors</div>
+        <div class="pain">Rise ($777M/yr), Request Finance, Toku, Toggle. They need a private settlement layer to sell into Fortune 500 stablecoin pilots — without owning the cryptography.</div>
+        <div class="market">Civitas is the privacy primitive they integrate.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9: WHY SOLANA -->
+  <section class="slide" data-notes="Pre-empt the 'why crypto?' question. Civitas breaks at three places simultaneously if you remove Solana. The pairing syscall is the technical lock-in — no other major L1 has it priced this aggressively. MagicBlock PERs are unique to this ecosystem.">
+    <div class="eyebrow">Why Solana · 08</div>
+    <h1 class="headline">This product cannot exist<br/>on any other chain.</h1>
+    <div class="row-3" style="margin-top:48px">
+      <div class="card">
+        <div class="heading"><span class="mono accent">alt_bn128_pairing</span></div>
+        <div class="body">Native Groth16 verification at ~200K CU. EVM L1s charge orders of magnitude more for the same pairing check — and the verifier doesn't fit. Without this syscall, the on-chain ZK gate is uneconomic.</div>
+      </div>
+      <div class="card">
+        <div class="heading">MagicBlock PERs</div>
+        <div class="body">Sub-50ms TEE-validated private settlement. No equivalent primitive exists on Ethereum, Cosmos, or any other rollup. MagicBlock launched this in Sept 2025 — Solana-exclusive.</div>
+      </div>
+      <div class="card">
+        <div class="heading">Composability</div>
+        <div class="body">Any Solana wallet, any USDC integration, any DEX, any Squads multisig. The privacy layer plugs in without forking the ecosystem.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10: COMPETITION -->
+  <section class="slide" data-notes="Token-2022 CT is the comparison every judge will mention. Address it head-on: it has been disabled for 11+ months and Civitas works today. Aztec is EVM — not on the table for Solana stablecoin volume. Off-chain payroll is the real competitor — and we beat it on auditability and composability.">
+    <div class="eyebrow">Competition · 09</div>
+    <h1 class="headline">Nobody else stitches all<br/>four layers together.</h1>
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th></th>
+          <th class="us">CIVITAS</th>
+          <th>Token-2022 CT</th>
+          <th>Aztec Payroll</th>
+          <th>Umbra</th>
+          <th>Off-chain Payroll</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Native on Solana</td><td class="us yes">✓</td><td class="no">disabled</td><td class="no">EVM only</td><td class="no">EVM only</td><td class="partial">n/a</td></tr>
+        <tr><td>On-chain ZK redemption</td><td class="us yes">✓ Groth16</td><td class="partial">ElGamal</td><td class="yes">✓</td><td class="partial">partial</td><td class="no">✗</td></tr>
+        <tr><td>TEE-attested compute</td><td class="us yes">✓ SEV-SNP</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="partial">trust-me</td></tr>
+        <tr><td>Private settlement</td><td class="us yes">✓ &lt;50ms</td><td class="no">offline</td><td class="yes">✓</td><td class="yes">✓</td><td class="partial">custodial</td></tr>
+        <tr><td>Composable USDC</td><td class="us yes">✓</td><td class="partial">n/a</td><td class="no">✗</td><td class="no">✗</td><td class="partial">n/a</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 11: BACKED BY -->
+  <section class="slide" data-notes="Credibility slide. You're not pitching from scratch — you're embedded in the ecosystem. Nillion Nucleus participation is a real signal. MagicBlock canonical SDK pattern shows technical depth. Don't oversell — let the names land.">
+    <div class="eyebrow">Backed By · 10</div>
+    <h1 class="headline">Built on real infrastructure.<br/>Backed by the teams who built it.</h1>
+    <div class="backed">
+      <div class="backer">
+        <div class="blogo">Nillion <span class="accent">·</span></div>
+        <div class="brole">Nucleus Program Participant</div>
+        <div class="bbody">Civitas is an active Nillion Nucleus program participant. nilDB + nilCC integration validated against the official V4 warm-workload pattern, with Ed25519-signed request bytes and pinned SNP launch measurement.</div>
+      </div>
+      <div class="backer">
+        <div class="blogo">MagicBlock <span class="accent">·</span></div>
+        <div class="brole">Private Ephemeral Rollups</div>
+        <div class="bbody">Integration uses the canonical SDK pattern (<span class="mono">transferSpl + privateTransfer</span>) — verified against the official <span class="mono">private-payments-demo</span> reference. Direct competitor for the Frontier prize.</div>
+      </div>
+      <div class="backer">
+        <div class="blogo">Solana <span class="accent">·</span></div>
+        <div class="brole">Anchor 0.30 · Devnet</div>
+        <div class="bbody">Production-quality Anchor program. Real Groth16 verifier (no stubs). 580-byte VK exported from <span class="mono">voucher_final.zkey</span>. Open-source roadmap.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12: ASK -->
+  <section class="slide" data-notes="Be specific. Don't say 'support.' Say what you want, what they get, what unlocks next. The MagicBlock $5K is the primary ask — but the warm intros to Rise / Request / DAO treasury teams are arguably more valuable. Name them.">
+    <div class="eyebrow">The Ask · 11</div>
+    <h1 class="headline">What we're asking from <span class="accent">Colosseum.</span></h1>
+    <div class="ask">
+      <div class="ask-card">
+        <div class="price">$5,000</div>
+        <div class="what">MagicBlock Frontier Track</div>
+        <div class="desc">Civitas is the only project using Private Ephemeral Rollups for compliant payroll settlement. Most novel application of MagicBlock infrastructure — designed end-to-end around the PER.</div>
+      </div>
+      <div class="ask-card">
+        <div class="price">Grant</div>
+        <div class="what">Solana Foundation follow-on</div>
+        <div class="desc">Civitas is publishable as a privacy primitive other Solana protocols can compose against. Open-source roadmap ready. Audit funding unlocks mainnet.</div>
+      </div>
+      <div class="ask-card">
+        <div class="price">Intros</div>
+        <div class="what">Pilot conversations</div>
+        <div class="desc">Warm intros to Rise, Request Finance, and DAO treasury teams. We have the integration. We need the first three design partners.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13: CONTACT -->
+  <section class="slide" data-notes="End on the one-liner. Repeat it. Then silence — let them ask.">
+    <div class="eyebrow">Contact · 12</div>
+    <h1 class="headline">Civitas. Private payroll,<br/>native on <span class="accent">Solana.</span></h1>
+    <div class="contact-grid">
+      <div class="col">
+        <h4>Links</h4>
+        <div class="line"><span class="k">DEMO</span>civitas.live  &nbsp;(devnet, live)</div>
+        <div class="line"><span class="k">REPO</span>github.com/rythmern02/Civitas-Sol</div>
+        <div class="line"><span class="k">PAPER</span>github.com/rythmern02/Civitas-Sol/WHITEPAPER.md</div>
+      </div>
+      <div class="col">
+        <h4>On-chain</h4>
+        <div class="line"><span class="k">PROGRAM</span><span class="mono" style="font-size:13px">CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y</span></div>
+        <div class="line"><span class="k">CLUSTER</span>Solana Devnet · Anchor 0.30</div>
+        <div class="line"><span class="k">CONTACT</span>rythme · @rythmern02</div>
+      </div>
+    </div>
+    <div style="margin-top:80px;font-size:22px;color:var(--ink);letter-spacing:-0.01em;line-height:1.4;max-width:780px">
+      "Pay your team in stablecoins. <span class="accent">No one sees the amounts.</span>"
+    </div>
+  </section>
+
+</div>
+
+<div class="notes" id="notes"></div>
+
+<div class="nav">
+  <button id="prev" aria-label="Previous">‹</button>
+  <div class="counter"><span id="cur">1</span><span style="opacity:.4"> / </span><span id="tot">13</span></div>
+  <div class="dots" id="dots"></div>
+  <button id="next" aria-label="Next">›</button>
+</div>
+
+<div class="keyhint">
+  <kbd>←</kbd><kbd>→</kbd> nav &nbsp; <kbd>N</kbd> notes &nbsp; <kbd>F</kbd> fullscreen &nbsp; <kbd>P</kbd> print
+</div>
+
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  const notes=document.getElementById('notes');
+  const cur=document.getElementById('cur');
+  const tot=document.getElementById('tot');
+  const dotsBox=document.getElementById('dots');
+  let i=0;
+  let notesOn=false;
+
+  tot.textContent=slides.length;
+  slides.forEach((_,idx)=>{
+    const d=document.createElement('div');
+    d.className='dot'+(idx===0?' active':'');
+    d.onclick=()=>go(idx);
+    dotsBox.appendChild(d);
+  });
+  const dots=[...document.querySelectorAll('.dot')];
+
+  function go(n){
+    n=Math.max(0,Math.min(slides.length-1,n));
+    slides[i].classList.remove('active');
+    dots[i].classList.remove('active');
+    i=n;
+    slides[i].classList.add('active');
+    dots[i].classList.add('active');
+    cur.textContent=i+1;
+    if(notesOn) renderNotes();
+  }
+  function renderNotes(){
+    const t=slides[i].dataset.notes||'';
+    if(!t){notes.classList.remove('show');return}
+    notes.textContent=t;
+    notes.classList.add('show');
+  }
+  document.getElementById('prev').onclick=()=>go(i-1);
+  document.getElementById('next').onclick=()=>go(i+1);
+  document.addEventListener('keydown',e=>{
+    if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown')go(i+1);
+    if(e.key==='ArrowLeft'||e.key==='PageUp')go(i-1);
+    if(e.key==='Home')go(0);
+    if(e.key==='End')go(slides.length-1);
+    if(e.key==='n'||e.key==='N'){notesOn=!notesOn;notesOn?renderNotes():notes.classList.remove('show')}
+    if(e.key==='f'||e.key==='F'){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()}
+    if(e.key==='p'||e.key==='P'){window.print()}
+  });
+</script>
+</body>
+</html>

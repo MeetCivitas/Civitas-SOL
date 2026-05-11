@@ -2,23 +2,24 @@
 
 ## Private Payroll Settlement Protocol on Solana
 
-**Version 3.0 — Solana Mainnet Architecture**
+**Version 3.1 — Devnet Live · V4 Warm Workload**
 **Date:** May 2026
 **Network:** Solana Devnet (Mainnet-Beta target)
-**Settlement Asset:** USDC (Token-2022, Confidential Transfer extension)
+**Settlement Asset:** USDC (SPL Token-2022 vault account; amount-hiding provided by MagicBlock Private Payments)
 **ZK Stack:** circom 2.1.6 · Groth16 · BN254 · Solana `alt_bn128_pairing`
-**Confidential Storage:** Nillion nilDB (`%allot` secret-shared columns)
-**Confidential Compute:** Nillion nilCC (AMD SEV-SNP TEE)
-**Settlement Privacy:** MagicBlock Private Ephemeral Rollup (TEE-validated)
+**Confidential Storage:** Nillion nilDB · SecretVaults v2 (`%allot` secret-shared columns)
+**Confidential Compute:** Nillion nilCC · V4 warm CVM (AMD SEV-SNP TEE · Ed25519-signed manifests · pinned launch measurement)
+**Settlement Privacy:** MagicBlock Private Payments · `@magicblock-labs/ephemeral-rollups-sdk@0.13` (TEE-fronted private transfers · split=5 · randomised delay 500ms–30s)
 **Authentication:** Privy · Phantom · Solflare
 **Identity:** Solana Name Service (`.sol`) vault binding
 **Program ID:** `CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y`
+**Status:** Live on devnet. All four privacy layers and on-chain Groth16 verifier verified end-to-end against real remote services — no in-process stubs or mocks on the production path.
 
 ---
 
 ## Abstract
 
-Civitas is a zero-knowledge payroll settlement protocol that decouples salary confidentiality from settlement finality on Solana. Employers compute payroll obligations inside a hardware-attested AMD SEV-SNP enclave (Nillion nilCC) and publish only Poseidon BN254 commitments organised into a depth-20 Merkle tree, persisted to a secret-shared Nillion nilDB cluster. Employees redeem salary vouchers by submitting 256-byte Groth16 proofs verified directly on-chain via Solana's native `alt_bn128_pairing` syscalls — a single Anchor instruction (`claim_payment`) that runs the pairing check, registers a nullifier PDA, and emits a domain-bound public-input commitment. The actual USDC movement is then dispatched through MagicBlock's TEE-validated Private Ephemeral Rollup, which splits and randomly delays the settlement so the payroll-vault → recipient transfer is never directly linkable to the on-chain ZK gate. This document specifies the protocol's cryptographic model, on-chain program, off-chain data plane, settlement layer, security analysis, and operational lifecycle.
+Civitas is a zero-knowledge payroll settlement protocol that decouples salary confidentiality from settlement finality on Solana. Employers compute payroll obligations inside a hardware-attested AMD SEV-SNP enclave (Nillion nilCC, running as a long-lived V4 warm workload with Ed25519-authenticated request signing and a pinned launch measurement) and publish only Poseidon BN254 commitments organised into a depth-20 Merkle tree, persisted to a secret-shared Nillion nilDB cluster. Employees redeem salary vouchers by submitting 256-byte Groth16 proofs verified directly on-chain via Solana's native `alt_bn128_pairing` syscalls — a single Anchor instruction (`claim_payment`) that runs the pairing check, registers a nullifier PDA, and emits a domain-bound public-input commitment. The actual USDC movement is then dispatched through MagicBlock Private Payments (`@magicblock-labs/ephemeral-rollups-sdk@0.13`) using the canonical `transferSpl(privateTransfer:…)` primitive, which routes a base-layer transfer through MagicBlock's TEE-fronted ER and splits the settlement into five sub-transfers, each scheduled at an independent random delay in `[500ms, 30s]` — so the payroll-vault → recipient transfer is never directly linkable to the on-chain ZK gate. This document specifies the protocol's cryptographic model, on-chain program, off-chain data plane, settlement layer, security analysis, and operational lifecycle. **Every integration described herein is live on devnet against the real remote service.**
 
 ---
 
@@ -55,7 +56,7 @@ The cryptographic primitives required to fix this — pairing-based SNARKs, hard
 3. **Domain-bound public-input commitment.** Public inputs (recipient ATA, amount, epoch, mint, vault PDA, program ID, run ID, deployment domain tag) are folded into a single field element `pi_hash` via a 10-input SpongePoseidon. The handler recomputes `pi_hash` from authoritative on-chain state before invoking the verifier — a single forged or replayed field is rejected.
 4. **Hardware-attested payroll computation.** Salary computation, commitment derivation, and Merkle root construction execute inside an AMD SEV-SNP confidential VM (Nillion nilCC). The enclave's attestation report cryptographically binds the code measurement to the result.
 5. **TEE-validated settlement privacy.** The actual USDC settlement is dispatched through MagicBlock's Private Ephemeral Rollup, where a TEE-fronted validator schedules a configurable number of split transfers with randomised delays in `[500ms, 30s]` — breaking the chronological link between claim and payout.
-6. **Token-2022 confidential vault.** Employer treasuries hold USDC in Token-2022 confidential vault accounts, leveraging the ConfidentialTransfer extension for ElGamal-encrypted balance accounting on the base layer.
+6. **Token-2022 vault + MagicBlock private settlement.** Employer treasuries hold USDC in SPL Token-2022 vault accounts (the program uses the `Token2022` token interface and `transfer_checked`). The Solana ConfidentialTransfer extension that originally provided ElGamal-encrypted balance accounting on the base layer is currently disabled on devnet and mainnet pending the 2026 Solana security audit; Civitas's amount-hiding is delivered instead by Layer 4 (MagicBlock Private Payments) — the only production-ready private SPL primitive on Solana today. When CT re-enables, the vault account model is already compatible.
 
 ---
 
@@ -66,16 +67,17 @@ Civitas comprises **four cooperating privacy layers** on Solana, plus the on-cha
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  Layer 1 — Confidential Storage   :  Nillion nilDB          │
-│            secret-shared salary records, %allot encryption  │
+│            SecretVaults v2 · 3-of-3 cluster · %allot        │
 ├─────────────────────────────────────────────────────────────┤
-│  Layer 2 — Confidential Compute   :  Nillion nilCC          │
-│            AMD SEV-SNP TEE — payroll commitment generation  │
+│  Layer 2 — Confidential Compute   :  Nillion nilCC V4       │
+│            AMD SEV-SNP TEE · warm CVM · Ed25519-signed reqs │
 ├─────────────────────────────────────────────────────────────┤
 │  Layer 3 — ZK Anonymous Claim     :  circom + snarkjs +     │
 │            Solana alt_bn128_pairing on-chain Groth16 verify │
 ├─────────────────────────────────────────────────────────────┤
 │  Layer 4 — Settlement Privacy     :  MagicBlock Private     │
-│            Ephemeral Rollup, TEE-cranked split + delay      │
+│            Payments · ER SDK 0.13 · transferSpl(private)    │
+│            split=5 · randomised delay 500ms–30s             │
 ├─────────────────────────────────────────────────────────────┤
 │  ── Anchored on ──                                          │
 │  Solana civitas-payroll Program (Token-2022 vault, PDAs,    │
@@ -91,12 +93,13 @@ Civitas comprises **four cooperating privacy layers** on Solana, plus the on-cha
 EMPLOYER                                                       EMPLOYEE
    │                                                              │
    │  1. initialize_vault(sns_domain)                             │
-   │  2. deposit_usdc(amount)  — Token-2022 confidential          │
-   │  3. nilCC TEE: compute commitments + Merkle root             │
+   │  2. deposit_usdc(amount)  — Token-2022 transfer_checked      │
+   │  3. POST /run/payroll (Ed25519-signed) → nilCC V4 warm CVM   │
+   │     enclave computes commitments + Merkle root               │
    │  4. start_payroll_run(run_id, epoch, n)                      │
    │  5. append_commitments_chunk × ⌈n/32⌉                        │
    │  6. finalize_merkle_root(run_id, root)                       │
-   │  7. write encrypted vouchers to nilDB                        │
+   │  7. write encrypted vouchers to nilDB (%allot)               │
    │                                          ─────────────────►  │
    │                                                              │
    │                                          8. fetch encrypted  │
@@ -107,11 +110,12 @@ EMPLOYER                                                       EMPLOYEE
    │                                          10. claim_payment   │
    │  ◄─────────────────────────────────────────  on-chain (ZK)   │
    │                                                              │
-   │  11. dispatcher: recompute pi_hash, build                    │
-   │      MagicBlock Private Pay tx (split N, delay ms)           │
+   │  11. dispatcher: recompute pi_hash, build MagicBlock         │
+   │      transferSpl(privateTransfer:{split:5,                   │
+   │                  minDelayMs:500, maxDelayMs:30_000})         │
    │                                                              │
-   │  12. TEE validator cranks N delayed splits to                │
-   │      employee USDC ATA                          ──────────►  │
+   │  12. ER SDK + TEE validator schedule 5 delayed splits        │
+   │      to employee USDC ATA                       ──────────►  │
 ```
 
 **Figure 2.** End-to-end payroll lifecycle.
@@ -121,16 +125,16 @@ EMPLOYER                                                       EMPLOYEE
 
 | Component                            | Technology                                     | Role                                                                                                                                    |
 | ------------------------------------ | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `**civitas-payroll` Anchor program** | Solana Rust / Anchor 0.30.x                    | Vault PDA, payroll runs, commitment chain, nullifier registry, on-chain Groth16 verification, Token-2022 deposits, contractor invoices. |
-| **Token-2022 USDC vault**            | Solana SPL Token-2022                          | Confidential employer treasury — vault ATA holds ElGamal-encrypted USDC balances.                                                       |
+| `**civitas-payroll` Anchor program** | Solana Rust / Anchor 0.31.x                    | Vault PDA, payroll runs, commitment chain, nullifier registry, on-chain Groth16 verification, Token-2022 deposits, contractor invoices. |
+| **Token-2022 USDC vault**            | Solana SPL Token-2022                          | Employer treasury account model (Token-2022 program). Amount-hiding is provided by Layer 4 (MagicBlock), not by the currently-disabled ConfidentialTransfer extension. |
 | **circom voucher circuit**           | circom 2.1.6 + circomlib                       | `circuits/voucher_circom/voucher.circom` — Poseidon BN254, depth-20 Merkle, SpongePoseidon(10) public-input binding.                    |
-| **snarkjs prover**                   | snarkjs Groth16                                | Browser proof generation with the compiled `voucher.wasm` (3.1 MB) + `voucher_final.zkey` (8.4 MB).                                     |
-| **On-chain Groth16 verifier**        | Native `alt_bn128_`* syscalls                  | `programs/civitas-payroll/src/verifier/groth16.rs` — pairing check `e(-A,B)·e(α,β)·e(L_pub,γ)·e(C,δ) = 1`.                              |
-| **Nillion nilDB**                    | SecretVaults v2, 3-of-3 staging cluster        | Secret-shared encrypted storage of employee tags, vouchers, and payroll-run metadata.                                                   |
-| **Nillion nilCC**                    | AMD SEV-SNP CVM                                | Hardware-attested payroll commitment generator; salary plaintext never leaves the encrypted VM boundary.                                |
-| **MagicBlock Private Payments**      | `@magicblock-labs/ephemeral-rollups-sdk` v0.12 | TEE-validated ER for split + delayed private USDC transfers.                                                                            |
+| **snarkjs prover**                   | snarkjs 0.7 (Groth16)                          | Browser proof generation with the compiled `voucher.wasm` (3.1 MB) + `voucher_final.zkey` (8.4 MB).                                     |
+| **On-chain Groth16 verifier**        | Native `alt_bn128_`* syscalls                  | `programs/civitas-payroll/src/verifier/groth16.rs` (219 LOC) — pairing check `e(-A,B)·e(α,β)·e(L_pub,γ)·e(C,δ) = 1`.                    |
+| **Nillion nilDB**                    | `@nillion/secretvaults` v2.0 · 3-of-3 staging  | Secret-shared encrypted storage of employee tags, vouchers, and payroll-run metadata.                                                   |
+| **Nillion nilCC**                    | V4 warm CVM · AMD SEV-SNP                      | Hardware-attested payroll commitment generator running as a long-lived `linux/amd64` workload; Ed25519-signed manifests verified inside the enclave; salary plaintext never leaves the encrypted VM boundary. |
+| **MagicBlock Private Payments**      | `@magicblock-labs/ephemeral-rollups-sdk` v0.13 | `transferSpl(privateTransfer:{split, minDelayMs, maxDelayMs})` · `delegateSpl` · `withdrawSpl` against `tee.magicblock.app`.            |
 | **Solana Name Service**              | Bonfida `@bonfida/spl-name-service`            | `.sol` domain binding to employer vaults, human-readable identity.                                                                      |
-| **Privy**                            | `@privy-io/react-auth`                         | Embedded wallet + email/social login for web2-native onboarding.                                                                        |
+| **Privy**                            | `@privy-io/react-auth` v3.16                   | Embedded wallet + email/social login for web2-native onboarding.                                                                        |
 | **Phantom / Solflare**               | Wallet Standard                                | Native Solana wallets for crypto-native users.                                                                                          |
 | **Client credential store**          | IndexedDB                                      | Master credential nonce η lives exclusively in the browser; never transmitted.                                                          |
 
@@ -435,7 +439,7 @@ Civitas persists every privacy-sensitive record into a **3-of-3 Nillion nilDB cl
 
 ## 7. Confidential Compute — Nillion nilCC TEE
 
-Payroll commitment generation is the most privacy-sensitive computation in Civitas: it requires plaintext access to the entire salary table to compute commitments, sample voucher nonces, and build the Merkle root. Civitas runs this computation inside a **Nillion nilCC AMD SEV-SNP confidential VM**.
+Payroll commitment generation is the most privacy-sensitive computation in Civitas: it requires plaintext access to the entire salary table to compute commitments, sample voucher nonces, and build the Merkle root. Civitas runs this computation inside a **Nillion nilCC AMD SEV-SNP confidential VM**, deployed as a **long-running V4 warm workload** rather than spinning up a new CVM per payroll run. The warm pattern (live since 2026-05-07) keeps the SEV-SNP CVM provisioned and serving HTTPS continuously; payroll requests arrive as Ed25519-signed manifests over `POST /run/payroll`. Cold-start cost (60–120 s of CVM provisioning + cert acquisition + service boot) is amortised across all runs of the workload's lifetime, taking per-request latency from ~90 s (legacy ephemeral CVM) to **~1 s first call / ~0.3 s subsequent**.
 
 ### 7.1 SEV-SNP Properties
 
@@ -448,14 +452,22 @@ AMD SEV-SNP (Secure Encrypted Virtualization — Secure Nested Paging) provides:
 ### 7.2 Civitas Workloads
 
 
-| Workload                 | File                              | Function                                                                                                                                                                                                                                                                                       |
-| ------------------------ | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Payroll Compute**      | `workload/run_compute.js`         | Receives encrypted manifest of `(employee_tag, salary)` pairs. Inside the enclave: derives `voucher_nonce ← randombytes`, computes `commitment = Poseidon₄(τ, a, e, ν)`, builds the Poseidon Merkle tree, returns root + per-employee voucher records. Plaintext salaries never leave the CVM. |
-| **Blind Onboarding**     | `workload/onboard_employee.js`    | Generates `η ← randombytes(32)` inside the enclave, derives `τ = Poseidon₁(η)`, returns only `τ` to the employer API; `η` is delivered to the employee out-of-band over an authenticated channel.                                                                                              |
-| **Attestation Verifier** | `lib/server/nilcc-attestation.ts` | Validates the attestation report's ARK → ASK → VCEK certificate chain, checks the launch measurement against the pinned workload measurement, and verifies the freshness nonce.                                                                                                                |
+| Workload                 | File                                                        | Function                                                                                                                                                                                                                                                                                       |
+| ------------------------ | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **HTTP entrypoint**      | `workload/server.js`                                        | Long-running Node HTTP server inside the SEV-SNP CVM. Routes: `POST /run/payroll`, `POST /run/onboard`, `GET /healthz`, `GET /attestation`. Reads raw request bytes, verifies the Ed25519 signature **before** parsing JSON. Stateless: no per-request state persists between calls.           |
+| **Request auth**         | `workload/auth.js`                                          | Ed25519 signature verifier. Reads `CIVITAS_REQUEST_PUBKEY` (32-byte hex, baked into the workload at provision time), wraps it in SPKI DER, verifies `x-civitas-sig` against the raw request bytes.                                                                                              |
+| **Payroll Compute**      | `workload/run_compute.js`                                   | Pure function `computePayroll(manifest)` invoked by `/run/payroll`. Inside the enclave: derives `voucher_nonce ← randombytes`, computes `commitment = Poseidon₄(τ, a, e, ν)`, builds the Poseidon Merkle tree, returns root + per-employee voucher records. Plaintext salaries never leave the CVM. |
+| **Blind Onboarding**     | `workload/onboard_employee.js`                              | Pure function `runOnboard(manifest, env)` invoked by `/run/onboard`. Generates `η ← randombytes(32)` inside the enclave, derives `τ = Poseidon₁(η)`, returns only `τ` to the employer API; `η` is delivered to the employee out-of-band.                                                       |
+| **Attestation proxy**    | `workload/server.js::handleAttestation`                     | Proxies `GET /nilcc/api/v2/report` from the in-CVM `nilcc-attester` sidecar (compose service `nilcc-attester` or `127.0.0.1`). Returns the AMD-SEV-SNP report bound to the workload's TLS cert fingerprint.                                                                                    |
+| **Orchestrator client**  | `frontend/lib/server/nilcc-client.ts::runOnWorkload`        | Signs manifest bytes with the orchestrator's Ed25519 key (matched by the workload's `CIVITAS_REQUEST_PUBKEY`), POSTs the **exact signed bytes** to `https://{NILCC_WORKLOAD_DOMAIN}/run/{kind}`. Never re-stringifies the manifest after signing.                                              |
+| **Attestation verifier** | `frontend/lib/server/nilcc-client.ts::verifyFreshAttestation` | Fetches `/nilcc/api/v2/report` directly from the workload domain (rather than proxying through the CVM), checks the SNP `measurement` against `NILCC_GOLDEN_MEASUREMENT`. Freshness derives from the TLS handshake (nilCC binds the report to the TLS cert fingerprint, not a per-request nonce). |
 
 
-**Table 10.** nilCC TEE workloads.
+**Table 10.** nilCC V4 warm workload — file map and responsibilities.
+
+**Note on platform.** The workload image must be built for `linux/amd64`. nilCC's AMD-SNP CVMs reject arm64 manifests with `no matching manifest for linux/amd64`. The canonical build command on Apple Silicon hosts is `docker buildx build --platform linux/amd64 --push -t <user>/civitas-nilcc-workload:v4 workload/`.
+
+**Note on path selection and rollback.** API routes (`app/api/payroll/generate/route.ts`, `app/api/employer/employees/onboard-tee/route.ts`) invoke `invokeNilCC()`, which selects V4 when `NILCC_WORKLOAD_DOMAIN` is set and `USE_LEGACY_NILCC != 1`, falling back to the legacy per-run CVM path (`submitPayrollJob` → `pollJobResult` → `deleteWorkload`) otherwise. The legacy code is kept exported for rollback safety.
 
 ### 7.3 Why TEE for Civitas
 
@@ -478,14 +490,15 @@ Civitas decouples the *authorisation* of a payment from its *execution*. An obse
 
 ### 8.2 Architecture
 
-The `civitas-payroll` integration of MagicBlock uses `@magicblock-labs/ephemeral-rollups-sdk` v0.12 with the TEE-fronted devnet at `https://tee.magicblock.app`:
+The `civitas-payroll` integration of MagicBlock uses `@magicblock-labs/ephemeral-rollups-sdk` **v0.13** (bumped 2026-05-09 from v0.12 after MagicBlock's 2026-05-01 permission-program redeploy; v0.12-built ixs were silently rejected by the new permission-CPI, so the SDK bump was load-bearing rather than cosmetic) with the TEE-fronted devnet at `https://tee.magicblock.app`:
 
 
-| Phase                | SDK Call                                                                                                                                  | Layer                                                                                                                                                |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Auth**             | `getAuthToken(rpcUrl, employerPubkey, signMessage)`                                                                                       | Bearer-token challenge/sign/login against the TEE auth endpoint.                                                                                     |
-| **Pre-fund**         | `delegateSpl(employer, mint, amount, { validator, private: true, … })`                                                                    | Base layer — sets up vault PDA + vault ATA + employer's delegated ephemeral ATA. One-time per mint.                                                  |
-| **Private dispatch** | `transferSpl(employer, employee, mint, amount, { visibility: "private", validator, privateTransfer: { split, minDelayMs, maxDelayMs } })` | Single instruction submitted to base layer; the TEE validator's crank service then schedules `split` randomly-delayed settlements in `[500ms, 30s]`. |
+| Phase                | SDK Call                                                                                                                                                                                                              | Layer                                                                                                                                                |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Auth**             | `GET tee.magicblock.app/auth/challenge?pubkey=…` → `tweetnacl.sign.detached(utf8(challenge), employerSecret)` → `POST tee.magicblock.app/auth/login`                                                                  | Bearer-token challenge/sign/login. 30-day tokens issued; the dispatcher refreshes at 25-minute boundaries.                                           |
+| **Pre-fund**         | `delegateSpl(employer, mint, amount, { connection: baseConn, validator })`                                                                                                                                            | Base layer — sets up vault PDA + vault ATA + employer's delegated ephemeral ATA. One-time per (mint, employer).                                      |
+| **Private dispatch** | `transferSpl(fromPk, toPk, mintPk, amountUsdc, { connection: baseConn, validator: await getPrivateValidator(), privateTransfer: { split: 5, minDelayMs: 500n, maxDelayMs: 30_000n } })`                              | Single instruction submitted to base layer; MagicBlock's TEE-fronted ER routes the transfer through five randomly-delayed sub-transfers in `[500ms, 30s]`. |
+| **Withdraw**         | `withdrawSpl(recipientPubkey, mintPk, amountUsdc, { connection: baseConn, validator })`                                                                                                                              | Recipient-driven: after the sub-transfers settle on the ER, the employee undelegates and withdraws from the MagicBlock vault to their regular ATA.   |
 
 
 ### 8.3 Dispatcher
@@ -555,8 +568,8 @@ The master credential nonce `η` is generated client-side via `crypto.getRandomV
 
 1. Employer connects wallet (Privy / Phantom / Solflare).
 2. Optionally registers a `.sol` SNS domain via Bonfida.
-3. Calls `initialize_vault(sns_domain)` — creates `VaultState` + Token-2022 confidential USDC vault ATA.
-4. Calls `deposit_usdc(amount)` — deposits USDC into the confidential vault.
+3. Calls `initialize_vault(sns_domain)` — creates `VaultState` PDA + Token-2022 USDC vault ATA (account model only; amount-hiding is delivered by Layer 4, not by the disabled CT extension).
+4. Calls `deposit_usdc(amount)` — moves USDC into the vault via Token-2022 `transfer_checked`. Tracks `usdc_balance_approx` as the employer's private view.
 5. Adds employees to `employee_registry` in nilDB (employer-side bulk import or per-employee TEE onboarding).
 
 ### 10.2 Employee Onboarding
@@ -601,14 +614,16 @@ The master credential nonce `η` is generated client-side via `crypto.getRandomV
 
 | Operation                                                 | Cost / Latency               | Notes                                                                 |
 | --------------------------------------------------------- | ---------------------------- | --------------------------------------------------------------------- |
-| Browser Groth16 proof (depth-20 circuit)                  | ~10–30 s                     | snarkjs over WebCrypto on a modern device; no GPU required.           |
+| Browser Groth16 proof (depth-20 circuit)                  | ~2.4 s on M1                 | snarkjs over WebCrypto on a modern device; no GPU required.           |
 | On-chain Groth16 verification                             | ~175,000 CU                  | 4-pair `alt_bn128_pairing` plus IC scalar mul.                        |
-| Full `claim_payment` ix (verify + nullifier init + event) | ~200,000 CU                  | Well under 1.4M per-tx cap.                                           |
+| Full `claim_payment` ix (verify + nullifier init + event) | ~180,000 CU                  | ~12.8% of the 1.4M per-tx cap.                                        |
 | `claim_payment` tx size                                   | ~700 B                       | 256 B proof + 32 B pi_hash + 32 B nullifier + 16 B run_id + accounts. |
 | `append_commitments_chunk` (32 leaves)                    | ~50,000 CU                   | Linear in chunk size.                                                 |
 | `finalize_merkle_root` (n leaves)                         | O(n)                         | One `CommitmentAccount` `init` per leaf.                              |
 | Solana finality                                           | ~400 ms                      | Confirmed commitment level.                                           |
-| MagicBlock crank latency                                  | 500 ms – 30 s (configurable) | Per-sub-transfer randomised delay.                                    |
+| nilCC V4 first call                                       | ~1.0 s                       | Warm CVM, signed manifest; replaces 60–120 s legacy cold-start.       |
+| nilCC V4 subsequent calls                                 | ~0.3 s                       | All run/onboard requests after the first.                             |
+| MagicBlock private-transfer leg delay                     | 500 ms – 30 s (configurable) | Per-sub-transfer randomised delay; 5 splits by default.               |
 | Tx fees (Devnet rate)                                     | ~5,000 lamports              | <$0.001 at typical SOL prices.                                        |
 | Merkle tree capacity                                      | 2²⁰ = 1,048,576 leaves       | Sufficient for ~10,000 employees with monthly cycles for 100+ years.  |
 
@@ -645,10 +660,34 @@ The master credential nonce `η` is generated client-side via `crypto.getRandomV
 | **Proof binding**                    | 10-input SpongePoseidon `pi_hash` recomputed on-chain from authoritative state (INV-6). |
 | **Cross-deployment replay**          | `domain_tag` baked into `pi_hash` at compile time (INV-7).                              |
 | **Settlement unlinkability**         | MagicBlock TEE-validated split + delay routing decouples claim from settlement.         |
-| **Vault solvency**                   | Token-2022 confidential vault accounting + employer pre-fund to MagicBlock vault.       |
+| **Vault solvency**                   | Token-2022 vault account accounting + employer pre-fund to MagicBlock vault via `delegateSpl`. |
 
 
 **Table 15.** Property → defending-mechanism map.
+
+---
+
+## 12bis. Integration Status (Devnet, 2026-05)
+
+Every integration in the protocol is wired against the real remote service. The table below is the single source of truth that the rest of this whitepaper describes.
+
+| Component                          | State    | Endpoint / Address                                                         | Verification                                                                                |
+| ---------------------------------- | -------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Anchor program (9 instructions)    | Live     | `CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y` on devnet                   | Deployed with Anchor 0.31 + Solana 2.2                                                      |
+| On-chain Groth16 verifier          | Live     | embedded 580 B VK at `keys/voucher_vk.bin`                                 | Uses `alt_bn128_pairing` / `alt_bn128_addition` / `alt_bn128_multiplication` — ~180k CU      |
+| Voucher circuit + trusted setup    | Built    | `circuits/voucher_circom/build/`                                           | depth-20 Merkle · ~21k R1CS · pot15 + phase-2 ceremony complete                              |
+| End-to-end voucher claim           | Verified | tx logged in commit `090f24d`                                              | snarkjs prove → `claim_payment` → nullifier PDA minted on devnet                             |
+| Nillion nilDB (SecretVaults v2)    | Live     | `nildb-stg-n[1-3].nillion.network`                                         | 3-of-3 cluster · `%allot` on salary + voucher_nonce columns                                  |
+| Nillion nilCC (V4 warm CVM)        | Live     | `{workloadId}.nillionusercontent.com`                                      | Ed25519-signed manifests · `NILCC_GOLDEN_MEASUREMENT` enforced · ~0.3 s warm latency         |
+| nilCC attestation                  | Live     | `https://{domain}/nilcc/api/v2/report`                                     | AMD SEV-SNP report · TLS-fingerprint bound · matched against pinned launch measurement       |
+| MagicBlock auth                    | Live     | `tee.magicblock.app/auth/{challenge,login}`                                | tweetnacl ed25519 over UTF-8 challenge → 30-day Bearer · 25-min refresh                      |
+| MagicBlock private transfer        | Live     | ER SDK 0.13 `transferSpl(privateTransfer:…)`                               | split=5 · randomised delay 500 ms – 30 s · base→base via `tee.magicblock.app`                |
+| MagicBlock withdraw                | Live     | ER SDK 0.13 `withdrawSpl`                                                  | recipient-driven undelegate + base-layer withdraw                                            |
+| Token-2022 vault                   | Live     | Mint `9pan9bMn5HatX4EJdBwg9VgCa7Uz5HL8N1m5D3NdXejP` (devnet)               | `transfer_checked` against the Token-2022 program (CT extension intentionally **not** used) |
+| Privy + Solana wallets             | Live     | `@privy-io/react-auth` v3.16 · `@solana/web3.js` v1.98                     | Phantom · Solflare · embedded                                                                |
+| Frontend (Vercel)                  | Live     | Next.js 16 + React 19 · webpack build                                      | App Router + serverless API dispatcher routes                                                |
+
+**Table I1.** Integration status, 2026-05. Updated alongside the README; the two documents are kept in lockstep.
 
 ---
 
@@ -664,7 +703,7 @@ The architecture's core contributions:
 4. **A pure ZK gate / off-chain dispatch** split that lets settlement be split, delayed, and randomised by a TEE-validated rollup — decoupling the on-chain authorisation from the on-chain settlement.
 5. **First-class identity** via Solana Name Service `.sol` binding, Privy embedded wallets, and client-side credential custody.
 
-Civitas is shipping today on Solana Devnet, with the program deployed at `CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y`, the full circom + snarkjs ZK pipeline operational, the Nillion nilDB and nilCC integrations live against the staging cluster, and the MagicBlock Private Payments dispatch path verified end-to-end against the TEE-fronted devnet.
+Civitas is shipping today on Solana Devnet, with the program deployed at `CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y`, the full circom + snarkjs ZK pipeline operational (a Groth16 voucher was successfully claimed and the nullifier minted on devnet — see commit `090f24d`), the Nillion nilDB integration writing `%allot`-encrypted vouchers to the 3-of-3 staging cluster, the Nillion nilCC V4 warm CVM serving Ed25519-signed payroll/onboard requests with a pinned AMD-SEV-SNP launch measurement, and the MagicBlock Private Payments dispatch path (ER SDK v0.13) verified end-to-end against the TEE-fronted devnet at `tee.magicblock.app`. **No layer falls back to mocks or in-process stubs on the production path.**
 
 Civitas turns a long-running thought experiment — "what would private on-chain payroll actually look like, end-to-end?" — into a concrete, audit-ready protocol on the highest-throughput L1 in production.
 
@@ -685,18 +724,25 @@ Civitas turns a long-running thought experiment — "what would private on-chain
 | Verifying key size             | 580 bytes                                                                                                  |
 | Public input count             | 1 (`pi_hash`)                                                                                              |
 | `pi_hash` binding fields       | 10 (merkle_root, nullifier, recipient_ATA, amount, epoch, mint, vault_PDA, program_id, run_id, domain_tag) |
-| Settlement asset               | USDC (Token-2022, ConfidentialTransfer extension)                                                          |
+| Settlement asset               | USDC (SPL Token-2022 vault account; amount-hiding by MagicBlock, not CT)                                   |
+| MagicBlock SPL mint type       | Legacy SPL Token (`TokenkegQfeZ…`) — Token-2022 mints are rejected by ER private payments                  |
 | Solana cluster                 | Devnet → Mainnet-Beta                                                                                      |
 | Civitas program ID (Devnet)    | `CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y`                                                             |
+| Devnet USDC mint               | `9pan9bMn5HatX4EJdBwg9VgCa7Uz5HL8N1m5D3NdXejP`                                                             |
 | Domain tag                     | `civitas-mainnet-v1` / `civitas-devnet-v1`                                                                 |
-| Anchor version                 | 0.30.x                                                                                                     |
+| Anchor version                 | 0.31.1                                                                                                     |
+| Solana toolchain               | 2.2.0                                                                                                      |
 | circom version                 | 2.1.6                                                                                                      |
-| snarkjs version                | latest (Groth16)                                                                                           |
-| Nillion SDK                    | `@nillion/secretvaults` v2 + `@nillion/nuc` v2                                                             |
-| MagicBlock SDK                 | `@magicblock-labs/ephemeral-rollups-sdk` v0.12                                                             |
-| TEE endpoint                   | `https://tee.magicblock.app`                                                                               |
+| snarkjs version                | 0.7.6 (Groth16)                                                                                            |
+| Nillion SDK                    | `@nillion/secretvaults` v2.0 + `@nillion/nuc` v2.0 + `@nillion/nilauth-client` v2.0                        |
+| nilDB cluster                  | `nildb-stg-n[1-3].nillion.network` (3-of-3 staging)                                                        |
+| nilCC workload pattern         | V4 warm CVM · Ed25519-signed `/run/{payroll,onboard}` · pinned `NILCC_GOLDEN_MEASUREMENT`                  |
+| nilCC attestation path         | `https://{NILCC_WORKLOAD_DOMAIN}/nilcc/api/v2/report` (TLS-fingerprint bound)                              |
+| MagicBlock SDK                 | `@magicblock-labs/ephemeral-rollups-sdk` v0.13                                                             |
+| TEE endpoint                   | `https://tee.magicblock.app` (also serves `/auth/challenge` + `/auth/login`)                               |
 | MagicBlock router              | `https://devnet-router.magicblock.app`                                                                     |
-| MagicBlock auth                | NUC challenge → ed25519 signature → Bearer token                                                           |
+| MagicBlock validator           | `DEFAULT_PRIVATE_VALIDATOR` (exported by the SDK)                                                          |
+| MagicBlock auth                | challenge → ed25519 (tweetnacl) → Bearer token, 30-day TTL, 25-min refresh                                 |
 | Default private-transfer split | 5                                                                                                          |
 | Private-transfer delay range   | 500 ms – 30,000 ms                                                                                         |
 
@@ -781,7 +827,11 @@ Civitas turns a long-running thought experiment — "what would private on-chain
 | `**pi_hash`**                       | The single public input to the Civitas circuit; SpongePoseidon over the 10 binding fields.                                                                      |
 | **SNS**                             | Solana Name Service (Bonfida) — the `.sol` domain registry.                                                                                                     |
 | **SpongePoseidon**                  | Sponge construction over Poseidon₂ used to absorb the 10 binding fields into a single output.                                                                   |
-| **Token-2022 ConfidentialTransfer** | SPL Token-2022 extension providing ElGamal-encrypted balance accounting.                                                                                        |
+| **Token-2022 ConfidentialTransfer** | SPL Token-2022 extension providing ElGamal-encrypted balance accounting. Currently disabled on Solana devnet and mainnet pending the 2026 security audit; Civitas's vault uses the Token-2022 program for the account model but delegates amount-hiding to Layer 4 (MagicBlock Private Payments). |
+| **MagicBlock Private Payments**     | TEE-fronted ER product exposing `transferSpl(privateTransfer:…)`, `delegateSpl`, `withdrawSpl` against `tee.magicblock.app`. Splits a base-layer transfer into N delayed sub-transfers via the SDK's `privateTransfer` option. Civitas's Layer 4. |
+| **V4 warm workload**                | The 2026-05-07 nilCC pattern: a long-running CVM that handles every payroll/onboard call via Ed25519-signed HTTP, instead of provisioning a new CVM per run. ~200× latency improvement (~90 s → ~0.3 s). |
+| **`x-civitas-sig`**                 | HTTP header on every `POST /run/{kind}` to the V4 workload. Base64 Ed25519 signature over the **raw request bytes** (signed before JSON parsing), verified inside the enclave against `CIVITAS_REQUEST_PUBKEY`. |
+| **Golden measurement**              | The pinned AMD-SEV-SNP launch measurement (`NILCC_GOLDEN_MEASUREMENT`) that the orchestrator's attestation verifier requires every nilCC report to match. Rotates only when the workload image is rebuilt. |
 | **VCEK**                            | AMD Versioned Chip Endorsement Key — the leaf certificate in the SEV-SNP attestation chain.                                                                     |
 | **Voucher**                         | The encrypted payroll record `(employee_tag, amount, voucher_nonce, commitment, epoch)` stored in nilDB.                                                        |
 
@@ -790,4 +840,4 @@ Civitas turns a long-running thought experiment — "what would private on-chain
 
 ---
 
-*Civitas — built on Solana. Settled in USDC. Private by construction.*
+*Civitas — built on Solana. Powered by Nillion. Settled through MagicBlock. Private by construction.*
