@@ -794,7 +794,7 @@ A professional Adevar Labs audit materially de-risks our pre-seed conversations 
 For audit coordination, security disclosure, or partnership conversations:
 
 - **Repo:** https://github.com/MeetCivitas/Civitas-SOL
-- **Author email:** [eshan.sharma108@gmail.com](mailto:eshan.sharma108@gmail.com)
+- **Author email:** [rythmenagrani@gmail.com](mailto:rythmenagrani@gmail.com)
 
 For responsible disclosure of issues found in this codebase, please open a private security advisory on the GitHub repository before public disclosure. We will respond within 24 hours.
 
