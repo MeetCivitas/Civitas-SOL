@@ -15,7 +15,7 @@
 
 **Program ID** · `CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y`
 
-[Whitepaper](./WHITEPAPER.md) · [Architecture](#architecture) · [Lifecycle](#lifecycle) · [Quick start](#quick-start) · [Integration status](#integration-status) · [Hackathon tracks](#hackathon-tracks)
+[Whitepaper](./WHITEPAPER.md) · [Audit Report](./AUDIT_REPORT.md) · [Architecture](#architecture) · [Lifecycle](#lifecycle) · [Quick start](#quick-start) · [Integration status](#integration-status) · [Hackathon tracks](#hackathon-tracks)
 
 </div>
 
@@ -489,6 +489,7 @@ mindmap
 ## Resources
 
 - **[Whitepaper (60 pages)](./WHITEPAPER.md)** full cryptographic and operational specification
+- **[Audit Report / Security Package](./AUDIT_REPORT.md)** pre-audit threat model, trust boundaries, self-identified findings, and Adevar Labs submission package
 - **Anchor program** [`programs/civitas-payroll`](./programs/civitas-payroll)
 - **Voucher circuit** [`circuits/voucher_circom/voucher.circom`](./circuits/voucher_circom/voucher.circom)
 - **nilCC V4 workload** [`workload/`](./workload)
