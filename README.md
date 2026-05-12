@@ -23,17 +23,17 @@
 
 ## TL;DR
 
-On-chain payroll has historically faced an unresolved trilemma — **transparency, privacy, and settlement integrity** — that nobody could satisfy without trusting a custodial processor. Civitas is the first end-to-end protocol on Solana that resolves all three, today, on a live devnet deployment:
+On-chain payroll has historically faced an unresolved trilemma **transparency, privacy, and settlement integrity** that nobody could satisfy without trusting a custodial processor. Civitas is the first end-to-end protocol on Solana that resolves all three, today, on a live devnet deployment:
 
-> Employers compute payroll inside an **AMD SEV-SNP enclave** (Nillion nilCC, warm V4 workload, ~0.3s per call) and publish only Poseidon commitments. Employees redeem their salary by submitting a **256-byte Groth16 proof** verified natively on-chain through Solana's `alt_bn128_pairing` syscalls in ~180k CU. Actual USDC settlement is dispatched through **MagicBlock Private Payments** (`@magicblock-labs/ephemeral-rollups-sdk@0.13`), which splits the transfer five ways and delays each leg by 500ms–30s — so the on-chain ZK claim is never linkable to any payout.
+> Employers compute payroll inside an **AMD SEV-SNP enclave** (Nillion nilCC, warm V4 workload, ~0.3s per call) and publish only Poseidon commitments. Employees redeem their salary by submitting a **256-byte Groth16 proof** verified natively on-chain through Solana's `alt_bn128_pairing` syscalls in ~180k CU. Actual USDC settlement is dispatched through **MagicBlock Private Payments** (`@magicblock-labs/ephemeral-rollups-sdk@0.13`), which splits the transfer five ways and delays each leg by 500ms–30s so the on-chain ZK claim is never linkable to any payout.
 
-**No salary appears in plaintext on-chain. No master credential leaves the browser. No single operator sees the full payroll table. No mocks anywhere in the path — every integration in this README is wired against the real, live remote service.**
+**No salary appears in plaintext on-chain. No master credential leaves the browser. No single operator sees the full payroll table. No mocks anywhere in the path every integration in this README is wired against the real, live remote service.**
 
 ---
 
 ## Architecture
 
-Civitas composes **four cooperating privacy layers** anchored to a single Anchor program. Each layer addresses a distinct privacy threat — the system breaks down only if *every* layer is simultaneously compromised.
+Civitas composes **four cooperating privacy layers** anchored to a single Anchor program. Each layer addresses a distinct privacy threat the system breaks down only if *every* layer is simultaneously compromised.
 
 ```mermaid
 flowchart TB
@@ -74,10 +74,10 @@ flowchart TB
 
 | Layer | Threat it eliminates | What still leaks if you drop it |
 |---|---|---|
-| **1 — nilDB** | A single DB operator reading the salary table | Encrypted vouchers exposed to whoever hosts them |
-| **2 — nilCC** | The payroll service seeing plaintext salaries | Employer's compute host can read every salary |
-| **3 — Groth16 ZK** | Linking employees to claims via the chain | Anyone can recompute who's getting paid what |
-| **4 — MagicBlock private payments** | Linking the on-chain claim to the actual payout | Block explorers see `vault → recipient` edges |
+| **1 nilDB** | A single DB operator reading the salary table | Encrypted vouchers exposed to whoever hosts them |
+| **2 nilCC** | The payroll service seeing plaintext salaries | Employer's compute host can read every salary |
+| **3 Groth16 ZK** | Linking employees to claims via the chain | Anyone can recompute who's getting paid what |
+| **4 MagicBlock private payments** | Linking the on-chain claim to the actual payout | Block explorers see `vault → recipient` edges |
 
 ---
 
@@ -97,7 +97,7 @@ sequenceDiagram
     participant MB as MagicBlock<br/>Private Payments
 
     E->>CHAIN: 1. initialize_vault(sns_domain?)
-    E->>CHAIN: 2. deposit_usdc(amount) — Token-2022 transfer_checked
+    E->>CHAIN: 2. deposit_usdc(amount) Token-2022 transfer_checked
     E->>TEE: 3. POST /run/payroll (Ed25519 signed manifest)
     TEE->>TEE: compute τ, C, ν, Merkle root R inside SEV-SNP
     E->>CHAIN: 4. start_payroll_run(run_id, epoch, n)
@@ -119,21 +119,21 @@ sequenceDiagram
 
 ### Core protocol relations
 
-Three Poseidon-BN254 hashes capture the entire cryptographic protocol — and **circuit ↔ server ↔ on-chain handler all agree on these definitions byte-for-byte**:
+Three Poseidon-BN254 hashes capture the entire cryptographic protocol and **circuit ↔ server ↔ on-chain handler all agree on these definitions byte-for-byte**:
 
 ```
-τ := Poseidon₁(η)             — Employee Tag      (one-way from credential nonce)
-C := Poseidon₄(τ, a, e, ν)    — Voucher Commitment (hiding, on-chain Merkle leaf)
-N := Poseidon₃(η, e, ν)       — Spend Nullifier   (one-time spend token)
+τ := Poseidon₁(η)             Employee Tag      (one-way from credential nonce)
+C := Poseidon₄(τ, a, e, ν)    Voucher Commitment (hiding, on-chain Merkle leaf)
+N := Poseidon₃(η, e, ν)       Spend Nullifier   (one-time spend token)
 ```
 
-The Groth16 circuit proves *"I know `(η, a, e, ν, path)` such that `Poseidon₄(Poseidon₁(η), a, e, ν)` is a leaf of the on-chain Merkle root, and I produced `N = Poseidon₃(η, e, ν)`"* — without revealing any of the witnesses.
+The Groth16 circuit proves *"I know `(η, a, e, ν, path)` such that `Poseidon₄(Poseidon₁(η), a, e, ν)` is a leaf of the on-chain Merkle root, and I produced `N = Poseidon₃(η, e, ν)`"* without revealing any of the witnesses.
 
 ---
 
 ## ZK claim path
 
-The single-instruction `claim_payment` is the heart of the protocol. The on-chain Groth16 verifier runs the entire BN254 pairing check via Solana's `alt_bn128_*` syscalls in ~180k compute units — well inside the 1.4M per-transaction budget.
+The single-instruction `claim_payment` is the heart of the protocol. The on-chain Groth16 verifier runs the entire BN254 pairing check via Solana's `alt_bn128_*` syscalls in ~180k compute units well inside the 1.4M per-transaction budget.
 
 ```mermaid
 flowchart LR
@@ -152,7 +152,7 @@ flowchart LR
     J -->|no| L[emit VoucherConsumed<br/>nullifier, run_id, pi_hash, slot]
 
     L -.->|off-chain trigger| M[Dispatcher / API]
-    M -->|ER SDK transferSpl<br/>privateTransfer:{split:5, delay}| N[(MagicBlock)]
+    M -->|"ER SDK transferSpl<br/>privateTransfer split 5, delay"| N[(MagicBlock)]
     N -.->|5 delayed splits| O[Employee USDC ATA]
 
     style C fill:#9945FF,color:#fff
@@ -165,8 +165,8 @@ flowchart LR
 
 **Key facts:**
 - Groth16 proof: **256 bytes**. Verification key: **580 bytes** (embedded into the BPF binary via `include_bytes!("../../keys/voucher_vk.bin")`). Both fit in a single 1232-byte Solana tx.
-- Public inputs are folded into a single field via `SpongePoseidon(10)` — **merkle_root, nullifier, recipient ATA, amount, epoch, mint, vault_pda, program_id, run_id, deployment_domain_tag** are *all* bound. A single forged or replayed field is rejected before the pairing even runs.
-- The on-chain claim instruction **does not move USDC**. Settlement is intentionally decoupled and dispatched through MagicBlock private payments — so the on-chain `vault → recipient` edge that block explorers would normally graph simply never exists.
+- Public inputs are folded into a single field via `SpongePoseidon(10)` **merkle_root, nullifier, recipient ATA, amount, epoch, mint, vault_pda, program_id, run_id, deployment_domain_tag** are *all* bound. A single forged or replayed field is rejected before the pairing even runs.
+- The on-chain claim instruction **does not move USDC**. Settlement is intentionally decoupled and dispatched through MagicBlock private payments so the on-chain `vault → recipient` edge that block explorers would normally graph simply never exists.
 
 ---
 
@@ -178,7 +178,7 @@ flowchart LR
 <tr><td rowspan="3"><b>On-chain</b></td>
 <td>Solana / Anchor 0.31</td><td>Program runtime, PDAs, events</td></tr>
 <tr><td>SPL Token-2022 program</td><td>USDC vault account model (Token2022 program ID)</td></tr>
-<tr><td><code>alt_bn128_*</code> syscalls</td><td>Native pairing / addition / multiplication for Groth16 — ~180k CU total</td></tr>
+<tr><td><code>alt_bn128_*</code> syscalls</td><td>Native pairing / addition / multiplication for Groth16 ~180k CU total</td></tr>
 
 <tr><td rowspan="3"><b>Cryptography</b></td>
 <td>circom 2.1.6 + circomlib</td><td>Voucher circuit · depth-20 Merkle · Poseidon BN254</td></tr>
@@ -305,7 +305,7 @@ cd frontend
 npm install
 node scripts/provision-nilcc.mjs
 # → prints NILCC_WORKLOAD_DOMAIN, CIVITAS_REQUEST_PRIVKEY/PUBKEY,
-#   NILCC_GOLDEN_MEASUREMENT — paste these into .env.local
+#   NILCC_GOLDEN_MEASUREMENT paste these into .env.local
 
 # 6. Configure env + run
 cp ../.env.local.example .env.local   # fill in Privy, Nillion org key, MagicBlock keypair
@@ -343,10 +343,10 @@ flowchart LR
 | `start_payroll_run(run_id, epoch, n)` | Employer | Open a new commitment batch (`PayrollRunAccount` PDA) |
 | `append_commitments_chunk(run_id, idx, commitments)` | Employer | Append up to 32 Poseidon leaves per tx |
 | `finalize_merkle_root(run_id, root, chunk_count)` | Employer | Lock the run and publish the depth-20 BN254 root |
-| **`claim_payment(proof, pi_hash, nullifier, run_id)`** | **Employee** | **Pure ZK gate — `alt_bn128_pairing` verify + nullifier PDA init + `VoucherConsumed` event** |
+| **`claim_payment(proof, pi_hash, nullifier, run_id)`** | **Employee** | **Pure ZK gate `alt_bn128_pairing` verify + nullifier PDA init + `VoucherConsumed` event** |
 | `create_invoice(id, commitment, due_ts, cid)` | Contractor | Open a contractor invoice |
 | `pay_invoice(invoice_id)` | Client | Atomic deposit + commit + finalize for a single invoice |
-| `close_vault()` | Employer | Devnet utility — close vault PDA + ATA |
+| `close_vault()` | Employer | Devnet utility close vault PDA + ATA |
 
 Full spec in [Appendix B of the whitepaper](./WHITEPAPER.md).
 
@@ -359,7 +359,7 @@ Every integration listed below is **live, against real remote services, with no 
 | Component | Status | Endpoint / Address | Notes |
 |---|---|---|---|
 | Anchor program (9 ix) | Deployed | `CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y` (devnet) | Anchor 0.31 · Solana 2.2 |
-| Groth16 verifier | Live | embedded VK (580 B) | `alt_bn128_pairing` + `alt_bn128_addition` + `alt_bn128_multiplication` — ~180k CU |
+| Groth16 verifier | Live | embedded VK (580 B) | `alt_bn128_pairing` + `alt_bn128_addition` + `alt_bn128_multiplication` ~180k CU |
 | Voucher circuit | Built | `circuits/voucher_circom/build/` | depth-20 Merkle · ~21k R1CS · pot15 + phase-2 ceremony complete |
 | Voucher claim end-to-end | Verified | tx logged in commit `090f24d` | snarkjs prove → `claim_payment` → nullifier minted on devnet |
 | Nillion nilDB (SecretVaults v2) | Live | `nildb-stg-n[1-3].nillion.network` | 3-of-3 cluster · `%allot` on salary columns · `@nillion/secretvaults@2.0.0` |
@@ -374,8 +374,8 @@ Every integration listed below is **live, against real remote services, with no 
 
 ### What's intentionally *not* on-chain
 
-- **USDC settlement is off-chain by design.** `claim_payment` is a pure ZK gate — it never touches a token program. The dispatcher binds `(recipient, amount)` to `pi_hash` only after the on-chain proof verifies, then triggers MagicBlock `transferSpl(privateTransfer:…)`. This is the *point* of Layer 4: an on-chain transfer linkable to the claim would defeat the entire stack.
-- **Token-2022 ConfidentialTransfer extension** is currently disabled on Solana devnet + mainnet (pending the 2026 Solana security audit). Civitas was originally architected to use it for Layer 4; the V2 pivot replaced it with MagicBlock Private Payments — the only production-ready private SPL primitive on Solana right now. The Token-2022 program is still used for the vault's account model, but amount-hiding is provided by MagicBlock, not CT.
+- **USDC settlement is off-chain by design.** `claim_payment` is a pure ZK gate it never touches a token program. The dispatcher binds `(recipient, amount)` to `pi_hash` only after the on-chain proof verifies, then triggers MagicBlock `transferSpl(privateTransfer:…)`. This is the *point* of Layer 4: an on-chain transfer linkable to the claim would defeat the entire stack.
+- **Token-2022 ConfidentialTransfer extension** is currently disabled on Solana devnet + mainnet (pending the 2026 Solana security audit). Civitas was originally architected to use it for Layer 4; the V2 pivot replaced it with MagicBlock Private Payments the only production-ready private SPL primitive on Solana right now. The Token-2022 program is still used for the vault's account model, but amount-hiding is provided by MagicBlock, not CT.
 
 ---
 
@@ -396,17 +396,17 @@ Every integration listed below is **live, against real remote services, with no 
 
 ---
 
-## MagicBlock private payments — wire detail
+## MagicBlock private payments wire detail
 
 The dispatcher path (`frontend/lib/server/magicblock-auth.ts` → `magicblock-private-payments.ts`) follows the canonical pattern verified against `github.com/magicblock-labs/private-payments-demo`:
 
 ```ts
-// 1. Auth — ed25519 against tee.magicblock.app
+// 1. Auth ed25519 against tee.magicblock.app
 const { challenge } = await getAuthChallenge(employerPubkey);
 const sig = nacl.sign.detached(utf8(challenge), employerSecret);
 const { token } = await loginWithSignature(employerPubkey, challenge, bs58.encode(sig));
 
-// 2. Private transfer — base→base, ER SDK 0.13
+// 2. Private transfer base→base, ER SDK 0.13
 const ixs = await transferSpl(
   fromPk, toPk, mintPk, amountUsdc,
   {
@@ -419,7 +419,7 @@ const ixs = await transferSpl(
     },
   },
 );
-// 3. Sign + submit — payments.magicblock.app routes the split-and-delay
+// 3. Sign + submit payments.magicblock.app routes the split-and-delay
 //    crank internally; recipient eventually undelegate + withdrawSpl.
 ```
 
@@ -427,7 +427,7 @@ const ixs = await transferSpl(
 
 ---
 
-## nilCC V4 — warm workload
+## nilCC V4 warm workload
 
 The nilCC integration shipped 2026-05-07 migrated from a "spin-up-a-CVM-per-payroll" pattern (60–120 s cold-start per run) to a **long-running V4 image** that handles every payroll/onboard call via signed HTTP:
 
@@ -441,7 +441,7 @@ The nilCC integration shipped 2026-05-07 migrated from a "spin-up-a-CVM-per-payr
 
 API routes (`app/api/payroll/generate/route.ts`, `app/api/employer/employees/onboard-tee/route.ts`) select V4 automatically when `NILCC_WORKLOAD_DOMAIN` is set; setting `USE_LEGACY_NILCC=1` flips back to the old ephemeral path.
 
-The workload image **must be built `linux/amd64`** — nilCC's AMD-SNP CVMs reject arm64 manifests:
+The workload image **must be built `linux/amd64`** nilCC's AMD-SNP CVMs reject arm64 manifests:
 
 ```bash
 docker buildx build --platform linux/amd64 -t <yourname>/civitas-nilcc-workload:v4 --push workload/
@@ -458,17 +458,17 @@ mindmap
   root((Civitas))
     Solana Foundation
       alt_bn128 native pairing
-      Anchor 0.31 program · 9 ix
+      Anchor 0.31 program with 9 ix
       Token-2022 vault account model
       SNS identity binding
     Nillion Nucleus
       nilDB SecretVaults v2
       nilCC V4 warm CVM
-      %allot secret-shared columns
+      allot secret-shared columns
       AMD SEV-SNP attestation
-    MagicBlock Frontier · $5K
-      ER SDK 0.13 · transferSpl private
-      Split=5 + delay 500ms-30s
+    MagicBlock Frontier 5K USDC
+      ER SDK 0.13 transferSpl private
+      Split 5 plus delay 500ms to 30s
       tee.magicblock.app auth
       withdrawSpl recipient flow
     Cloak Privacy
@@ -476,26 +476,26 @@ mindmap
       Settlement-graph privacy
       pi_hash domain binding
     Zero Knowledge
-      Voucher circuit · circom 2.1.6
-      Groth16 BN254 · 256-byte proof
+      Voucher circuit circom 2.1.6
+      Groth16 BN254 256-byte proof
       Poseidon Merkle depth-20
       On-chain pi_hash recompute
 ```
 
-**Primary target:** MagicBlock Frontier ($5K USDC) — two integrations (Permissioned Ephemeral Rollups for the commit pipeline UI, MagicBlock Private Payments for amount-hiding settlement) carrying the *"Confidential Transfers were disabled — we engineered around it"* narrative.
+**Primary target:** MagicBlock Frontier ($5K USDC) two integrations (Permissioned Ephemeral Rollups for the commit pipeline UI, MagicBlock Private Payments for amount-hiding settlement) carrying the *"Confidential Transfers were disabled we engineered around it"* narrative.
 
 ---
 
 ## Resources
 
-- **[Whitepaper (60 pages)](./WHITEPAPER.md)** — full cryptographic and operational specification
-- **Anchor program** — [`programs/civitas-payroll`](./programs/civitas-payroll)
-- **Voucher circuit** — [`circuits/voucher_circom/voucher.circom`](./circuits/voucher_circom/voucher.circom)
-- **nilCC V4 workload** — [`workload/`](./workload)
-- **Groth16 setup script** — [`scripts/groth16-setup.sh`](./scripts/groth16-setup.sh)
-- **Deploy script** — [`scripts/deploy.sh`](./scripts/deploy.sh)
-- **MagicBlock SDK wrappers** — [`frontend/lib/server/magicblock-private-payments.ts`](./frontend/lib/server/magicblock-private-payments.ts) · [`magicblock-auth.ts`](./frontend/lib/server/magicblock-auth.ts)
-- **nilCC client** — [`frontend/lib/server/nilcc-client.ts`](./frontend/lib/server/nilcc-client.ts)
+- **[Whitepaper (60 pages)](./WHITEPAPER.md)** full cryptographic and operational specification
+- **Anchor program** [`programs/civitas-payroll`](./programs/civitas-payroll)
+- **Voucher circuit** [`circuits/voucher_circom/voucher.circom`](./circuits/voucher_circom/voucher.circom)
+- **nilCC V4 workload** [`workload/`](./workload)
+- **Groth16 setup script** [`scripts/groth16-setup.sh`](./scripts/groth16-setup.sh)
+- **Deploy script** [`scripts/deploy.sh`](./scripts/deploy.sh)
+- **MagicBlock SDK wrappers** [`frontend/lib/server/magicblock-private-payments.ts`](./frontend/lib/server/magicblock-private-payments.ts) · [`magicblock-auth.ts`](./frontend/lib/server/magicblock-auth.ts)
+- **nilCC client** [`frontend/lib/server/nilcc-client.ts`](./frontend/lib/server/nilcc-client.ts)
 
 ---
 
