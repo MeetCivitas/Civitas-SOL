@@ -15,7 +15,7 @@
         { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:; worker-src blob: 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; media-src 'self'; connect-src 'self' https://*.devnet.solana.com https://api.devnet.solana.com https://api.mainnet-beta.solana.com https://rpc.helius.xyz https://*.nillion.network https://*.magicblock.app wss://*.devnet.solana.com wss://api.devnet.solana.com wss://*.magicblock.app;"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:; worker-src blob: 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; media-src 'self'; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; connect-src 'self' https://*.devnet.solana.com https://api.devnet.solana.com https://api.mainnet-beta.solana.com https://rpc.helius.xyz https://*.nillion.network https://*.magicblock.app wss://*.devnet.solana.com wss://api.devnet.solana.com wss://*.magicblock.app;"
         }
       ]
     },

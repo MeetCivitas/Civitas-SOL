@@ -362,7 +362,7 @@ export default function HomePage() {
 
               <div className="relative w-full aspect-video bg-black rounded-b-xl overflow-hidden">
                 <iframe
-                  src="https://www.youtube.com/embed/YK5ZtIX1Fig?rel=0&modestbranding=1"
+                  src="https://www.youtube-nocookie.com/embed/csFhpaPIVsw?rel=0&modestbranding=1"
                   frameBorder="0"
                   allowFullScreen
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
