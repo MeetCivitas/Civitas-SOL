@@ -701,7 +701,7 @@ Additional out-of-band exercises:
 | Document | Purpose |
 |---|---|
 | [`README.md`](./README.md) | Architecture overview, integration status, quick-start |
-| [`WHITEPAPER.md`](./WHITEPAPER.md) | 60-page protocol specification — cryptography, circuits, settlement, threat model |
+| [`WHITEPAPER.md`](./WHITEPAPER.md) | Detailed protocol specification — cryptography, circuits, settlement, threat model |
 | [`AUDIT_REPORT.md`](./AUDIT_REPORT.md) | **This document** — pre-audit security package |
 | [`pitch-script-2min.md`](./pitch-script-2min.md) | Demo-day pitch script |
 
@@ -784,7 +784,7 @@ A professional Adevar Labs audit materially de-risks our pre-seed conversations 
 | **Innovation & Potential Impact** | First end-to-end privacy-preserving payroll on Solana composing ZK + TEE + nilDB + MagicBlock private settlement. Target market is well-understood: every employer wants salary privacy. |
 | **Technical Complexity** | 9-instruction Anchor program with on-chain Groth16 BN254 verifier (180k CU), depth-20 Merkle circuit, 4-layer cross-system trust composition, V4 warm CVM with attestation-bound TLS. |
 | **Security Awareness** | This document. 10 self-identified findings, an explicit STRIDE analysis, a 10-row trust-boundary table, and a public history of remediating 7 critical issues during development. |
-| **Documentation** | 60-page whitepaper, comprehensive README, inline `//!` module docs, this audit package. Every external integration is documented with file paths and line numbers. |
+| **Documentation** | Detailed whitepaper, comprehensive README, inline `//!` module docs, this audit package. Every external integration is documented with file paths and line numbers. |
 | **Team Experience** | Solana-native team with prior Anchor and ZK deployments. Hackathon ship matches public roadmap commitments. |
 
 ---
