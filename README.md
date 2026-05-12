@@ -275,7 +275,7 @@ Civitas-Sol/
 │
 ├── tests/                              # Anchor integration tests
 ├── Anchor.toml
-└── WHITEPAPER.md                       # 60-page protocol spec
+└── WHITEPAPER.md                       # protocol spec
 ```
 
 ---
@@ -488,7 +488,7 @@ mindmap
 
 ## Resources
 
-- **[Whitepaper (60 pages)](./WHITEPAPER.md)** full cryptographic and operational specification
+- **[Whitepaper ( detailed )](./WHITEPAPER.md)** full cryptographic and operational specification
 - **[Audit Report / Security Package](./AUDIT_REPORT.md)** pre-audit threat model, trust boundaries, self-identified findings, and Adevar Labs submission package
 - **Anchor program** [`programs/civitas-payroll`](./programs/civitas-payroll)
 - **Voucher circuit** [`circuits/voucher_circom/voucher.circom`](./circuits/voucher_circom/voucher.circom)
