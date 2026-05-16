@@ -13,6 +13,13 @@ const nextConfig: NextConfig = {
   // 2. Output standalone is good for Docker builds
   output: 'standalone',
 
+  // Clean URL for the pitch deck (served as a static file from /public)
+  async rewrites() {
+    return [
+      { source: '/pitch', destination: '/pitch.html' },
+    ];
+  },
+
   // 3. Webpack config
   webpack: (config, { isServer }) => {
     // Enable async WASM for snarkjs (Groth16 prover) — voucher.wasm + voucher.zkey
