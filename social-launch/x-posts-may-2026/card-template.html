@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Civitas card</title>
+<style>
+  :root {
+    --bg-0: #05070d;
+    --bg-1: #0b1322;
+    --bg-2: #0f1d36;
+    --fg:   #ECF1F9;
+    --mute: #7E8AA3;
+    --acc:  #5B8DEF;
+    --acc2: #7CF9C7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1600px; height: 900px; overflow: hidden; }
+  body {
+    font-family: 'JetBrains Mono', 'SF Mono', 'Menlo', ui-monospace, monospace;
+    color: var(--fg);
+    background:
+      radial-gradient(1100px 700px at 85% 110%, rgba(91,141,239,0.18), transparent 60%),
+      radial-gradient(900px 600px at 12% -10%, rgba(124,249,199,0.10), transparent 65%),
+      linear-gradient(160deg, var(--bg-0), var(--bg-1) 55%, var(--bg-2));
+    position: relative;
+  }
+  .grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 80px 80px;
+    pointer-events: none;
+  }
+  .frame {
+    position: absolute; inset: 56px 64px 56px 64px;
+    display: flex; flex-direction: column;
+    justify-content: space-between;
+  }
+  .top {
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 14px;
+    font-size: 28px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--fg);
+  }
+  .brand .dot {
+    width: 14px; height: 14px; border-radius: 4px;
+    background: linear-gradient(135deg, var(--acc), var(--acc2));
+    box-shadow: 0 0 28px rgba(124,249,199,0.45);
+  }
+  .meta {
+    font-size: 18px; letter-spacing: 0.12em; color: var(--mute); text-transform: uppercase;
+  }
+  .body {
+    flex: 1;
+    display: flex; align-items: center;
+  }
+  .body pre {
+    font-family: inherit;
+    font-size: 38px;
+    line-height: 1.42;
+    color: var(--fg);
+    white-space: pre-wrap;
+    max-width: 1380px;
+    letter-spacing: -0.005em;
+    font-weight: 500;
+    text-shadow: 0 1px 0 rgba(0,0,0,0.3);
+  }
+  .body pre.small { font-size: 32px; line-height: 1.45; }
+  .body pre.tiny  { font-size: 28px; line-height: 1.5; }
+  .body pre b { color: var(--acc2); font-weight: 600; }
+  .body pre i { color: var(--acc);  font-style: normal; }
+  .bottom {
+    display: flex; justify-content: space-between; align-items: flex-end;
+  }
+  .url {
+    font-size: 22px; letter-spacing: 0.06em; color: var(--mute);
+  }
+  .url b { color: var(--fg); font-weight: 600; }
+  .badge {
+    font-size: 16px; letter-spacing: 0.18em; color: var(--mute);
+    text-transform: uppercase;
+    padding: 8px 16px; border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 999px;
+    background: rgba(255,255,255,0.02);
+  }
+  .badge b { color: var(--acc2); font-weight: 600; }
+  .accent-bar {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
+    background: linear-gradient(180deg, var(--acc), var(--acc2));
+    opacity: 0.9;
+  }
+</style>
+</head>
+<body>
+  <div class="grid"></div>
+  <div class="accent-bar"></div>
+  <div class="frame">
+    <div class="top">
+      <div class="brand"><span class="dot"></span><span>Civitas</span></div>
+      <div class="meta" id="meta">Day 01 · AM</div>
+    </div>
+    <div class="body"><pre id="body" class="">Hello world.</pre></div>
+    <div class="bottom">
+      <div class="url"><b>meetcivitas.xyz</b> · private payroll on solana</div>
+      <div class="badge"><b>Devnet · Live</b></div>
+    </div>
+  </div>
+<script>
+  function render(opts) {
+    document.getElementById('meta').textContent = opts.meta || '';
+    var el = document.getElementById('body');
+    el.textContent = opts.body || '';
+    el.className = '';
+    var n = (opts.body || '').length;
+    if (n > 220) el.classList.add('small');
+    if (n > 260) el.classList.add('tiny');
+  }
+  window.renderCard = render;
+  if (window.__INIT__) render(window.__INIT__);
+</script>
+</body>
+</html>

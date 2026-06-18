@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useCivitas } from "@/lib/civitas-provider";
 import { useSolanaWallet } from "@/lib/solana-wallet";
+import { ReceiptsViewer } from "@/components/employees/receipts-viewer";
 import { WalletButton } from "@/components/wallet-button";
 import { buildExplorerUrl, formatUsdc, shortenAddress, MAGICBLOCK_USDC_MINT } from "@/lib/solana";
 import { buildMerkleTree } from "@/lib/merkle-tree";
@@ -903,6 +904,28 @@ export default function EmployeesPage() {
                 unconditionally on every claim, then settlement routes through MagicBlock private payments.
               </p>
             </motion.div>
+
+            {/* ── Private payment inbox (auto-settled by MagicBlock crank) ── */}
+            <motion.section
+              variants={fadeUp}
+              className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.02] p-6 sm:p-7 backdrop-blur-2xl"
+            >
+              <div className="absolute top-0 left-7 right-7 h-px hairline" aria-hidden />
+              <div className="mb-5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/35">
+                  Private Payments · TEE-settled
+                </p>
+                <h2 className="mt-2 text-2xl font-medium tracking-[-0.02em] text-white">
+                  Your private payment inbox
+                </h2>
+                <p className="mt-1 text-[12px] text-white/45">
+                  Payroll lands directly in your wallet — settled by MagicBlock's TEE-side
+                  crank with encrypted destination + jittered splits. No claim step, no
+                  exposed amounts on the public ledger.
+                </p>
+              </div>
+              {address && <ReceiptsViewer companyId={process.env.NEXT_PUBLIC_CIVITAS_COMPANY_ID} />}
+            </motion.section>
 
             {/* ── Vouchers ───────────────────────────────────────── */}
             <motion.section variants={fadeUp} className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.02] p-6 sm:p-7 backdrop-blur-2xl">

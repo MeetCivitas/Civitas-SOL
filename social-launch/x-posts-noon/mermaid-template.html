@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Civitas mermaid card</title>
+<script src="https://unpkg.com/mermaid@11.4.1/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg-0: #05070d;
+    --bg-1: #0b1322;
+    --bg-2: #0f1d36;
+    --fg:   #ECF1F9;
+    --mute: #7E8AA3;
+    --acc:  #5B8DEF;
+    --acc2: #7CF9C7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1600px; height: 900px; overflow: hidden; }
+  body {
+    font-family: 'JetBrains Mono', 'SF Mono', 'Menlo', ui-monospace, monospace;
+    color: var(--fg);
+    background:
+      radial-gradient(1100px 700px at 85% 110%, rgba(91,141,239,0.18), transparent 60%),
+      radial-gradient(900px 600px at 12% -10%, rgba(124,249,199,0.10), transparent 65%),
+      linear-gradient(160deg, var(--bg-0), var(--bg-1) 55%, var(--bg-2));
+    position: relative;
+  }
+  .grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 80px 80px;
+    pointer-events: none;
+  }
+  .frame {
+    position: absolute; inset: 36px 56px 36px 56px;
+    display: flex; flex-direction: column;
+  }
+  .top {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 14px;
+    font-size: 24px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--fg);
+  }
+  .brand .dot {
+    width: 12px; height: 12px; border-radius: 4px;
+    background: linear-gradient(135deg, var(--acc), var(--acc2));
+    box-shadow: 0 0 22px rgba(124,249,199,0.45);
+  }
+  .meta {
+    font-size: 16px; letter-spacing: 0.12em; color: var(--mute); text-transform: uppercase;
+  }
+  .title {
+    font-size: 28px; font-weight: 600; color: var(--fg);
+    letter-spacing: -0.01em;
+    margin-bottom: 14px;
+  }
+  .title b { color: var(--acc2); font-weight: 600; }
+  .canvas {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px;
+    padding: 24px;
+    overflow: hidden;
+  }
+  .canvas svg {
+    max-width: 100%; max-height: 100%;
+    width: auto; height: auto;
+  }
+  .bottom {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    margin-top: 16px;
+  }
+  .url { font-size: 18px; letter-spacing: 0.06em; color: var(--mute); }
+  .url b { color: var(--fg); font-weight: 600; }
+  .badge {
+    font-size: 14px; letter-spacing: 0.18em; color: var(--mute);
+    text-transform: uppercase;
+    padding: 7px 14px; border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 999px;
+    background: rgba(255,255,255,0.02);
+  }
+  .badge b { color: var(--acc2); font-weight: 600; }
+  .accent-bar {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
+    background: linear-gradient(180deg, var(--acc), var(--acc2));
+    opacity: 0.9;
+  }
+</style>
+</head>
+<body>
+  <div class="grid"></div>
+  <div class="accent-bar"></div>
+  <div class="frame">
+    <div class="top">
+      <div class="brand"><span class="dot"></span><span>Civitas · noon brief</span></div>
+      <div class="meta" id="meta">Day 01 · 15:00 IST</div>
+    </div>
+    <div class="title" id="title">Loading…</div>
+    <div class="canvas" id="canvas"></div>
+    <div class="bottom">
+      <div class="url"><b>meetcivitas.xyz</b> · private payroll on solana</div>
+      <div class="badge"><b>Devnet · Live</b></div>
+    </div>
+  </div>
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'dark',
+    themeVariables: {
+      darkMode: true,
+      background: 'transparent',
+      primaryColor: '#0f1d36',
+      primaryBorderColor: '#5B8DEF',
+      primaryTextColor: '#ECF1F9',
+      secondaryColor: '#0b1322',
+      tertiaryColor: '#0f1d36',
+      lineColor: '#7CF9C7',
+      textColor: '#ECF1F9',
+      noteBkgColor: '#0b1322',
+      noteTextColor: '#ECF1F9',
+      mainBkg: '#0f1d36',
+      secondBkg: '#0b1322',
+      tertiaryBkg: '#0b1322',
+      clusterBkg: 'rgba(91,141,239,0.08)',
+      clusterBorder: '#5B8DEF',
+      actorBkg: '#0f1d36',
+      actorTextColor: '#ECF1F9',
+      actorBorder: '#7CF9C7',
+      signalColor: '#7CF9C7',
+      signalTextColor: '#ECF1F9',
+      labelBoxBkgColor: '#0f1d36',
+      labelTextColor: '#ECF1F9',
+      stateLabelColor: '#ECF1F9',
+      labelBackground: '#0b1322',
+    },
+    flowchart: { htmlLabels: false, curve: 'basis', useMaxWidth: true },
+    sequence:  { useMaxWidth: true, mirrorActors: false, boxMargin: 12, messageFontSize: 16 },
+    state:     { useMaxWidth: true },
+    er:        { useMaxWidth: true },
+    gantt:     { useMaxWidth: true },
+  });
+  async function render(opts) {
+    document.getElementById('meta').textContent = opts.meta || '';
+    document.getElementById('title').innerHTML = opts.title || '';
+    const { svg } = await mermaid.render('m', opts.mermaid);
+    document.getElementById('canvas').innerHTML = svg;
+    window.__RENDERED__ = true;
+  }
+  window.renderCard = render;
+  if (window.__INIT__) render(window.__INIT__);
+</script>
+</body>
+</html>

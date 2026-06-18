@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+node_modules
 /frontend/node_modules/
 
 # Build artifacts
@@ -39,6 +40,16 @@ yarn-error.log*
 .claude/
 .superstack/
 .vercel/
+.playwright-mcp/
+
+# Private / personal docs (not for public repo)
+frontend/grant-application.md
+
+# Local keypairs & PoC secrets
+frontend/scripts/eata-poc-employee.json
+
+# Captured browser profile for social automation (large, contains session cookies)
+social-launch/**/browser-data/
 
 # TypeScript
 *.tsbuildinfo

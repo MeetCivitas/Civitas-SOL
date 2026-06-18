@@ -1,0 +1,293 @@
+{
+  "day01-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-19 09:00",
+    "ts": "2026-05-18T14:30:58.162Z"
+  },
+  "day01-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-19 20:00",
+    "ts": "2026-05-18T14:31:07.467Z"
+  },
+  "day02-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-20 09:00",
+    "ts": "2026-05-18T14:32:29.204Z"
+  },
+  "day02-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-20 20:00",
+    "ts": "2026-05-18T14:32:39.614Z"
+  },
+  "day03-am": {
+    "status": "no-image",
+    "path": "/Users/rythme/developer/blockchain/Civitas-Sol/social-launch/x-posts-may-2026/images/day03-am.png"
+  },
+  "day03-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-21 20:00",
+    "ts": "2026-05-18T14:32:49.782Z"
+  },
+  "day04-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-22 09:00",
+    "ts": "2026-05-18T14:32:58.668Z"
+  },
+  "day04-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-22 20:00",
+    "ts": "2026-05-18T14:33:07.943Z"
+  },
+  "day05-am": {
+    "status": "no-image",
+    "path": "/Users/rythme/developer/blockchain/Civitas-Sol/social-launch/x-posts-may-2026/images/day05-am.png"
+  },
+  "day05-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-23 20:00",
+    "ts": "2026-05-18T14:33:17.259Z"
+  },
+  "day06-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-24 09:00",
+    "ts": "2026-05-18T14:33:25.951Z"
+  },
+  "day06-pm": {
+    "status": "no-image",
+    "path": "/Users/rythme/developer/blockchain/Civitas-Sol/social-launch/x-posts-may-2026/images/day06-pm.png"
+  },
+  "day07-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-25 09:00",
+    "ts": "2026-05-18T14:33:38.241Z"
+  },
+  "day07-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-25 20:00",
+    "ts": "2026-05-18T14:33:47.882Z"
+  },
+  "day08-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-26 09:00",
+    "ts": "2026-05-18T14:33:58.038Z"
+  },
+  "day08-pm": {
+    "status": "no-image",
+    "path": "/Users/rythme/developer/blockchain/Civitas-Sol/social-launch/x-posts-may-2026/images/day08-pm.png"
+  },
+  "day09-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-27 09:00",
+    "ts": "2026-05-18T14:34:09.901Z"
+  },
+  "day09-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-27 20:00",
+    "ts": "2026-05-18T14:34:20.484Z"
+  },
+  "day10-am": {
+    "status": "no-image",
+    "path": "/Users/rythme/developer/blockchain/Civitas-Sol/social-launch/x-posts-may-2026/images/day10-am.png"
+  },
+  "day10-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-28 20:00",
+    "ts": "2026-05-18T14:34:30.901Z"
+  },
+  "day11-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-29 09:00",
+    "ts": "2026-05-18T14:34:41.009Z"
+  },
+  "day11-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-29 20:00",
+    "ts": "2026-05-18T14:34:52.364Z"
+  },
+  "day12-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-30 09:00",
+    "ts": "2026-05-18T14:35:02.105Z"
+  },
+  "day12-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-30 20:00",
+    "ts": "2026-05-18T14:35:12.818Z"
+  },
+  "day13-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-31 09:00",
+    "ts": "2026-05-18T14:35:22.672Z"
+  },
+  "day13-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-31 20:00",
+    "ts": "2026-05-18T14:35:32.784Z"
+  },
+  "day14-am": {
+    "status": "no-image",
+    "path": "/Users/rythme/developer/blockchain/Civitas-Sol/social-launch/x-posts-may-2026/images/day14-am.png"
+  },
+  "day14-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-01 20:00",
+    "ts": "2026-05-18T14:35:44.150Z"
+  },
+  "day15-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-02 09:00",
+    "ts": "2026-05-18T14:35:53.635Z"
+  },
+  "day15-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-02 20:00",
+    "ts": "2026-05-18T14:36:02.536Z"
+  },
+  "day16-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-03 09:00",
+    "ts": "2026-05-18T14:36:21.614Z"
+  },
+  "day16-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-03 20:00",
+    "ts": "2026-05-18T14:36:31.347Z"
+  },
+  "day17-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-04 09:00",
+    "ts": "2026-05-18T14:36:40.658Z"
+  },
+  "day17-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-04 20:00",
+    "ts": "2026-05-18T14:36:51.080Z"
+  },
+  "day18-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-05 09:00",
+    "ts": "2026-05-18T14:36:59.541Z"
+  },
+  "day18-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-05 20:00",
+    "ts": "2026-05-18T14:37:08.906Z"
+  },
+  "day19-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-06 09:00",
+    "ts": "2026-05-18T14:37:18.566Z"
+  },
+  "day19-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-06 20:00",
+    "ts": "2026-05-18T14:37:29.748Z"
+  },
+  "day20-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-07 09:00",
+    "ts": "2026-05-18T14:37:39.492Z"
+  },
+  "day20-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-07 20:00",
+    "ts": "2026-05-18T14:37:48.835Z"
+  },
+  "day21-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-08 09:00",
+    "ts": "2026-05-18T14:37:59.126Z"
+  },
+  "day21-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-08 20:00",
+    "ts": "2026-05-18T14:38:09.941Z"
+  },
+  "day22-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-09 09:00",
+    "ts": "2026-05-18T14:38:20.827Z"
+  },
+  "day22-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-09 20:00",
+    "ts": "2026-05-18T14:38:29.606Z"
+  },
+  "day23-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-10 09:00",
+    "ts": "2026-05-18T14:38:44.342Z"
+  },
+  "day23-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-10 20:00",
+    "ts": "2026-05-18T14:38:54.121Z"
+  },
+  "day24-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-11 09:00",
+    "ts": "2026-05-18T14:39:04.135Z"
+  },
+  "day24-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-11 20:00",
+    "ts": "2026-05-18T14:39:14.405Z"
+  },
+  "day25-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-12 09:00",
+    "ts": "2026-05-18T14:39:23.880Z"
+  },
+  "day25-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-12 20:00",
+    "ts": "2026-05-18T14:39:33.189Z"
+  },
+  "day26-am": {
+    "status": "no-image",
+    "path": "/Users/rythme/developer/blockchain/Civitas-Sol/social-launch/x-posts-may-2026/images/day26-am.png"
+  },
+  "day26-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-13 20:00",
+    "ts": "2026-05-18T14:39:43.425Z"
+  },
+  "day27-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-14 09:00",
+    "ts": "2026-05-18T14:39:52.945Z"
+  },
+  "day27-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-14 20:00",
+    "ts": "2026-05-18T14:40:02.510Z"
+  },
+  "day28-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-15 09:00",
+    "ts": "2026-05-18T14:40:14.657Z"
+  },
+  "day28-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-15 20:00",
+    "ts": "2026-05-18T14:40:24.676Z"
+  },
+  "day29-am": {
+    "status": "no-image",
+    "path": "/Users/rythme/developer/blockchain/Civitas-Sol/social-launch/x-posts-may-2026/images/day29-am.png"
+  },
+  "day29-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-16 20:00",
+    "ts": "2026-05-18T14:40:35.234Z"
+  },
+  "day30-pm": {
+    "status": "no-image",
+    "path": "/Users/rythme/developer/blockchain/Civitas-Sol/social-launch/x-posts-may-2026/images/day30-pm.png"
+  },
+  "day30-am": {
+    "status": "blocked",
+    "reason": "X rejected with 'The content of your post is invalid' — almost certainly the free-tier scheduled-post cap (50) was reached. Schedule manually after one of the earlier posts publishes, or upgrade to Premium.",
+    "ts": "2026-05-18T14:49:50.504Z"
+  }
+}

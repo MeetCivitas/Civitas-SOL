@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Civitas carousel slide</title>
+<style>
+  :root {
+    --bg-0: #05070d;
+    --bg-1: #0b1322;
+    --bg-2: #0f1d36;
+    --fg:   #ECF1F9;
+    --mute: #7E8AA3;
+    --acc:  #5B8DEF;
+    --acc2: #7CF9C7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1080px; overflow: hidden; }
+  body {
+    font-family: 'JetBrains Mono', 'SF Mono', 'Menlo', ui-monospace, monospace;
+    color: var(--fg);
+    background:
+      radial-gradient(900px 600px at 90% 110%, rgba(91,141,239,0.20), transparent 60%),
+      radial-gradient(700px 500px at 10% -10%, rgba(124,249,199,0.12), transparent 65%),
+      linear-gradient(160deg, var(--bg-0), var(--bg-1) 55%, var(--bg-2));
+    position: relative;
+  }
+  .grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+  }
+  .accent-bar {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 8px;
+    background: linear-gradient(180deg, var(--acc), var(--acc2));
+    opacity: 0.95;
+  }
+  .frame {
+    position: absolute; inset: 56px 64px 56px 80px;
+    display: flex; flex-direction: column;
+  }
+  .top {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 32px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 22px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--fg);
+  }
+  .brand .dot {
+    width: 14px; height: 14px; border-radius: 4px;
+    background: linear-gradient(135deg, var(--acc), var(--acc2));
+    box-shadow: 0 0 22px rgba(124,249,199,0.45);
+  }
+  .pager {
+    font-size: 14px; letter-spacing: 0.14em; color: var(--mute);
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 999px;
+    background: rgba(255,255,255,0.02);
+  }
+  .kicker {
+    font-size: 18px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--acc2);
+    margin-bottom: 24px;
+    opacity: 0.95;
+  }
+  .body-area {
+    flex: 1;
+    display: flex; flex-direction: column;
+    justify-content: center;
+  }
+  .headline {
+    font-size: 56px;
+    font-weight: 600;
+    line-height: 1.12;
+    letter-spacing: -0.015em;
+    color: var(--fg);
+    margin-bottom: 24px;
+  }
+  .headline.small { font-size: 44px; line-height: 1.15; }
+  .headline.tiny  { font-size: 36px; line-height: 1.2; }
+  .subhead {
+    font-size: 26px;
+    line-height: 1.42;
+    color: var(--mute);
+    font-weight: 400;
+    margin-top: 12px;
+    max-width: 880px;
+  }
+  .body-text {
+    font-size: 28px;
+    line-height: 1.45;
+    color: var(--fg);
+    font-weight: 500;
+    white-space: pre-wrap;
+    max-width: 880px;
+  }
+  .body-text.small { font-size: 24px; line-height: 1.5; }
+  .stat {
+    font-size: 180px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, var(--acc2), var(--acc));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: var(--acc2);
+    line-height: 1;
+    margin-bottom: 24px;
+  }
+  .stat.smaller { font-size: 140px; }
+  .caption {
+    font-size: 26px;
+    line-height: 1.45;
+    color: var(--fg);
+    white-space: pre-wrap;
+    max-width: 880px;
+  }
+  ul.list {
+    list-style: none;
+    margin-top: 8px;
+  }
+  ul.list li {
+    font-size: 28px;
+    line-height: 1.5;
+    color: var(--fg);
+    padding-left: 36px;
+    position: relative;
+    margin-bottom: 14px;
+  }
+  ul.list li::before {
+    content: "→";
+    position: absolute; left: 0; top: 0;
+    color: var(--acc2);
+    font-weight: 600;
+  }
+  table.rows {
+    width: 100%; max-width: 920px;
+    border-collapse: collapse;
+    margin-top: 4px;
+  }
+  table.rows td {
+    font-size: 24px;
+    padding: 14px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    color: var(--fg);
+    vertical-align: top;
+  }
+  table.rows td:first-child {
+    color: var(--acc2);
+    font-weight: 600;
+    width: 38%;
+    letter-spacing: 0.02em;
+  }
+  table.rows tr:last-child td { border-bottom: none; }
+  .bottom {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    margin-top: 32px;
+  }
+  .url { font-size: 18px; letter-spacing: 0.08em; color: var(--mute); }
+  .url b { color: var(--fg); font-weight: 600; }
+  .badge {
+    font-size: 14px; letter-spacing: 0.18em; color: var(--mute);
+    text-transform: uppercase;
+    padding: 7px 14px; border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 999px;
+    background: rgba(255,255,255,0.02);
+  }
+  .badge b { color: var(--acc2); font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="grid"></div>
+  <div class="accent-bar"></div>
+  <div class="frame">
+    <div class="top">
+      <div class="brand"><span class="dot"></span><span>Civitas</span></div>
+      <div class="pager" id="pager">1 / 1</div>
+    </div>
+    <div class="kicker" id="kicker"></div>
+    <div class="body-area" id="bodyArea"></div>
+    <div class="bottom">
+      <div class="url"><b>meetcivitas.xyz</b> · private payroll on solana</div>
+      <div class="badge"><b>Devnet · Live</b></div>
+    </div>
+  </div>
+<script>
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function renderSlide(opts) {
+    document.getElementById('pager').textContent = (opts.pager || '');
+    document.getElementById('kicker').textContent = (opts.kicker || '').toUpperCase();
+
+    let html = '';
+
+    // headline (optionally with sizing classes based on length)
+    if (opts.headline) {
+      const n = opts.headline.length;
+      const cls = n > 110 ? 'headline tiny' : n > 70 ? 'headline small' : 'headline';
+      html += `<div class="${cls}">${escapeHtml(opts.headline)}</div>`;
+    }
+
+    // stat (huge number)
+    if (opts.stat) {
+      const n = opts.stat.length;
+      const cls = n > 6 ? 'stat smaller' : 'stat';
+      html += `<div class="${cls}">${escapeHtml(opts.stat)}</div>`;
+      if (opts.caption) html += `<div class="caption">${escapeHtml(opts.caption)}</div>`;
+    }
+
+    // body text
+    if (opts.body) {
+      const n = opts.body.length;
+      const cls = n > 260 ? 'body-text small' : 'body-text';
+      html += `<div class="${cls}">${escapeHtml(opts.body)}</div>`;
+    }
+
+    // subhead (smaller, muted, follows headline)
+    if (opts.subhead) {
+      html += `<div class="subhead">${escapeHtml(opts.subhead)}</div>`;
+    }
+
+    // list (bulleted with arrow markers)
+    if (opts.list && opts.list.length) {
+      html += '<ul class="list">';
+      for (const item of opts.list) {
+        html += `<li>${escapeHtml(item)}</li>`;
+      }
+      html += '</ul>';
+    }
+
+    // rows (two-column table)
+    if (opts.rows && opts.rows.length) {
+      html += '<table class="rows">';
+      for (const r of opts.rows) {
+        html += `<tr><td>${escapeHtml(r[0])}</td><td>${escapeHtml(r[1] || '')}</td></tr>`;
+      }
+      html += '</table>';
+    }
+
+    document.getElementById('bodyArea').innerHTML = html;
+    window.__RENDERED__ = true;
+  }
+  window.renderSlide = renderSlide;
+</script>
+</body>
+</html>

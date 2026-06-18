@@ -1,0 +1,7 @@
+{
+  "day01-noon": {
+    "status": "blocked-cap",
+    "error": "page.waitForFunction: Timeout 15000ms exceeded.",
+    "ts": "2026-05-18T16:06:22.306Z"
+  }
+}

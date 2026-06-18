@@ -1,0 +1,50 @@
+[
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "Enhance post",
+    "x": 348
+  },
+  {
+    "tag": "BUTTON",
+    "aria": "Add media",
+    "text": "",
+    "x": 532
+  },
+  {
+    "tag": "BUTTON",
+    "aria": "Create an event",
+    "text": "",
+    "x": 588
+  },
+  {
+    "tag": "BUTTON",
+    "aria": "Celebrate an occasion",
+    "text": "",
+    "x": 644
+  },
+  {
+    "tag": "BUTTON",
+    "aria": "More",
+    "text": "",
+    "x": 700
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "Privacy & Terms",
+    "x": 1020
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "Get the LinkedIn app",
+    "x": 1033
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "Business Services",
+    "x": 1095
+  }
+]

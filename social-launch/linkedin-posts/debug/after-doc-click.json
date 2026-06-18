@@ -1,0 +1,90 @@
+{
+  "fileInputs": [
+    {
+      "visible": true,
+      "accept": ".doc,.docx,.pdf,.ppt,.pptx"
+    }
+  ],
+  "buttons": [
+    {
+      "tag": "BUTTON",
+      "aria": "Back",
+      "text": "Back"
+    },
+    {
+      "tag": "BUTTON",
+      "aria": "Done",
+      "text": "Done"
+    },
+    {
+      "tag": "BUTTON",
+      "aria": null,
+      "text": "Enhance your Page"
+    },
+    {
+      "tag": "BUTTON",
+      "aria": null,
+      "text": "Create"
+    },
+    {
+      "tag": "BUTTON",
+      "aria": null,
+      "text": "View as member"
+    },
+    {
+      "tag": "BUTTON",
+      "aria": null,
+      "text": "Start a post"
+    },
+    {
+      "tag": "BUTTON",
+      "aria": "Add a video",
+      "text": "Video"
+    },
+    {
+      "tag": "BUTTON",
+      "aria": "Add a photo",
+      "text": "Photo"
+    },
+    {
+      "tag": "BUTTON",
+      "aria": null,
+      "text": "Privacy & Terms"
+    },
+    {
+      "tag": "BUTTON",
+      "aria": null,
+      "text": "Business Services"
+    },
+    {
+      "tag": "BUTTON",
+      "aria": null,
+      "text": "Get the LinkedIn app"
+    },
+    {
+      "tag": "BUTTON",
+      "aria": "More options",
+      "text": "More"
+    },
+    {
+      "tag": "BUTTON",
+      "aria": null,
+      "text": "Messaging\nYou are on the messaging overlay. Press enter to open the list of conv"
+    },
+    {
+      "tag": "BUTTON",
+      "aria": null,
+      "text": "Compose message"
+    },
+    {
+      "tag": "BUTTON",
+      "aria": null,
+      "text": "You are on the messaging overlay. Press enter to open the list of conversations."
+    },
+    {
+      "tag": "BUTTON",
+      "aria": "Page inboxes",
+      "text": ""
+    }
+  ]
+}

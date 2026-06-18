@@ -13,6 +13,8 @@ import {
 import { motion, AnimatePresence } from "framer-motion"
 import { PrivacyStackVisualizer } from "@/components/ui/privacy-stack"
 import { PrivacyScoreMeter } from "@/components/ui/privacy-score-meter"
+import { SessionPanel } from "@/components/employer/session-panel"
+import { DisbursePanel } from "@/components/employer/disburse-panel"
 
 const TABS = ["Overview", "Payrolls", "Employees", "Auditors", "Reports", "Activity"]
 
@@ -230,6 +232,10 @@ export function EmployerDashboard() {
           {/* ─── OVERVIEW ─────────────────────────── */}
           {activeTab === "Overview" && (
             <div className="space-y-7">
+              {/* ── Civitas Payroll: compliance + MagicBlock private settlement ── */}
+              <SessionPanel />
+              <DisbursePanel />
+
               {/* KPIs */}
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="flex flex-col gap-2">

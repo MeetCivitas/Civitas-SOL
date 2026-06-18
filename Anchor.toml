@@ -8,9 +8,11 @@ skip-lint = false
 
 [programs.devnet]
 civitas_payroll = "CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y"
+civitas_ephemeral = "BW2wwxbsSjixSfXNGoD9ajoUq8394ZkB2Fn9PusXjJfs"
 
 [programs.localnet]
 civitas_payroll = "CQW3TnN4X6iG2potguVv2hCKfk4f9tf8PMG7dTV6e24y"
+civitas_ephemeral = "BW2wwxbsSjixSfXNGoD9ajoUq8394ZkB2Fn9PusXjJfs"
 
 [registry]
 url = "https://api.apr.dev"

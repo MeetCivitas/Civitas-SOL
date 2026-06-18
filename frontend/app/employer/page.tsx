@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import { AvatarInitials } from "@/components/ui/avatar-initials";
 import { EmployerOnboarding, type EmployerProfileData } from "@/components/employer/employer-onboarding";
+import { SessionPanel } from "@/components/employer/session-panel";
+import { DisbursePanel } from "@/components/employer/disburse-panel";
 import { WalletButton } from "@/components/wallet-button";
 import { useCivitas, type CompanyProfile } from "@/lib/civitas-provider";
 import {
@@ -636,6 +638,15 @@ export default function EmployerDashboard() {
                         <GlowCard label="Employees" value={employees.length.toString()} icon={<Users className="h-4 w-4" />} color="blue" />
                         <GlowCard label="Payroll Runs" value={payrollRuns.length.toString()} icon={<FileText className="h-4 w-4" />} color="teal" />
                         <GlowCard label="Treasury" value={`${poolBalanceFormatted} USDC`} icon={<Coins className="h-4 w-4" />} color="emerald" highlight />
+                      </div>
+
+                      {/* ── Civitas Payroll: Nillion compliance + MagicBlock encrypted-queue private payments ── */}
+                      <div className="space-y-4">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-white/30">
+                          Private Payroll · Compliance &rarr; Encrypted Settlement
+                        </p>
+                        <SessionPanel />
+                        <DisbursePanel companyId={company?.companyId} />
                       </div>
 
                       <div>

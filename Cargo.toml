@@ -1,5 +1,6 @@
 [workspace]
 members = ["programs/civitas-payroll"]
+exclude = ["programs/civitas-ephemeral"]
 resolver = "2"
 
 [profile.release]

@@ -1,0 +1,100 @@
+{
+  "address": "BW2wwxbsSjixSfXNGoD9ajoUq8394ZkB2Fn9PusXjJfs",
+  "metadata": {
+    "name": "civitas_ephemeral",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Civitas private payroll — ER-native settlement on MagicBlock TEE-secured Ephemeral Rollups"
+  },
+  "instructions": [
+    {
+      "name": "initialize_payroll_pool",
+      "args": [
+        { "name": "per_employee_limit", "type": "u64" },
+        { "name": "daily_limit", "type": "u64" },
+        { "name": "compliance_attestor", "type": "pubkey" }
+      ]
+    },
+    {
+      "name": "register_employee",
+      "args": []
+    },
+    {
+      "name": "attest_compliance",
+      "args": [
+        { "name": "passed", "type": "bool" },
+        { "name": "jurisdiction_code", "type": { "array": ["u8", 4] } }
+      ]
+    },
+    {
+      "name": "shield_funds",
+      "args": [{ "name": "amount", "type": "u64" }]
+    },
+    {
+      "name": "delegate_treasury",
+      "args": [{ "name": "members", "type": { "option": { "vec": "Member" } } }]
+    },
+    {
+      "name": "delegate_employee",
+      "args": [{ "name": "members", "type": { "option": { "vec": "Member" } } }]
+    },
+    {
+      "name": "execute_private_transfer",
+      "args": [{ "name": "amount", "type": "u64" }]
+    },
+    {
+      "name": "unshield_settlement",
+      "args": [{ "name": "amount", "type": "u64" }]
+    },
+    {
+      "name": "withdraw_to_personal",
+      "args": []
+    },
+    {
+      "name": "close_treasury_session",
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "EmployerTreasury",
+      "fields": [
+        { "name": "authority", "type": "pubkey" },
+        { "name": "mint", "type": "pubkey" },
+        { "name": "treasury_token_account", "type": "pubkey" },
+        { "name": "total_shielded", "type": "u64" },
+        { "name": "total_disbursed", "type": "u64" },
+        { "name": "per_employee_limit", "type": "u64" },
+        { "name": "daily_limit", "type": "u64" },
+        { "name": "compliance_attestor", "type": "pubkey" },
+        { "name": "compliance_attested_at", "type": "i64" },
+        { "name": "jurisdiction_code", "type": { "array": ["u8", 4] } },
+        { "name": "is_delegated", "type": "bool" },
+        { "name": "bump", "type": "u8" }
+      ]
+    },
+    {
+      "name": "EmployeeShieldedAccount",
+      "fields": [
+        { "name": "treasury", "type": "pubkey" },
+        { "name": "employee", "type": "pubkey" },
+        { "name": "mint", "type": "pubkey" },
+        { "name": "shielded_token_account", "type": "pubkey" },
+        { "name": "shielded_balance", "type": "u64" },
+        { "name": "lifetime_received", "type": "u64" },
+        { "name": "last_receipt_unix", "type": "i64" },
+        { "name": "pending_unshield", "type": "u64" },
+        { "name": "is_delegated", "type": "bool" },
+        { "name": "bump", "type": "u8" }
+      ]
+    }
+  ],
+  "constants": {
+    "TREASURY_SEED": "civ_treasury",
+    "EMPLOYEE_SEED": "civ_employee",
+    "COMPLIANCE_MAX_AGE_SECS": 300,
+    "PERMISSION_PROGRAM_ID": "ACLseoPoyC3cBqoUtkbjZ4aDrkurZW86v19pXz2XQnp1",
+    "DELEGATION_PROGRAM_ID": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh",
+    "DEFAULT_VALIDATOR": "MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo"
+  }
+}

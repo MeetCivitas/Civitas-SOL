@@ -1,0 +1,386 @@
+[
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "aria": "Open Emoji Keyboard",
+    "text": "Open Emoji Keyboard"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Enhance post"
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "aria": null,
+    "text": "Enhance post"
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "aria": "Add media",
+    "text": ""
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "aria": "Create an event",
+    "text": ""
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "aria": "Celebrate an occasion",
+    "text": ""
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "aria": "Share that you’re hiring",
+    "text": ""
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "aria": "Create a poll",
+    "text": ""
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "aria": "Add a document",
+    "text": ""
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "aria": "Schedule post",
+    "text": ""
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "aria": null,
+    "text": "Post"
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "aria": null,
+    "text": "Enhance your Page"
+  },
+  {
+    "tag": "A",
+    "role": null,
+    "aria": null,
+    "text": "1 follower"
+  },
+  {
+    "tag": "BUTTON",
+    "role": "link",
+    "aria": null,
+    "text": "Create"
+  },
+  {
+    "tag": "BUTTON",
+    "role": "link",
+    "aria": null,
+    "text": "View as member"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Dashboard"
+  },
+  {
+    "tag": "A",
+    "role": null,
+    "aria": null,
+    "text": "Dashboard"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Page posts"
+  },
+  {
+    "tag": "A",
+    "role": null,
+    "aria": null,
+    "text": "Page posts"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Analytics"
+  },
+  {
+    "tag": "A",
+    "role": null,
+    "aria": null,
+    "text": "Analytics"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Feed"
+  },
+  {
+    "tag": "A",
+    "role": null,
+    "aria": null,
+    "text": "Feed"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Activity"
+  },
+  {
+    "tag": "A",
+    "role": null,
+    "aria": null,
+    "text": "Activity"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Inbox"
+  },
+  {
+    "tag": "A",
+    "role": null,
+    "aria": null,
+    "text": "Inbox"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Edit Page"
+  },
+  {
+    "tag": "A",
+    "role": null,
+    "aria": null,
+    "text": "Edit Page"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Jobs"
+  },
+  {
+    "tag": "A",
+    "role": null,
+    "aria": null,
+    "text": "Jobs"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Advertise today"
+  },
+  {
+    "tag": "A",
+    "role": null,
+    "aria": null,
+    "text": "Advertise today"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Unlock invites"
+  },
+  {
+    "tag": "A",
+    "role": null,
+    "aria": null,
+    "text": "Unlock invites"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Settings"
+  },
+  {
+    "tag": "A",
+    "role": null,
+    "aria": null,
+    "text": "Settings"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Published"
+  },
+  {
+    "tag": "A",
+    "role": "link",
+    "aria": null,
+    "text": "Published"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Page ads"
+  },
+  {
+    "tag": "A",
+    "role": "link",
+    "aria": null,
+    "text": "Page ads"
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "aria": null,
+    "text": "Start a post"
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "aria": "Add a video",
+    "text": "Video"
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "aria": "Add a photo",
+    "text": "Photo"
+  },
+  {
+    "tag": "A",
+    "role": null,
+    "aria": "Write an article on LinkedIn",
+    "text": "Write article"
+  },
+  {
+    "tag": "A",
+    "role": null,
+    "aria": null,
+    "text": "Start a post"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "About"
+  },
+  {
+    "tag": "A",
+    "role": null,
+    "aria": null,
+    "text": "About"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Accessibility"
+  },
+  {
+    "tag": "A",
+    "role": null,
+    "aria": null,
+    "text": "Accessibility"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Help Center"
+  },
+  {
+    "tag": "A",
+    "role": null,
+    "aria": null,
+    "text": "Help Center"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Privacy & Terms"
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "aria": null,
+    "text": "Privacy & Terms"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Ad Choices"
+  },
+  {
+    "tag": "A",
+    "role": null,
+    "aria": null,
+    "text": "Ad Choices"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Advertising"
+  },
+  {
+    "tag": "A",
+    "role": null,
+    "aria": null,
+    "text": "Advertising"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Business Services"
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "aria": null,
+    "text": "Business Services"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "Get the LinkedIn app"
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "aria": null,
+    "text": "Get the LinkedIn app"
+  },
+  {
+    "tag": "LI",
+    "role": null,
+    "aria": null,
+    "text": "More"
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "aria": "More options",
+    "text": "More"
+  }
+]

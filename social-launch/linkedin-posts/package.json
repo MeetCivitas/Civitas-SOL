@@ -1,0 +1,16 @@
+{
+  "name": "linkedin-posts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "render:cards": "node render-cards.mjs",
+    "render:mermaid": "node render-mermaid.mjs",
+    "render:carousels": "node render-carousels.mjs",
+    "render:all": "node render-cards.mjs && node render-mermaid.mjs && node render-carousels.mjs"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1",
+    "playwright": "^1.60.0"
+  }
+}

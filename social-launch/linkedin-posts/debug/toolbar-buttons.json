@@ -1,0 +1,162 @@
+[
+  {
+    "tag": "BUTTON",
+    "aria": "Dismiss",
+    "text": ""
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "Civitas\nPost to Anyone"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": "Open Emoji Keyboard",
+    "text": "Open Emoji Keyboard"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "Enhance post"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": "Add media",
+    "text": ""
+  },
+  {
+    "tag": "BUTTON",
+    "aria": "Create an event",
+    "text": ""
+  },
+  {
+    "tag": "BUTTON",
+    "aria": "Celebrate an occasion",
+    "text": ""
+  },
+  {
+    "tag": "BUTTON",
+    "aria": "More",
+    "text": ""
+  },
+  {
+    "tag": "BUTTON",
+    "aria": "Schedule post",
+    "text": ""
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "Post"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "Skip to search"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "Skip to main content"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "Keyboard shortcuts"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "Close jump menu"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "Me"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "For Business"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": "Edit background",
+    "text": ""
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "Enhance your Page"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "Create"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "View as member"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "Start a post"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": "Add a video",
+    "text": "Video"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": "Add a photo",
+    "text": "Photo"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": "Post highlights information",
+    "text": ""
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "Privacy & Terms"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "Business Services"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "Get the LinkedIn app"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": "More options",
+    "text": "More"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "Messaging\nYou are on the messaging overlay. Press enter to o"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "Compose message"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": null,
+    "text": "You are on the messaging overlay. Press enter to open the li"
+  },
+  {
+    "tag": "BUTTON",
+    "aria": "Page inboxes",
+    "text": ""
+  }
+]

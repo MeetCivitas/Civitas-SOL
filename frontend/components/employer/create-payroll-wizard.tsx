@@ -98,6 +98,13 @@ export function CreatePayrollWizard() {
   const [pendingProofFile, setPendingProofFile] = useState<File | null>(null)
   const [privateSessionId, setPrivateSessionId] = useState<string | null>(null)
   const [perStatus, setPerStatus] = useState<"idle" | "delegating" | "processing" | "finalizing" | "done">("idle")
+  const [dispatchStatus, setDispatchStatus] = useState<{
+    state: "idle" | "running" | "done" | "partial" | "error"
+    settled: number
+    total: number
+    note?: string
+    errors?: Array<{ employee: string; error: string }>
+  }>({ state: "idle", settled: 0, total: 0 })
 
   useEffect(() => {
     loadEmployees()
@@ -436,16 +443,106 @@ export function CreatePayrollWizard() {
         console.warn("[PayrollWizard] commit verify check error (non-fatal):", verErr?.message)
       }
 
-      // MagicBlock private settlement: NOT done from the wizard. Each claim
-      // dispatch (POST /api/payroll/dispatch-claim, server-side) signs a
-      // base→base private transfer with the deployer keypair, pulling USDC
-      // from the deployer's MagicBlock balance. Use the dedicated
-      // "Pre-fund MagicBlock ER" button on the employer page to top that up.
-      // The connected browser wallet is NOT involved in private settlement.
+      // ── MagicBlock private settlement (Option B: auto-dispatch at commit) ─
+      //
+      // For each employee in the run, server fires a MagicBlock private
+      // transfer from the deployer's pre-funded ER balance to the employee's
+      // wallet ATA. This is the same encrypted-queue ix the legacy per-claim
+      // dispatch uses, just batched at commit-time so the run auto-settles
+      // without each employee needing to click "Claim" manually.
+      //
+      // The browser wallet is NOT involved here. Failures per-employee are
+      // captured and surfaced; the legacy /employees Claim ceremony stays
+      // available as a fallback for any voucher that didn't settle.
       const sessionId = `mbs_${generatedRun.runId.replace(/-/g, "").slice(0, 16)}`
       setPrivateSessionId(sessionId)
-      ;(generatedRun as any).magicblockStatus = "deferred"
+      ;(generatedRun as any).magicblockStatus = "dispatching"
       ;(generatedRun as any).magicblockError = null
+
+      try {
+        const dispatchEntries = selectedEmployees
+          .map((empId: string) => {
+            const emp = employees.find(
+              (e: any) =>
+                e.employee_id === empId || e.employeeTag === empId || e.employee_tag === empId,
+            )
+            if (!emp) return null
+            const tag = (emp as any).employee_tag || (emp as any).employeeTag || ""
+            if (!tag) return null
+            // We need a wallet pubkey for MagicBlock disbursement. The tag is
+            // usable iff it's a base58 32-byte pubkey; otherwise we skip and
+            // surface a clear error.
+            try {
+              const { PublicKey } = require("@solana/web3.js")
+              new PublicKey(tag)
+            } catch {
+              return null
+            }
+            const netPay = computeNetPay(empId) // USDC (display units, decimals=6)
+            const amountBaseUnits = BigInt(Math.floor(Number(netPay) * 1_000_000)).toString()
+            if (BigInt(amountBaseUnits) <= 0n) return null
+            return { employeeWallet: tag, amountBaseUnits, voucherId: tag }
+          })
+          .filter(Boolean) as Array<{ employeeWallet: string; amountBaseUnits: string; voucherId?: string }>
+
+        if (dispatchEntries.length === 0) {
+          ;(generatedRun as any).magicblockStatus = "skipped"
+          ;(generatedRun as any).magicblockError =
+            "No dispatchable entries (employee_tag is not a wallet pubkey for any selected employee)"
+        } else {
+          setDispatchStatus({
+            state: "running",
+            settled: 0,
+            total: dispatchEntries.length,
+            note: `Firing ${dispatchEntries.length} MagicBlock private transfer(s)…`,
+          })
+          setProcessingLabel(`Step 3/3: Auto-settling ${dispatchEntries.length} employees via MagicBlock…`)
+
+          const dispatchRes = await fetch("/api/payroll/dispatch-batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              runId: generatedRun.runId,
+              employerAddress: ownerAddress,
+              companyId: company?.companyId,
+              entries: dispatchEntries,
+              split: 4,
+              minDelayMs: 500,
+              maxDelayMs: 30_000,
+            }),
+          })
+          const dispatchJson = await dispatchRes.json().catch(() => ({}))
+          if (!dispatchRes.ok) {
+            throw new Error(dispatchJson?.error || `dispatch-batch ${dispatchRes.status}`)
+          }
+          const ok = dispatchJson.dispatchedCount ?? 0
+          const failed = dispatchJson.failedCount ?? 0
+          const errors = (dispatchJson.results || [])
+            .filter((r: any) => r.error)
+            .map((r: any) => ({ employee: r.employee, error: r.error }))
+          setDispatchStatus({
+            state: failed === 0 ? "done" : ok === 0 ? "error" : "partial",
+            settled: ok,
+            total: dispatchEntries.length,
+            note: dispatchJson.note,
+            errors,
+          })
+          ;(generatedRun as any).magicblockStatus =
+            failed === 0 ? "settled" : ok === 0 ? "failed" : "partial"
+          ;(generatedRun as any).magicblockError =
+            errors.length > 0 ? errors.map((e: any) => `${e.employee.slice(0, 8)}…: ${e.error}`).join("; ") : null
+        }
+      } catch (dispatchErr: any) {
+        console.error("[PayrollWizard] dispatch-batch failed:", dispatchErr)
+        ;(generatedRun as any).magicblockStatus = "failed"
+        ;(generatedRun as any).magicblockError = dispatchErr?.message ?? String(dispatchErr)
+        setDispatchStatus({
+          state: "error",
+          settled: 0,
+          total: selectedEmployees.length,
+          errors: [{ employee: "all", error: dispatchErr?.message ?? String(dispatchErr) }],
+        })
+      }
 
       setPerStatus("done")
       console.log("[PayrollWizard] Commit transaction completed:", actualTxHash)
@@ -968,28 +1065,45 @@ export function CreatePayrollWizard() {
                     <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-3">Privacy Stack · Active</p>
                     {(() => {
                       const mbStatus = (generatedRun as any)?.magicblockStatus as
+                        | "settled"
+                        | "partial"
+                        | "dispatching"
+                        | "failed"
+                        | "skipped"
                         | "deferred"
                         | "deposited"
-                        | "skipped"
                         | undefined
                       const mbError = (generatedRun as any)?.magicblockError as string | null | undefined
-                      // "deferred" = the new normal: settlement runs server-side
-                      // at each claim from the deployer's pre-funded ER balance,
-                      // so the wizard doesn't deposit. "deposited" is the legacy
-                      // wallet-signed-deposit path. Both = green.
-                      const ppActive = mbStatus === "deferred" || mbStatus === "deposited"
-                      const ppSub =
-                        mbStatus === "deferred"
-                          ? "Settlement runs from deployer ER balance at claim time"
-                          : privateSessionId
-                            ? `Session ${privateSessionId.slice(0, 20)}… active`
-                            : "Deposited to ER"
+                      // The wizard now AUTO-DISPATCHES at commit:
+                      //   "settled" — all employees received the private transfer
+                      //   "partial" — some succeeded; the rest can still claim manually
+                      //   "failed"  — vendor outage; legacy /employees Claim path
+                      //                stays available as the fallback
+                      //   "skipped" — no dispatchable entries (e.g. employee tags
+                      //                aren't wallet pubkeys)
+                      const ppActive = mbStatus === "settled" || mbStatus === "partial"
+                      const ppLabel = mbStatus === "settled"
+                        ? "MagicBlock Private Payments"
+                        : mbStatus === "partial"
+                          ? `MagicBlock Private Payments · ${dispatchStatus.settled}/${dispatchStatus.total} settled`
+                          : mbStatus === "failed"
+                            ? "MagicBlock Private Payments: UNAVAILABLE"
+                            : "MagicBlock Private Payments"
+                      const ppSub = mbStatus === "settled"
+                        ? `${dispatchStatus.settled} private transfer${dispatchStatus.settled === 1 ? "" : "s"} queued · crank settles in 3-30s`
+                        : mbStatus === "partial"
+                          ? `${dispatchStatus.settled} ok, ${dispatchStatus.total - dispatchStatus.settled} failed — rest claimable via /employees`
+                          : mbStatus === "failed"
+                            ? `Vendor outage; ZK voucher Claim flow still works. Detail: ${(mbError ?? "service degraded").slice(0, 80)}`
+                            : mbStatus === "skipped"
+                              ? "No employee_tag is a wallet pubkey — claim via /employees"
+                              : "Settlement runs via MagicBlock encrypted queue"
                       const layers: Array<{ color: string; label: string; sub: string; ok: boolean }> = [
                         { color: "text-violet-400 border-violet-500/20 bg-violet-500/5", label: "Nillion nilCC TEE", sub: "Payroll computed in secure enclave", ok: true },
                         { color: "text-amber-400 border-amber-500/20 bg-amber-500/5", label: "MagicBlock ER", sub: "Commit txs routed through Ephemeral Rollup", ok: true },
                         ppActive
-                          ? { color: "text-blue-400 border-blue-500/20 bg-blue-500/5", label: "MagicBlock Private Payments", sub: ppSub, ok: true }
-                          : { color: "text-amber-400 border-amber-500/20 bg-amber-500/5", label: "MagicBlock Private Payments: UNAVAILABLE", sub: `Vendor outage; ZK-voucher unlinkability still applies. Detail: ${(mbError ?? "service degraded").slice(0, 80)}`, ok: false },
+                          ? { color: "text-blue-400 border-blue-500/20 bg-blue-500/5", label: ppLabel, sub: ppSub, ok: true }
+                          : { color: "text-amber-400 border-amber-500/20 bg-amber-500/5", label: ppLabel, sub: ppSub, ok: false },
                         { color: "text-emerald-400 border-emerald-500/20 bg-emerald-500/5", label: "Groth16 ZK Voucher", sub: "Per-claim unlinkability enforced on-chain", ok: true },
                       ]
                       return layers.map(layer => (
@@ -1003,6 +1117,28 @@ export function CreatePayrollWizard() {
                       ))
                     })()}
                   </div>
+
+                  {/* Per-employee dispatch results */}
+                  {dispatchStatus.state !== "idle" && dispatchStatus.total > 0 && (
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 space-y-2">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-2">
+                        Dispatch · {dispatchStatus.settled}/{dispatchStatus.total} settled
+                      </p>
+                      {dispatchStatus.note && (
+                        <p className="text-[10px] text-white/40">{dispatchStatus.note}</p>
+                      )}
+                      {(dispatchStatus.errors ?? []).length > 0 && (
+                        <ul className="text-[10px] text-amber-300/80 list-disc list-inside space-y-0.5">
+                          {(dispatchStatus.errors ?? []).slice(0, 6).map((e, i) => (
+                            <li key={i}>
+                              <span className="font-mono">{e.employee.slice(0, 8)}…</span>:{" "}
+                              {e.error}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
 
                   {commitTx && commitTx !== "pending" && (
                     <a

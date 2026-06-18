@@ -11,13 +11,12 @@
  *      employee-supplied (recipient, amount, epoch). Rejects mismatch.
  *      This binds the proof's commitment to specific values WITHOUT ever
  *      having put recipient/amount on-chain.
- *   3. Triggers a real MagicBlock private transfer:
- *        employer-ER → employee-ER
- *        visibility=private, split=5, randomized 500–30000 ms delay.
- *      Signed locally with the employer keypair — no browser involvement.
- *
- * After this returns, the employee calls /api/payroll/private-pay?action=
- * withdraw to pull funds from their MagicBlock ER → base wallet.
+ *   3. Triggers a real MagicBlock private transfer through the Payments
+ *      REST gateway (`payments.magicblock.app/v1/spl/transfer`, base→base
+ *      shuttle path): visibility=private, split=4, jittered 500–4000ms.
+ *      Signed locally with the deployer keypair — no browser involvement.
+ *      Settles into the employee's USDC ATA via the TEE crank within
+ *      ~3-30s; no employee-side withdraw required.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -26,9 +25,7 @@ import {
   getAssociatedTokenAddressSync,
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
-  createAssociatedTokenAccountInstruction,
 } from "@solana/spl-token";
-import { Transaction } from "@solana/web3.js";
 import {
   recomputePiHash,
   bytesEqual,
@@ -36,11 +33,9 @@ import {
   bytesToHex,
 } from "@/lib/server/pi-hash";
 import {
-  employerPrivateTransfer,
+  privateTransferViaRest,
   getEmployerPubkey,
-  getEmployerKeypair,
-} from "@/lib/server/magicblock-auth";
-import { assertMagicBlockHealthy } from "@/lib/server/magicblock-private-payments";
+} from "@/lib/server/magicblock-rest-dispatch";
 
 export const runtime = "nodejs";
 
@@ -132,37 +127,6 @@ function uuidToBytes16(uuid: string): Uint8Array {
   return out;
 }
 
-async function ensureRecipientAtaExists(
-  conn: Connection,
-  ata: PublicKey,
-  ownerWallet: PublicKey,
-): Promise<{ created: boolean; signature?: string }> {
-  const info = await conn.getAccountInfo(ata, "confirmed");
-  if (info) return { created: false };
-
-  const payer = getEmployerKeypair();
-
-  const ix = createAssociatedTokenAccountInstruction(
-    payer.publicKey,
-    ata,
-    ownerWallet,
-    USDC_MINT,
-    TOKEN_PROGRAM_ID,
-    ASSOCIATED_TOKEN_PROGRAM_ID,
-  );
-  const tx = new Transaction().add(ix);
-  tx.feePayer = payer.publicKey;
-  const { blockhash } = await conn.getLatestBlockhash();
-  tx.recentBlockhash = blockhash;
-  tx.partialSign(payer);
-  const sig = await conn.sendRawTransaction(tx.serialize(), {
-    skipPreflight: false,
-    maxRetries: 5,
-  });
-  await conn.confirmTransaction(sig, "confirmed");
-  return { created: true, signature: sig };
-}
-
 export async function POST(req: NextRequest) {
   let body: DispatchBody;
   try {
@@ -182,13 +146,6 @@ export async function POST(req: NextRequest) {
     "piHashHex",
   ] as (keyof DispatchBody)[]) {
     if (!body[k]) return err(`missing field: ${k}`);
-  }
-
-  // ── Health: refuse if MagicBlock unreachable ────────────────────────────
-  try {
-    await assertMagicBlockHealthy();
-  } catch (e) {
-    return err(`MagicBlock unhealthy: ${(e as Error).message}`, 503);
   }
 
   const conn = new Connection(RPC, "confirmed");
@@ -272,8 +229,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // ── 3. Ensure the employee's USDC ATA exists so the eventual withdraw
-  //      lands somewhere (server pays rent — rent is < 0.002 SOL) ─────────
+  // ── 3. Verify the supplied recipient ATA matches the ATA derived from
+  //      the employee's wallet for the configured MagicBlock mint. The
+  //      proof binds to recipientTokenAccount; mismatch means the proof
+  //      doesn't cover the destination we're about to settle to. ─────────
   const employeeWalletPk = new PublicKey(body.employeeWallet);
   const expectedAta = getAssociatedTokenAddressSync(
     USDC_MINT,
@@ -288,28 +247,22 @@ export async function POST(req: NextRequest) {
       400,
     );
   }
-  let ataResult: { created: boolean; signature?: string };
-  try {
-    ataResult = await ensureRecipientAtaExists(conn, expectedAta, employeeWalletPk);
-  } catch (e) {
-    return err(`failed to ensure recipient ATA: ${(e as Error).message}`, 502);
-  }
 
-  // ── 4. Trigger the MagicBlock private transfer (base→base, single ix) ──
+  // ── 4. Trigger the MagicBlock private transfer through the REST gateway
+  //      (`payments.magicblock.app/v1/spl/transfer`, base→base shuttle path).
+  //      Verified working end-to-end in `frontend/scripts/eata-poc.mjs`.
+  //      ATA pre-creation + mint init are idempotent inside the dispatcher.
   let transferResult;
   try {
-    transferResult = await employerPrivateTransfer(
+    transferResult = await privateTransferViaRest(
       body.employeeWallet,
       BigInt(body.amountBaseUnits),
       USDC_MINT.toBase58(),
       {
-        // Requested split — employerPrivateTransfer clamps this to the
-        // queue's actual slot capacity if it's smaller (e.g. legacy
-        // 1-slot queues from earlier deployments → split clamped to 1).
         split: 4,
         minDelayMs: 500,
-        maxDelayMs: 30_000,
-        memo: `civitas-claim:${body.runId}`,
+        maxDelayMs: 4_000,
+        clientRefId: `civitas-claim:${body.runId}`,
       },
     );
   } catch (e) {
@@ -324,11 +277,11 @@ export async function POST(req: NextRequest) {
     employerAccount: getEmployerPubkey(),
     nullifierPda: nullifierPda.toBase58(),
     piHashBindingVerified: true,
-    recipientAta: expectedAta.toBase58(),
-    recipientAtaCreated: ataResult.created,
-    recipientAtaCreateSig: ataResult.signature,
+    recipientAta: transferResult.recipientAta,
+    recipientAtaCreated: transferResult.recipientAtaCreated ?? false,
+    recipientAtaCreateSig: transferResult.recipientAtaCreateSig,
     privateTransferSig: transferResult.signature,
-    queuedSplits: transferResult.queuedTransfers,
+    queuedSplits: 4,
     note: "Funds will settle into the employee's USDC ATA after the TEE validator's queue cranks (typically <30s, randomized). No employee-side withdraw required.",
   });
 }

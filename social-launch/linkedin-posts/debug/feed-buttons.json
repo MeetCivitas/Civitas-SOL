@@ -1,0 +1,138 @@
+[
+  {
+    "tag": "BUTTON",
+    "text": "Skip to main content",
+    "aria": null,
+    "cls": "f679cf55 _66de6ca2 b628a087 _11602656 _997ad1cc fd32b7e8 _6b379e9e b4bfc770 _994d2b58 f7dc45a7 _67275242 c4e46078 _477d2f09",
+    "id": null,
+    "dataTest": null
+  },
+  {
+    "tag": "BUTTON",
+    "text": "",
+    "aria": "Close jump menu",
+    "cls": "f679cf55 _66de6ca2 b628a087 _11602656 _997ad1cc fd32b7e8 _6b379e9e b4bfc770 _994d2b58 f7dc45a7 _67275242 c4e46078 _477d2f09 a0a0ce99",
+    "id": null,
+    "dataTest": null
+  },
+  {
+    "tag": "BUTTON",
+    "text": "Home",
+    "aria": "Home, 1 new notification",
+    "cls": "bc37230f c03f02d4 c4e46078 b628a087 _11602656 _20be5ce5 _283c1278 _49df7ffe ed6bc3b2 fd32b7e8 _82dda571 _6528ddcf _2939b67c _9dfae635 _477d2f09 e37ced6c _6b379e9e fdcd4185 _591d2f1a",
+    "id": null,
+    "dataTest": null
+  },
+  {
+    "tag": "BUTTON",
+    "text": "Me",
+    "aria": null,
+    "cls": "bc37230f c03f02d4 c4e46078 b628a087 _11602656 _20be5ce5 _283c1278 _49df7ffe ed6bc3b2 fd32b7e8 _82dda571 _6528ddcf _2939b67c _9dfae635 _477d2f09 e37ced6c _6b379e9e fdcd4185",
+    "id": null,
+    "dataTest": null
+  },
+  {
+    "tag": "BUTTON",
+    "text": "For Business",
+    "aria": "For Business",
+    "cls": "bc37230f c03f02d4 c4e46078 b628a087 _11602656 _20be5ce5 _283c1278 _49df7ffe ed6bc3b2 fd32b7e8 _82dda571 _6528ddcf _2939b67c _9dfae635 _477d2f09 e37ced6c _6b379e9e fdcd4185",
+    "id": null,
+    "dataTest": null
+  },
+  {
+    "tag": "DIV",
+    "text": "Try Premium Page",
+    "aria": null,
+    "cls": "fafd022e c3aff294 _22fe64b5 _0128c7f8 _54dedf40 b327711c _8e3a607e _53a4030f b628a087 _997ad1cc c88276fb _20be5ce5",
+    "id": null,
+    "dataTest": null
+  },
+  {
+    "tag": "DIV",
+    "text": "Start a post",
+    "aria": null,
+    "cls": "_93815843 _9363cf23 _635b181c _11e3056d _1ec43564 _22fe64b5 _0128c7f8 _54dedf40 b327711c _8e3a607e _53a4030f b628a087 _997ad1cc c88276fb _20be5ce5",
+    "id": null,
+    "dataTest": null
+  },
+  {
+    "tag": "DIV",
+    "text": "Video",
+    "aria": null,
+    "cls": "_22fe64b5 _0128c7f8 _54dedf40 b327711c _8e3a607e _53a4030f b628a087 _997ad1cc c88276fb _20be5ce5",
+    "id": null,
+    "dataTest": null
+  },
+  {
+    "tag": "DIV",
+    "text": "Photo",
+    "aria": null,
+    "cls": "_22fe64b5 _0128c7f8 _54dedf40 b327711c _8e3a607e _53a4030f b628a087 _997ad1cc c88276fb _20be5ce5",
+    "id": null,
+    "dataTest": null
+  },
+  {
+    "tag": "DIV",
+    "text": "Sort by: Top",
+    "aria": null,
+    "cls": "_635b181c _11e3056d _1ec43564 _22fe64b5 _0128c7f8 _54dedf40 b327711c _8e3a607e _53a4030f b628a087 _997ad1cc c88276fb _20be5ce5",
+    "id": null,
+    "dataTest": null
+  },
+  {
+    "tag": "BUTTON",
+    "text": "",
+    "aria": "Open control menu for post by National Highways Authority of India",
+    "cls": "f679cf55 _66de6ca2 b628a087 _11602656 _997ad1cc fd32b7e8 _6b379e9e _014d892d _994d2b58 f7dc45a7 _67275242 c4e46078 _477d2f09 _985230d8 _045f21ca _0582315b",
+    "id": null,
+    "dataTest": null
+  },
+  {
+    "tag": "BUTTON",
+    "text": "",
+    "aria": "Hide post by National Highways Authority of India",
+    "cls": "f679cf55 _66de6ca2 b628a087 _11602656 _997ad1cc fd32b7e8 _6b379e9e _014d892d _994d2b58 f7dc45a7 _67275242 c4e46078 _477d2f09 c3aff294 _985230d8 _045f21ca _0582315b",
+    "id": null,
+    "dataTest": null
+  },
+  {
+    "tag": "BUTTON",
+    "text": "Follow",
+    "aria": "Follow National Highways Authority of India",
+    "cls": "f679cf55 _66de6ca2 b628a087 _11602656 _997ad1cc fd32b7e8 _6b379e9e _3922166d _994d2b58 f7dc45a7 _67275242 c4e46078 _477d2f09",
+    "id": null,
+    "dataTest": null
+  },
+  {
+    "tag": "BUTTON",
+    "text": "… more",
+    "aria": null,
+    "cls": "_72cef95d _7b950d27 b1be852f de72efc8 ab042183 _4cbb96e2 f3729c74 c4a11211 _7a5ce34c bec1cf24 b628a087 _160802ca dde47176 _082bf33a _1da564fd",
+    "id": null,
+    "dataTest": null
+  },
+  {
+    "tag": "BUTTON",
+    "text": "",
+    "aria": "Info tooltip",
+    "cls": "f679cf55 _66de6ca2 b628a087 _11602656 _997ad1cc fd32b7e8 _6b379e9e _014d892d _994d2b58 f7dc45a7 _67275242 c4e46078 _477d2f09",
+    "id": null,
+    "dataTest": null
+  },
+  {
+    "tag": "BUTTON",
+    "text": "Show more news",
+    "aria": null,
+    "cls": "f679cf55 _66de6ca2 b628a087 _11602656 _997ad1cc fd32b7e8 _6b379e9e _014d892d _994d2b58 f7dc45a7 _67275242 c4e46078 _477d2f09 a5f652a7 b251ef17",
+    "id": null,
+    "dataTest": null
+  },
+  {
+    "tag": "BUTTON",
+    "text": "Show more",
+    "aria": null,
+    "cls": "f679cf55 _66de6ca2 b628a087 _11602656 _997ad1cc fd32b7e8 _6b379e9e _014d892d _994d2b58 f7dc45a7 _67275242 c4e46078 _477d2f09 _79236a88 _1ec43564",
+    "id": null,
+    "dataTest": null
+  }
+]

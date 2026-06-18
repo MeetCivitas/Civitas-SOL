@@ -1,0 +1,192 @@
+{
+  "cards": [
+    {
+      "id": "day02-am",
+      "day": 2, "slot": "AM", "date": "Sun May 24",
+      "body": "Token-2022 confidential transfers?\nDisabled since June.\n\nSo we engineered around it.\n\nCivitas now uses MagicBlock's\nencrypted queue + a treasury PDA gate\nto pay salaries in USDC, privately,\non Solana mainnet beta.\n\nNo waiting on a re-audit."
+    },
+    {
+      "id": "day04-pm",
+      "day": 4, "slot": "PM", "date": "Tue May 26",
+      "body": "Auditors see what they should.\nThe public chain stays clean.\n\nPrivacy ≠ permissionless.\nPrivacy + policy is the harder fight.\n\nWe chose the harder fight."
+    },
+    {
+      "id": "day10-am",
+      "day": 10, "slot": "AM", "date": "Mon Jun 01",
+      "body": "Salary is the encryption target.\n\nRow-level access controls\nare pretend-privacy.\n\nCryptographic privacy\nis the only model\nthat survives the phishing question."
+    },
+    {
+      "id": "day18-am",
+      "day": 18, "slot": "AM", "date": "Tue Jun 09",
+      "body": "Pay alice.sol on the 1st of every month.\n\nThis is the entire UX of payroll.\n\nA name. An amount. A date.\nUSDC arrives. Sealed.\n\nNo spreadsheets.\nNo CSVs.\nNo bank routing numbers."
+    },
+    {
+      "id": "day22-pm",
+      "day": 22, "slot": "PM", "date": "Sat Jun 13",
+      "body": "Solana is the only L1 where:\n\n→ A single atomic tx encodes\n   compliance + private settlement\n→ Block times let payroll feel like Stripe\n→ Fees stay under a cent at any scale\n\nThis is not a multi-chain pitch.\nThis is an L1 pitch."
+    },
+    {
+      "id": "day25-pm",
+      "day": 25, "slot": "PM", "date": "Tue Jun 16",
+      "body": "Why Civitas stays Solana-only:\n\nL2s settle on a slower layer.\nBridges are exploit surfaces.\nEVM has no production\nprivate-payment primitive.\n\nSolana has alt_bn128.\nSub-second finality.\nSub-cent fees.\nA working private rail.\n\nWe stay."
+    },
+    {
+      "id": "day27-pm",
+      "day": 27, "slot": "PM", "date": "Thu Jun 18",
+      "body": "Devnet is the dress rehearsal.\nMainnet is the show.\n\nSame program.\nSame flow.\nSame UX.\nSame privacy guarantees.\n\nThe difference is\nwhat's at stake on the other side\nof `authorize_disburse`."
+    }
+  ],
+  "mermaids": [
+    {
+      "id": "day03-am",
+      "day": 3, "slot": "AM", "date": "Mon May 25",
+      "title": "Disbursement flow — compliance + private settlement, one atomic tx",
+      "mermaid": "flowchart LR\n  A[Employer hits Pay] --> B[authorize_disburse]\n  B -->|Chainalysis| C{Gate}\n  B -->|Geofence| C\n  B -->|Jurisdiction| C\n  B -->|Attest under 6h| C\n  C -->|fail| X[tx reverts]\n  C -->|pass| D[Treasury PDA signs SPL transfer]\n  D --> E[MagicBlock encrypted queue]\n  E --> F[TEE crank: decrypt + jitter]\n  F --> G[Employee ATA]"
+    },
+    {
+      "id": "day05-am",
+      "day": 5, "slot": "AM", "date": "Wed May 27",
+      "title": "Civitas privacy stack — four layers, zero leaks",
+      "mermaid": "flowchart TB\n  L1[L1 Storage: nilDB %allot secret-shared]\n  L2[L2 Compute: nilCC TEE enclave]\n  L3[L3 Proof: Poseidon BN254 + Groth16]\n  L4[L4 Settlement: MagicBlock encrypted queue]\n  L1 --> L2 --> L3 --> L4 --> E[USDC in employee ATA]"
+    },
+    {
+      "id": "day09-am",
+      "day": 9, "slot": "AM", "date": "Sun May 31",
+      "title": "nilDB %allot — how a salary stays private at rest",
+      "mermaid": "flowchart LR\n  A[Salary: 9500 USDC] --> B[%allot encrypt]\n  B --> C1[Share 1 to Node A]\n  B --> C2[Share 2 to Node B]\n  B --> C3[Share 3 to Node C]\n  B --> C4[Share 4 to Node D]\n  C1 --> D[Reconstruct only with org capability key]\n  C2 --> D\n  C3 --> D\n  C4 --> D\n  D --> E[Cleartext 9500]\n  X[Subpoena 1 node] -.-> Y[ciphertext only]"
+    },
+    {
+      "id": "day12-am",
+      "day": 12, "slot": "AM", "date": "Wed Jun 03",
+      "title": "Compliance gate — authorize_disburse decision tree",
+      "mermaid": "flowchart TB\n  A[Disbursement intent] --> B{Chainalysis screen}\n  B -->|sanctioned| F[REVERT]\n  B -->|clean| C{IP geofence}\n  C -->|disallowed| F\n  C -->|allowed| D{Jurisdiction allowlist}\n  D -->|not on list| F\n  D -->|on list| E{Attestation freshness}\n  E -->|stale over 6h| F\n  E -->|fresh| G[Treasury PDA signs]\n  G --> H[MagicBlock queue]"
+    },
+    {
+      "id": "day16-am",
+      "day": 16, "slot": "AM", "date": "Sun Jun 07",
+      "title": "SNS resolution — name in, private USDC out",
+      "mermaid": "flowchart LR\n  A[Pay alice.sol $4,500] --> B[Bonfida SNS resolver]\n  B --> C[Pubkey: 7xK...j3F]\n  C --> D[Compliance gate]\n  D -->|pass| E[Treasury PDA]\n  E --> F[MagicBlock encrypted queue]\n  F --> G[Alice's ATA]"
+    },
+    {
+      "id": "day19-am",
+      "day": 19, "slot": "AM", "date": "Wed Jun 10",
+      "title": "Civitas HR-SaaS API — three endpoints",
+      "mermaid": "flowchart LR\n  A[Rippling / Deel / Toku] -->|POST /payroll/disburse| B[Civitas API]\n  A -->|POST /compliance/attest| B\n  A -->|GET /receipts/orgId| B\n  B --> C[Treasury PDA + MagicBlock + nilDB]\n  C --> D[Private USDC settlement]"
+    },
+    {
+      "id": "day22-am",
+      "day": 22, "slot": "AM", "date": "Sat Jun 13",
+      "title": "Helius webhook — how a settlement becomes a paystub",
+      "mermaid": "flowchart LR\n  A[MagicBlock TEE crank] --> B[SPL transfer landed]\n  B --> C[Helius webhook fires]\n  C --> D[Civitas backend updates voucher status]\n  D --> E[Employee paystub: settled]"
+    },
+    {
+      "id": "day24-am",
+      "day": 24, "slot": "AM", "date": "Mon Jun 15",
+      "title": "Front-running protection — four leak vectors closed",
+      "mermaid": "flowchart TB\n  A[Salary commitment on chain] --> B{MagicBlock queue}\n  B --> C[Jitter delivery 3-30s]\n  B --> D[Split amount across sends]\n  B --> E[No public memo]\n  C --> F[TEE crank settles to ATA]\n  D --> F\n  E --> F\n  F --> G[Observer sees: SPL transfer arrived. Amount unknown. Timing fuzzy.]"
+    }
+  ],
+  "carousels": [
+    {
+      "id": "day01-pm-payments-privacy",
+      "day": 1, "slot": "PM", "date": "Sat May 23",
+      "title": "The Payments Privacy Problem",
+      "slides": [
+        { "kicker": "8-slide carousel · swipe →", "headline": "Your salary is on a block explorer right now.", "subhead": "If your company pays you in stablecoins — yes, this includes you." },
+        { "kicker": "The number", "stat": "$650B", "caption": "Stablecoin volume on Solana, February 2026.\nThe highest monthly volume on any blockchain. Ever.\n\nAll of it public." },
+        { "kicker": "The processor case", "stat": "$777M", "caption": "Annual crypto payroll volume moved by Rise in 2025.\n\nThey can't sell to Fortune 500.\n\nReason: privacy." },
+        { "kicker": "The chain's answer", "headline": "Token-2022 confidential transfers.", "body": "Disabled since June 2025.\n\nStill offline.\n\nThe market needs private payments. The chain has no native answer." },
+        { "kicker": "The privacy boundary", "headline": "Most 'private payroll' projects skip 3 of 4 layers.", "list": ["Storage", "Compute", "Proof", "Settlement"] },
+        { "kicker": "Where each layer needs to live", "headline": "What 'private' means, layer by layer.", "rows": [["Storage", "ciphertext on disk"], ["Compute", "TEE-attested"], ["Proof", "ZK voucher"], ["Settlement", "amount sealed at rail"]] },
+        { "kicker": "What we built", "headline": "Civitas wires all four.", "body": "nilDB · nilCC · Poseidon + Groth16 · MagicBlock\n\nOne Anchor program. One frontend. One product." },
+        { "kicker": "Open the product", "headline": "meetcivitas.xyz", "body": "Devnet live today. Mainnet Q3 2026.\n\nDesign partner slots open. DMs read same-day." }
+      ]
+    },
+    {
+      "id": "day05-pm-built-around",
+      "day": 5, "slot": "PM", "date": "Wed May 27",
+      "title": "Why we built around the failure",
+      "slides": [
+        { "kicker": "6-slide carousel · swipe →", "headline": "The primitive we couldn't wait for.", "subhead": "Token-2022 confidential transfers were the answer. Then they weren't." },
+        { "kicker": "Timeline", "rows": [["2023", "Token-2022 CT shipped"], ["Apr 2025", "audit findings"], ["Jun 2025", "disabled on mainnet"], ["May 2026", "still offline"]] },
+        { "kicker": "The decision tree", "headline": "What do you do?", "list": ["Wait?", "Move to L2?", "Move to EVM?", "Build the workaround?"] },
+        { "kicker": "MagicBlock's Private Payments", "body": "Encrypted message queue.\nTEE-cranked decrypt + settle.\nAmount sealed at the rail.\n3–30s jitter for timing privacy.\n\nIn production. Today." },
+        { "kicker": "What we added on top", "list": ["Treasury PDA custody", "authorize_disburse compliance gate", "6h attestation freshness window", "Per-employee + daily caps", "Voucher ledger on nilDB"] },
+        { "kicker": "The result", "headline": "USDC payroll. Private at the rail. Compliant at the gate.", "body": "Devnet today.\nMainnet Q3 2026.\n\nmeetcivitas.xyz" }
+      ]
+    },
+    {
+      "id": "day08-pm-nillion-nucleus",
+      "day": 8, "slot": "PM", "date": "Sat May 30",
+      "title": "Civitas × Nillion Nucleus",
+      "slides": [
+        { "kicker": "Big announce · 10-slide carousel", "headline": "Civitas × Nillion.", "subhead": "Privacy at the storage layer. The piece crypto payroll has been missing." },
+        { "kicker": "What Nillion is", "body": "A secret-share network.\nMPC + TEE compute.\nBlind queries on private data.\n\nThe full privacy stack at the data layer." },
+        { "kicker": "Why secret-sharing matters for payroll", "headline": "No single node sees the salary.", "body": "Not Nillion.\nNot Civitas.\nNot a single node operator.\n\nSubpoena one node → ciphertext only." },
+        { "kicker": "nilDB", "headline": "Secret-shared document store.", "body": "Field-level encryption via %allot.\n\nThe org holds the capability key. We don't. Nobody does." },
+        { "kicker": "nilCC", "headline": "Attested TEE compute.", "body": "Run code on private data without seeing it.\n\nSEV-SNP measurement. Ed25519-signed outputs. Verifiable from the repo." },
+        { "kicker": "The Civitas integration", "headline": "4 nilDB collections per org.", "list": ["employees · encrypted PII + comp", "payrolls · run templates", "runs · executed batches w/ commitments", "vouchers · encrypted receipts per disbursement"] },
+        { "kicker": "What's encrypted under %allot", "list": ["pay rate", "paystub history", "tax IDs", "jurisdiction attestations", "comp negotiation notes"] },
+        { "kicker": "Who can decrypt", "rows": [["Org capability key", "everything"], ["Auditor scoped key", "permitted window"], ["Civitas", "nothing"], ["Nillion", "nothing"]] },
+        { "kicker": "Bigger than Civitas", "headline": "Every private fintech needs this primitive.", "body": "Private credit · private trading · private grants · private payroll.\n\nStorage privacy is the layer beneath all of them." },
+        { "kicker": "Build with us", "headline": "Nillion Nucleus is open.", "body": "Civitas + Nillion proves the model.\n\nmeetcivitas.xyz · nillion.com" }
+      ]
+    },
+    {
+      "id": "day10-pm-nilcc-tee",
+      "day": 10, "slot": "PM", "date": "Mon Jun 01",
+      "title": "nilCC TEE for non-cryptographers",
+      "slides": [
+        { "kicker": "7-slide carousel · swipe →", "headline": "What if your code could prove it's the same code, every time?", "subhead": "TEE attestation, explained without the cryptography jargon." },
+        { "kicker": "The problem", "headline": "When payroll math runs on a server, you trust the server operator.", "body": "What if you didn't have to?" },
+        { "kicker": "TEE in one sentence", "headline": "A CPU-level secure enclave where memory is encrypted and code execution is measured.", "body": "The CPU itself enforces it. Even the OS can't peek inside." },
+        { "kicker": "AMD SEV-SNP", "headline": "The specific TEE Nillion uses.", "list": ["Memory encryption — RAM is ciphertext to outside code", "Integrity protection — tampering detected", "Attestation — enclave signs proof of what's inside"] },
+        { "kicker": "Attestation", "headline": "The enclave signs a measurement of its own code.", "body": "You verify the signature.\nYou know the exact code that ran.\n\nNot 'trust the vendor'. Math." },
+        { "kicker": "Warm workload pattern", "headline": "Run one long-lived enclave. Pin the measurement. Sign inputs with Ed25519.", "body": "~200x faster than spinning a new enclave per request.\n\nThis is the pattern Civitas uses for payroll runs." },
+        { "kicker": "What this gets you", "headline": "Civitas runs payroll compute inside nilCC.", "body": "Pinned measurement. Ed25519-signed inputs. Our ops team cannot tamper with payroll math.\n\nPeriod." }
+      ]
+    },
+    {
+      "id": "day15-pm-onboarding-90s",
+      "day": 15, "slot": "PM", "date": "Sat Jun 06",
+      "title": "Employee onboarding in 90 seconds",
+      "slides": [
+        { "kicker": "7-slide carousel · swipe →", "headline": "Civitas employee onboarding.", "subhead": "90 seconds. No seed phrases. No wallet installs. No 'what's my address'." },
+        { "kicker": "00:00", "headline": "Email invite", "body": "Manager hits 'Invite' in the Civitas dashboard.\nEmployee gets an email.\n\nSubject: Alice invited you to Civitas Payroll." },
+        { "kicker": "00:12", "headline": "Continue with Google", "body": "Employee clicks the email link.\nOAuth screen.\nOne click." },
+        { "kicker": "00:18", "headline": "Wallet spawned, invisibly", "body": "Privy generates an MPC-managed embedded wallet.\n\nNo seed phrase shown.\nNo install required.\nReal Solana pubkey underneath." },
+        { "kicker": "00:30", "headline": "Compliance attestation runs", "body": "Chainalysis address screen. IP geofence. Jurisdiction allowlist.\n\nBackground. Invisible to the employee." },
+        { "kicker": "00:75", "headline": "ATA created on first paystub", "body": "Associated token account quietly created.\nReady to receive USDC." },
+        { "kicker": "00:90", "headline": "First paystub appears.", "body": "Net pay. Gross. Deductions. Settlement timestamp.\n\nEmployee never saw 'Solana'.\n\nThat's the point." }
+      ]
+    },
+    {
+      "id": "day18-pm-paystub-mobile",
+      "day": 18, "slot": "PM", "date": "Tue Jun 09",
+      "title": "The mobile paystub experience",
+      "slides": [
+        { "kicker": "8-slide carousel · swipe →", "headline": "The Civitas employee app.", "subhead": "Where 99% of your employees will spend their Civitas time. So we obsess." },
+        { "kicker": "Lock screen", "headline": "Paystub ready", "body": "Push notification on payday.\nFirst confirmation employees get." },
+        { "kicker": "Home", "headline": "Balance + next pay date", "body": "Current USDC balance.\nLast paystub amount.\n\n'Next pay: Jun 1'." },
+        { "kicker": "Paystub list", "headline": "Last 12 months, scrollable", "body": "Latest on top.\nMonth-by-month history.\nTap any to expand." },
+        { "kicker": "Paystub detail", "headline": "Net pay · Gross · Deductions · Tax info", "body": "Decrypted in-browser with org-scoped key.\n\nThe server never sees the cleartext." },
+        { "kicker": "Proof of settlement", "headline": "Tx hash + 'Settled in 14 seconds'", "body": "On-chain receipt is verifiable.\n\nThe settlement was real.\nThe timestamp was real." },
+        { "kicker": "Export", "headline": "Signed PDF, landlord-grade", "body": "Accepted by landlords, mortgage lenders, tax filings.\n\nNot 'a crypto paystub'.\nA paystub." },
+        { "kicker": "The promise", "headline": "If your payroll UX is worse than this on Stripe Connect — you're using the wrong rail." }
+      ]
+    },
+    {
+      "id": "day26-pm-vs-alternatives",
+      "day": 26, "slot": "PM", "date": "Wed Jun 17",
+      "title": "Civitas vs the alternatives",
+      "slides": [
+        { "kicker": "6-slide carousel · swipe →", "headline": "Civitas vs every alternative we've been compared to.", "subhead": "If your CFO says 'why not Stripe' or your CTO says 'why not roll our own' — this is the post." },
+        { "kicker": "Stripe Connect", "rows": [["Rails", "bank ACH/wire"], ["Privacy", "none"], ["Settlement", "2–3 business days"], ["Verdict", "easy to use, wrong rail"]] },
+        { "kicker": "Deel Crypto / Toku / Liquifi", "rows": [["Rails", "USDC out"], ["Privacy", "salaries cleartext internally"], ["Chain receipts", "amounts public"], ["Verdict", "rails yes, privacy no"]] },
+        { "kicker": "Custom on-chain payroll", "rows": [["Control", "total"], ["Privacy", "amounts public per tx"], ["Compliance", "no gate"], ["Verdict", "possible. legally radioactive."]] },
+        { "kicker": "EVM private payments (Aztec et al)", "rows": [["Privacy", "yes"], ["Settlement", "L2 → L1 in hours"], ["Bridge", "exploit surface"], ["USDC native", "no"], ["Verdict", "privacy yes, UX no"]] },
+        { "kicker": "Civitas", "rows": [["Storage", "nilDB %allot"], ["Compute", "nilCC TEE"], ["Proof", "Groth16 on alt_bn128"], ["Settlement", "MagicBlock encrypted queue, 30s"], ["Verdict", "nobody else stitches all four"]] }
+      ]
+    }
+  ]
+}

@@ -42,6 +42,13 @@ type SolanaWalletContextValue = {
   signMessage: (message: Uint8Array) => Promise<Uint8Array>;
   signAndSendTransaction: (serializedTx: string) => Promise<string>;
   /**
+   * Sign-only (no submit). Use for MagicBlock ER txs where Solflare's
+   * built-in network detector flags the ER blockhash as "mainnet".
+   * Returns the signed transaction's raw bytes; caller submits via the
+   * appropriate Connection.
+   */
+  signTransactionOnly: (serializedTx: string) => Promise<Uint8Array>;
+  /**
    * Sign all transactions in a single wallet prompt (Phantom/Solflare support this).
    * Returns the signed serialized transactions as base64 strings ready to send.
    * Falls back to sequential signAndSendTransaction if signAllTransactions unavailable.
@@ -53,7 +60,9 @@ const SolanaWalletContext = createContext<SolanaWalletContextValue | undefined>(
 
 function getProvider(): WalletProvider | null {
   if (typeof window === "undefined") return null;
-  // Prioritize Solflare, then fall back to window.solana (Phantom or others)
+  // Prefer Solflare, then fall back to window.solana (Phantom or others).
+  // ER transactions are signed by a local session key (lib/session-keypair.ts)
+  // so we never expose Solflare to a blockhash it can't recognise.
   return (window as any).solflare || window.solana || null;
 }
 
@@ -174,20 +183,31 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
   const signMessage = useCallback(async (message: Uint8Array): Promise<Uint8Array> => {
     const provider = getProvider();
     if (!provider?.signMessage) throw new Error("Wallet does not support signMessage");
-    const result = await provider.signMessage(message, "bytes");
-    // Solflare returns { signature } while Phantom returns the raw bytes
+    // Phantom accepts an optional "bytes"|"utf8"|"hex" display hint; Solflare
+    // only accepts "utf8"|"hex" and rejects "bytes" with "Invalid params".
+    // The wallet-standard signature is just signMessage(message) — call it
+    // without the second arg so it works across providers.
+    let result: { signature: Uint8Array } | Uint8Array;
+    try {
+      result = await provider.signMessage(message);
+    } catch (e: any) {
+      // Some legacy Phantom builds insist on the second arg — fall back to "utf8".
+      if (/expected one of|Invalid params/i.test(e?.message ?? "")) {
+        result = await provider.signMessage(message, "utf8");
+      } else {
+        throw e;
+      }
+    }
     if (result instanceof Uint8Array) return result;
     return (result as { signature: Uint8Array }).signature;
   }, []);
 
   const signAndSendTransaction = useCallback(async (serializedTx: string): Promise<string> => {
     const provider = getProvider();
-    if (!provider?.signAndSendTransaction) {
-      throw new Error("Wallet does not support signAndSendTransaction");
-    }
+    if (!provider) throw new Error("Wallet not connected");
 
     const binary = Uint8Array.from(atob(serializedTx), (char) => char.charCodeAt(0));
-    const { Transaction, VersionedTransaction } = await import("@solana/web3.js");
+    const { Transaction, VersionedTransaction, Connection } = await import("@solana/web3.js");
     let transaction: unknown;
 
     try {
@@ -196,12 +216,66 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
       transaction = VersionedTransaction.deserialize(binary);
     }
 
-    const result = await provider.signAndSendTransaction(transaction, {
-      skipPreflight: false,
-      preflightCommitment: "confirmed",
-    });
+    // Prefer the wallet's own signAndSendTransaction (Phantom path). Solflare
+    // has it too, but its content-script pre-simulation often returns
+    // "Internal error" on multi-CPI transactions (e.g. delegate_treasury with
+    // its 14 accounts + 3 chained CPIs). Fall back to signTransaction + raw
+    // submission with skipPreflight to bypass that path.
+    try {
+      if (provider.signAndSendTransaction) {
+        const result = await provider.signAndSendTransaction(transaction, {
+          skipPreflight: true,
+          preflightCommitment: "confirmed",
+        });
+        return typeof result === "string" ? result : result.signature;
+      }
+    } catch (e: any) {
+      const msg = e?.message ?? String(e);
+      if (!/internal error|jsonrpc/i.test(msg) || !provider.signTransaction) throw e;
+      // Fall through to manual sign+send path.
+    }
 
-    return typeof result === "string" ? result : result.signature;
+    if (!provider.signTransaction) {
+      throw new Error("Wallet does not support signTransaction");
+    }
+    const signed = await provider.signTransaction(transaction);
+    const rawBytes =
+      signed instanceof VersionedTransaction
+        ? signed.serialize()
+        : (signed as InstanceType<typeof Transaction>).serialize();
+    const conn = new Connection(
+      process.env.NEXT_PUBLIC_SOLANA_RPC ?? "https://api.devnet.solana.com",
+      "confirmed",
+    );
+    const sig = await conn.sendRawTransaction(rawBytes, {
+      skipPreflight: true,
+      maxRetries: 5,
+    });
+    return sig;
+  }, []);
+
+  /**
+   * Sign a transaction without sending — caller handles submission.
+   * Bypasses wallet preflight + network checks, useful for MagicBlock ER
+   * transactions where the ER blockhash isn't recognised by the wallet's
+   * default RPC.
+   */
+  const signTransactionOnly = useCallback(async (serializedTx: string): Promise<Uint8Array> => {
+    const provider = getProvider();
+    if (!provider?.signTransaction) throw new Error("Wallet does not support signTransaction");
+
+    const binary = Uint8Array.from(atob(serializedTx), (c) => c.charCodeAt(0));
+    const { Transaction, VersionedTransaction } = await import("@solana/web3.js");
+    let transaction: unknown;
+    try {
+      transaction = Transaction.from(binary);
+    } catch {
+      transaction = VersionedTransaction.deserialize(binary);
+    }
+    const signed = await provider.signTransaction(transaction);
+    return signed instanceof VersionedTransaction
+      ? signed.serialize()
+      : (signed as InstanceType<typeof Transaction>).serialize();
   }, []);
 
   /**
@@ -261,9 +335,10 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
       disconnect,
       signMessage,
       signAndSendTransaction,
+      signTransactionOnly,
       signAllAndSend,
     }),
-    [address, available, connect, connecting, disconnect, providerName, signAndSendTransaction, signMessage, signAllAndSend],
+    [address, available, connect, connecting, disconnect, providerName, signAndSendTransaction, signTransactionOnly, signMessage, signAllAndSend],
   );
 
   return <SolanaWalletContext.Provider value={value}>{children}</SolanaWalletContext.Provider>;

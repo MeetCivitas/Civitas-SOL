@@ -1,0 +1,350 @@
+{
+  "day01-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-23 11:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:04:55.399Z"
+  },
+  "day01-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-23 21:00 IST",
+    "kind": "carousel",
+    "at": "2026-05-22T18:05:27.486Z"
+  },
+  "day02-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-24 11:00 IST",
+    "kind": "card",
+    "at": "2026-05-22T18:05:49.354Z"
+  },
+  "day02-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-24 21:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:06:07.514Z"
+  },
+  "day03-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-25 11:00 IST",
+    "kind": "mermaid",
+    "at": "2026-05-22T18:06:30.261Z"
+  },
+  "day04-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-26 11:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:06:49.789Z"
+  },
+  "day04-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-26 21:00 IST",
+    "kind": "card",
+    "at": "2026-05-22T18:07:12.350Z"
+  },
+  "day05-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-27 11:00 IST",
+    "kind": "mermaid",
+    "at": "2026-05-22T18:07:34.688Z"
+  },
+  "day05-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-27 21:00 IST",
+    "kind": "carousel",
+    "at": "2026-05-22T18:08:03.120Z"
+  },
+  "day06-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-28 11:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:08:23.085Z"
+  },
+  "day06-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-28 21:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:08:42.349Z"
+  },
+  "day07-am": {
+    "status": "error",
+    "error": "locator.waitFor: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"Next\"), button:has-text(\"Done\")').first() to be visible\u001b[22m\n",
+    "kind": "text-only",
+    "at": "2026-05-22T18:27:07.379Z"
+  },
+  "day07-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-29 21:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:09:20.667Z"
+  },
+  "day08-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-30 11:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:09:40.759Z"
+  },
+  "day08-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-30 21:00 IST",
+    "kind": "carousel",
+    "at": "2026-05-22T18:10:15.216Z"
+  },
+  "day09-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-31 11:00 IST",
+    "kind": "mermaid",
+    "at": "2026-05-22T18:10:38.101Z"
+  },
+  "day09-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-05-31 21:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:10:57.237Z"
+  },
+  "day10-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-01 11:00 IST",
+    "kind": "card",
+    "at": "2026-05-22T18:11:18.778Z"
+  },
+  "day10-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-01 21:00 IST",
+    "kind": "carousel",
+    "at": "2026-05-22T18:11:54.232Z"
+  },
+  "day11-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-02 11:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:12:12.837Z"
+  },
+  "day11-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-02 21:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:12:32.962Z"
+  },
+  "day12-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-03 11:00 IST",
+    "kind": "mermaid",
+    "at": "2026-05-22T18:12:55.000Z"
+  },
+  "day12-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-03 21:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:13:13.523Z"
+  },
+  "day13-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-04 11:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:13:32.402Z"
+  },
+  "day13-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-04 21:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:13:52.819Z"
+  },
+  "day14-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-05 11:00 IST",
+    "kind": "hero",
+    "at": "2026-05-22T18:14:14.812Z"
+  },
+  "day14-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-05 21:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:14:34.139Z"
+  },
+  "day15-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-06 11:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:14:53.859Z"
+  },
+  "day15-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-06 21:00 IST",
+    "kind": "carousel",
+    "at": "2026-05-22T18:15:23.060Z"
+  },
+  "day16-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-07 11:00 IST",
+    "kind": "mermaid",
+    "at": "2026-05-22T18:15:44.330Z"
+  },
+  "day16-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-07 21:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:16:03.727Z"
+  },
+  "day17-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-08 11:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:16:22.353Z"
+  },
+  "day18-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-09 11:00 IST",
+    "kind": "card",
+    "at": "2026-05-22T18:16:44.740Z"
+  },
+  "day18-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-09 21:00 IST",
+    "kind": "carousel",
+    "at": "2026-05-22T18:17:14.967Z"
+  },
+  "day19-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-10 11:00 IST",
+    "kind": "mermaid",
+    "at": "2026-05-22T18:17:37.158Z"
+  },
+  "day19-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-10 21:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:17:57.297Z"
+  },
+  "day20-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-11 11:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:18:15.514Z"
+  },
+  "day20-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-11 21:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:18:37.091Z"
+  },
+  "day21-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-12 11:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:18:55.037Z"
+  },
+  "day21-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-12 21:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:19:14.666Z"
+  },
+  "day22-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-13 11:00 IST",
+    "kind": "mermaid",
+    "at": "2026-05-22T18:19:36.649Z"
+  },
+  "day22-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-13 21:00 IST",
+    "kind": "card",
+    "at": "2026-05-22T18:19:58.771Z"
+  },
+  "day23-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-14 11:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:20:18.041Z"
+  },
+  "day23-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-14 21:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:20:38.259Z"
+  },
+  "day24-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-15 11:00 IST",
+    "kind": "mermaid",
+    "at": "2026-05-22T18:21:00.993Z"
+  },
+  "day24-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-15 21:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:21:19.195Z"
+  },
+  "day25-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-16 11:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:21:38.233Z"
+  },
+  "day25-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-16 21:00 IST",
+    "kind": "card",
+    "at": "2026-05-22T18:21:59.224Z"
+  },
+  "day26-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-17 11:00 IST",
+    "kind": "hero",
+    "at": "2026-05-22T18:22:20.980Z"
+  },
+  "day26-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-17 21:00 IST",
+    "kind": "carousel",
+    "at": "2026-05-22T18:22:49.035Z"
+  },
+  "day27-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-18 11:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:23:07.513Z"
+  },
+  "day27-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-18 21:00 IST",
+    "kind": "card",
+    "at": "2026-05-22T18:23:30.152Z"
+  },
+  "day28-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-19 11:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:23:49.867Z"
+  },
+  "day28-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-19 21:00 IST",
+    "kind": "text-only",
+    "at": "2026-05-22T18:24:08.234Z"
+  },
+  "day29-am": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-20 11:00 IST",
+    "kind": "hero",
+    "at": "2026-05-22T18:24:36.851Z"
+  },
+  "day29-pm": {
+    "status": "error",
+    "error": "locator.waitFor: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"Next\"), button:has-text(\"Done\")').first() to be visible\u001b[22m\n",
+    "kind": "text-only",
+    "at": "2026-05-22T18:27:37.295Z"
+  },
+  "day30-am": {
+    "status": "error",
+    "error": "locator.waitFor: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"Next\"), button:has-text(\"Done\")').first() to be visible\u001b[22m\n",
+    "kind": "text-only",
+    "at": "2026-05-22T18:28:07.527Z"
+  },
+  "day30-pm": {
+    "status": "scheduled",
+    "scheduledFor": "2026-06-21 21:00 IST",
+    "kind": "hero",
+    "at": "2026-05-22T18:25:39.012Z"
+  }
+}
