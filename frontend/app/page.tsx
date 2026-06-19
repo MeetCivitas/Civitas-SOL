@@ -223,9 +223,9 @@ export default function HomePage() {
 
             <nav className="hidden md:flex items-center gap-9" aria-label="Primary">
               {[
-                { label: "Architecture", href: "https://github.com/MeetCivitas/Civitas-Sol/blob/main/WHITEPAPER.pdf" },
-                { label: "Solutions",    href: "https://x.com/RythmeNagr64107/status/2034605883200806945?s=20" },
-                { label: "Developers",   href: "https://github.com/MeetCivitas/Civitas-Sol" },
+                { label: "Architecture", href: "https://github.com/MeetCivitas/Civitas-SOL/blob/main/WHITEPAPER.md" },
+                { label: "Audit",        href: "https://github.com/MeetCivitas/Civitas-SOL/blob/main/AUDIT_REPORT.md" },
+                { label: "Developers",   href: "https://github.com/MeetCivitas/Civitas-SOL" },
               ].map(item => (
                 <a
                   key={item.label}
@@ -597,7 +597,7 @@ export default function HomePage() {
             </p>
             <div className="flex items-center gap-3 mt-7">
               {[
-                { icon: <Github className="h-4 w-4" />, href: "https://github.com/MeetCivitas/Civitas-Sol", label: "GitHub" },
+                { icon: <Github className="h-4 w-4" />, href: "https://github.com/MeetCivitas/Civitas-SOL", label: "GitHub" },
                 { icon: <Twitter className="h-4 w-4" />, href: "https://x.com/meet_civitas", label: "Twitter" },
               ].map(s => (
                 <a
@@ -660,8 +660,8 @@ export default function HomePage() {
               links: [
                 { label: "Employer Portal", href: "/login" },
                 { label: "Employee Portal", href: "/login" },
-                { label: "Treasury Mgmt",   href: "#" },
-                { label: "ZK Payroll",      href: "#" },
+                { label: "Whitepaper",      href: "https://github.com/MeetCivitas/Civitas-SOL/blob/main/WHITEPAPER.md", ext: true },
+                { label: "Audit Report",    href: "https://github.com/MeetCivitas/Civitas-SOL/blob/main/AUDIT_REPORT.md", ext: true },
               ],
             },
             {
@@ -677,19 +677,16 @@ export default function HomePage() {
             {
               heading: "Developers",
               links: [
-                { label: "GitHub",          href: "https://github.com/MeetCivitas/Civitas-Sol", ext: true },
-                { label: "Docs",            href: "#" },
-                { label: "Smart Contracts", href: "#" },
-                { label: "SDK",             href: "#" },
+                { label: "GitHub",          href: "https://github.com/MeetCivitas/Civitas-SOL", ext: true },
+                { label: "Docs",            href: "https://github.com/MeetCivitas/Civitas-SOL/blob/main/WHITEPAPER.md", ext: true },
+                { label: "Smart Contracts", href: "https://github.com/MeetCivitas/Civitas-SOL/tree/main/programs", ext: true },
               ],
             },
             {
               heading: "Legal",
               links: [
-                { label: "Privacy Policy",   href: "#" },
-                { label: "Terms of Service", href: "#" },
-                { label: "Bug Bounty",       href: "#" },
-                { label: "Audit Reports",    href: "#" },
+                { label: "Audit Report",    href: "https://github.com/MeetCivitas/Civitas-SOL/blob/main/AUDIT_REPORT.md", ext: true },
+                { label: "Whitepaper",      href: "https://github.com/MeetCivitas/Civitas-SOL/blob/main/WHITEPAPER.md", ext: true },
               ],
             },
           ].map(col => (
